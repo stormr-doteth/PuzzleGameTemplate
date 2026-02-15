@@ -1,0 +1,15 @@
+# Roblox binary files
+*.rbxl
+*.rbxlx
+
+# Wally packages
+Packages/
+ServerPackages/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
