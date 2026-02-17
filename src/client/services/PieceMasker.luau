@@ -10,6 +10,7 @@ type PieceImageData = PuzzleTypes.PieceImageData
 local TAB_WIDTH_RATIO = 0.35
 local TAB_HEIGHT_RATIO = 0.18
 local AA_RADIUS = 2
+local OUTLINE_THICKNESS = 4
 
 local PieceMasker = {}
 
@@ -56,6 +57,97 @@ local function semicircleSignedDistance(
 	end
 end
 
+-- Compute the signed distance from a pixel to the piece boundary.
+-- Negative = inside the piece, positive = outside.
+local function getPieceSignedDistance(
+	px: number, -- x in piece image space (0-based)
+	py: number, -- y in piece image space (0-based)
+	cellW: number,
+	cellH: number,
+	tabW: number,
+	tabH: number,
+	padTop: number,
+	padRight: number,
+	padBottom: number,
+	padLeft: number,
+	edges: PuzzleTypes.PieceEdges
+): number
+	-- Convert to cell-local coordinates where (0,0) is top-left of the base cell
+	local cx = px - padLeft
+	local cy = py - padTop
+
+	-- Start by checking if inside base rectangle
+	local inBaseRect = cx >= 0 and cx < cellW and cy >= 0 and cy < cellH
+
+	-- Calculate tab/indent semicircle centers and radii for each edge
+	local tabRadius = tabW / 2
+
+	-- Base rectangle signed distance (negative = inside)
+	local baseDistX = math.max(-cx, cx - cellW)
+	local baseDistY = math.max(-cy, cy - cellH)
+	local baseDist = math.max(baseDistX, baseDistY)
+
+	-- Start with base rect signed distance
+	-- For a union/subtraction SDF, we combine using min (union) and max (intersection/subtraction)
+	local dist = baseDist
+
+	-- Top edge
+	if edges.top == "tab" then
+		local tcx = cellW / 2
+		local tcy = 0
+		local sd = semicircleSignedDistance(cx, cy, tcx, tcy, tabRadius, "top")
+		-- Union: piece = base rect OR tab semicircle
+		dist = math.min(dist, sd)
+	elseif edges.top == "indent" then
+		local tcx = cellW / 2
+		local tcy = 0
+		local sd = semicircleSignedDistance(cx, cy, tcx, tcy, tabRadius, "bottom")
+		-- Subtraction: piece = base rect AND NOT indent semicircle
+		dist = math.max(dist, -sd)
+	end
+
+	-- Bottom edge
+	if edges.bottom == "tab" then
+		local tcx = cellW / 2
+		local tcy = cellH
+		local sd = semicircleSignedDistance(cx, cy, tcx, tcy, tabRadius, "bottom")
+		dist = math.min(dist, sd)
+	elseif edges.bottom == "indent" then
+		local tcx = cellW / 2
+		local tcy = cellH
+		local sd = semicircleSignedDistance(cx, cy, tcx, tcy, tabRadius, "top")
+		dist = math.max(dist, -sd)
+	end
+
+	-- Left edge
+	if edges.left == "tab" then
+		local tcx = 0
+		local tcy = cellH / 2
+		local sd = semicircleSignedDistance(cx, cy, tcx, tcy, tabRadius, "left")
+		dist = math.min(dist, sd)
+	elseif edges.left == "indent" then
+		local tcx = 0
+		local tcy = cellH / 2
+		local sd = semicircleSignedDistance(cx, cy, tcx, tcy, tabRadius, "right")
+		dist = math.max(dist, -sd)
+	end
+
+	-- Right edge
+	if edges.right == "tab" then
+		local tcx = cellW
+		local tcy = cellH / 2
+		local sd = semicircleSignedDistance(cx, cy, tcx, tcy, tabRadius, "right")
+		dist = math.min(dist, sd)
+	elseif edges.right == "indent" then
+		local tcx = cellW
+		local tcy = cellH / 2
+		local sd = semicircleSignedDistance(cx, cy, tcx, tcy, tabRadius, "left")
+		dist = math.max(dist, -sd)
+	end
+
+	return dist
+end
+
 -- Determine if a pixel (in local piece coordinates) is inside the jigsaw piece shape
 -- Returns a value: 1 = fully inside, 0 = fully outside, 0..1 = anti-aliased edge
 local function getPieceAlpha(
@@ -82,16 +174,6 @@ local function getPieceAlpha(
 	local tabRadius = tabW / 2
 	local minDist = math.huge -- minimum signed distance to any boundary
 
-	-- Base rectangle signed distance (negative = inside)
-	local baseDistX = math.max(-cx, cx - (cellW - 1))
-	local baseDistY = math.max(-cy, cy - (cellH - 1))
-	local baseDist: number
-	if baseDistX <= 0 and baseDistY <= 0 then
-		baseDist = math.max(baseDistX, baseDistY)
-	else
-		baseDist = math.max(baseDistX, baseDistY)
-	end
-
 	-- Start with base rect
 	local insidePiece = inBaseRect
 
@@ -111,7 +193,6 @@ local function getPieceAlpha(
 		local tcy = 0
 		local sd = semicircleSignedDistance(cx, cy, tcx, tcy, tabRadius, "bottom")
 		if sd < 0 and inBaseRect then
-			-- Inside the indent cutout — remove from piece
 			insidePiece = false
 		end
 		if sd < 0 and inBaseRect then
@@ -294,8 +375,41 @@ function PieceMasker.createPieceImages(
 			end
 		end
 
+		-- Generate outline image: white pixels along the SDF boundary
+		local outlineImage = AssetService:CreateEditableImage({
+			Size = Vector2.new(pieceW, pieceH),
+		})
+
+		for py = 0, pieceH - 1 do
+			local outlineRowBuffer = buffer.create(pieceW * 4)
+
+			for px = 0, pieceW - 1 do
+				local sd = getPieceSignedDistance(
+					px, py, cellW, cellH, tabW, tabH,
+					padTop, padRight, padBottom, padLeft,
+					piece.edges
+				)
+
+				-- Outline band: covers boundary and extends slightly outside to hide AA fringe
+				if sd <= AA_RADIUS and -sd <= OUTLINE_THICKNESS then
+					local offset = px * 4
+					buffer.writeu8(outlineRowBuffer, offset, 255)
+					buffer.writeu8(outlineRowBuffer, offset + 1, 255)
+					buffer.writeu8(outlineRowBuffer, offset + 2, 255)
+					buffer.writeu8(outlineRowBuffer, offset + 3, 255)
+				end
+			end
+
+			outlineImage:WritePixelsBuffer(
+				Vector2.new(0, py),
+				Vector2.new(pieceW, 1),
+				outlineRowBuffer
+			)
+		end
+
 		result[piece.id] = {
 			image = pieceImage,
+			outlineImage = outlineImage,
 			width = pieceW,
 			height = pieceH,
 			offsetX = padLeft,

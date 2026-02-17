@@ -5,9 +5,25 @@ local Packages = ServerScriptService:WaitForChild("Packages")
 local ProfileStore = require(Packages.ProfileStore)
 
 local PROFILE_TEMPLATE = {
-	Cash = 0,
+	Cash = 10000,
 	Level = 1,
 	XP = 0,
+	UnlockedImages = {},         -- { [string]: true }
+	TotalPuzzlesCompleted = 0,
+	TotalPlayTime = 0,
+	TotalPiecesPlaced = 0,
+	PuzzlesCompletedByDifficulty = {},  -- { ["2x2"]: count, ... }
+	PersonalBests = {},          -- { ["imageId_difficultyId"]: bestTimeSeconds }
+	Achievements = {},           -- reserved for future
+	PurchaseHistory = {},        -- { { productId, timestamp } }
+	OwnedBoardSkins = {},        -- { [string]: true }
+	OwnedConfettiStyles = {},    -- { [string]: true }
+	OwnedBadges = {},            -- { [string]: true }
+	HintsRemaining = 0,
+	EquippedBoardSkin = "",
+	EquippedConfettiStyle = "",
+	EquippedBadge = "",
+	SavedPuzzles = {},  -- { SavedPuzzleData }, max 3 entries
 }
 
 local PlayerStore = ProfileStore.New("PlayerData", PROFILE_TEMPLATE)
