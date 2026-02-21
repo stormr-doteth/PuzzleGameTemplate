@@ -10,10 +10,12 @@ local ImageService = require(script.Parent.Parent.Parent.services.ImageService)
 local PieceMasker = require(script.Parent.Parent.Parent.services.PieceMasker)
 local SoundService = require(script.Parent.Parent.Parent.services.SoundService)
 
+local RoomTypes = require(Shared.RoomTypes)
 local ShopItems = require(Shared.ShopItems)
 
 local PuzzlePiece = require(script.Parent.PuzzlePiece)
 local usePuzzleState = require(script.Parent.Parent.hooks.usePuzzleState)
+local useMultiplayerPuzzle = require(script.Parent.Parent.hooks.useMultiplayerPuzzle)
 local useTimer = require(script.Parent.Parent.hooks.useTimer)
 
 export type PuzzleBoardProps = {
@@ -29,6 +31,9 @@ export type PuzzleBoardProps = {
 	equippedBoardSkin: string?,
 	hintsRemaining: number?,
 	onHintUsed: (() -> ())?,
+	isMultiplayer: boolean?,
+	roomPuzzleDef: any?,
+	roomInitialPieces: any?,
 }
 
 local BOARD_MAX_SIZE = 600
@@ -39,10 +44,21 @@ local function formatTime(seconds: number): string
 	return string.format("%d:%02d", mins, secs)
 end
 
+local PLAYER_COLORS = {
+	Color3.fromRGB(80, 180, 230),
+	Color3.fromRGB(230, 140, 80),
+	Color3.fromRGB(80, 230, 140),
+	Color3.fromRGB(230, 80, 180),
+}
+
 local function PuzzleBoard(props: PuzzleBoardProps)
-	local state, actions = usePuzzleState()
+	local soloState, soloActions = usePuzzleState()
+	local mpState, mpActions = useMultiplayerPuzzle(props.roomInitialPieces)
+	local state = if props.isMultiplayer then mpState else soloState
+	local actions = if props.isMultiplayer then mpActions else soloActions
 	local timer = useTimer()
 	local localHints, setLocalHints = React.useState(props.hintsRemaining or 0)
+	local localUserId = game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.UserId or 0
 
 	-- Dynamic top inset to clear Roblox top bar in full-screen ScreenGui
 	local topInset = React.useMemo(function()
@@ -72,7 +88,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			end
 
 			local puzzle
-			if props.savedState then
+			if props.isMultiplayer and props.roomPuzzleDef then
+				puzzle = props.roomPuzzleDef
+			elseif props.savedState then
 				-- Use saved puzzleDef instead of generating new
 				puzzle = props.savedState.puzzleDef
 			else
@@ -104,7 +122,10 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			setCellSize(Vector2.new(displayCellW, displayCellH))
 			setBoardSize(Vector2.new(displayBoardW, displayBoardH))
 
-			if props.savedState then
+			if props.isMultiplayer then
+				-- Multiplayer: pieces are initialized by the useMultiplayerPuzzle hook
+				-- No scramble or restore needed
+			elseif props.savedState then
 				-- Restore piece positions and timer from saved state
 				actions.restorePieces(props.savedState.pieces)
 				timer.restore(props.savedState.elapsedSeconds)
@@ -162,6 +183,28 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		return math.floor((viewportH - boardSize.Y) / 2)
 	end, { boardSize } :: { any })
 
+	-- Convert screen image position → virtual cell position (for sending to server)
+	local function screenToVirtual(screenX: number, screenY: number, imgOffsetX: number, imgOffsetY: number)
+		-- Add tab offset: image pos → cell pos
+		local cellX = screenX + imgOffsetX
+		local cellY = screenY + imgOffsetY
+		-- Map board-relative screen position to virtual canvas
+		local vw = RoomTypes.VIRTUAL_CANVAS_WIDTH
+		local vh = RoomTypes.VIRTUAL_CANVAS_HEIGHT
+		return (cellX - boardOffsetX) / boardSize.X * vw,
+			(cellY - boardOffsetY) / boardSize.Y * vh
+	end
+
+	-- Convert virtual cell position → screen image position (for display)
+	local function virtualToScreen(virtualX: number, virtualY: number, imgOffsetX: number, imgOffsetY: number)
+		local vw = RoomTypes.VIRTUAL_CANVAS_WIDTH
+		local vh = RoomTypes.VIRTUAL_CANVAS_HEIGHT
+		local cellX = virtualX / vw * boardSize.X + boardOffsetX
+		local cellY = virtualY / vh * boardSize.Y + boardOffsetY
+		-- Subtract tab offset: cell pos → image pos
+		return cellX - imgOffsetX, cellY - imgOffsetY
+	end
+
 	local function onPieceHoverStart(pieceId: number)
 		setHoveredPieceIds(function(prev)
 			local next = table.clone(prev)
@@ -181,6 +224,21 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local function onDragStart(pieceId: number)
 		actions.bringToFront(pieceId)
 		SoundService.playPickup()
+		if props.isMultiplayer and actions.claimPiece then
+			actions.claimPiece(pieceId)
+		end
+	end
+
+	local function onDragMove(pieceId: number, x: number, y: number)
+		if props.isMultiplayer and pieceImages then
+			local imageData = pieceImages[pieceId]
+			if imageData then
+				local sox = math.floor(imageData.offsetX * pixelScale)
+				local soy = math.floor(imageData.offsetY * pixelScale)
+				local vx, vy = screenToVirtual(x, y, sox, soy)
+				actions.movePiece(pieceId, vx, vy)
+			end
+		end
 	end
 
 	local function onDragEnd(pieceId: number, x: number, y: number)
@@ -204,9 +262,15 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		local correctX = boardOffsetX + (pieceDef.col - 1) * cellSize.X - scaledOffsetX
 		local correctY = boardOffsetY + (pieceDef.row - 1) * cellSize.Y - scaledOffsetY
 
-		local snapped = actions.trySnap(pieceId, x, y, correctX, correctY)
-		if snapped then
-			SoundService.playSnap()
+		if props.isMultiplayer then
+			local vx, vy = screenToVirtual(x, y, scaledOffsetX, scaledOffsetY)
+			actions.trySnap(pieceId, vx, vy, 0, 0)
+			-- Hook always returns false; server handles snap sound via events
+		else
+			local snapped = actions.trySnap(pieceId, x, y, correctX, correctY)
+			if snapped then
+				SoundService.playSnap()
+			end
 		end
 	end
 
@@ -252,13 +316,18 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			Position = UDim2.new(0, 20, 0, topInset),
 			Size = UDim2.fromOffset(130, 36),
 			BackgroundColor3 = Color3.fromRGB(50, 50, 70),
-			Text = "< Back to Menu",
+			Text = if props.isMultiplayer then "< Leave Room" else "< Back to Menu",
 			TextColor3 = Color3.fromRGB(220, 220, 240),
 			TextSize = 14,
 			Font = Enum.Font.GothamMedium,
 			ZIndex = 50,
 			[React.Event.Activated] = function()
-				if props.onBackToMenu and puzzleDef then
+				if props.isMultiplayer then
+					-- In multiplayer, just give up (no save)
+					if props.onGiveUp then
+						props.onGiveUp()
+					end
+				elseif props.onBackToMenu and puzzleDef then
 					timer.stop()
 					local savePieces = {}
 					for id, p in state.pieces do
@@ -318,8 +387,8 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 		})
 
-		-- Hint button
-		if localHints > 0 and puzzleDef and pieceImages then
+		-- Hint button (disabled in multiplayer)
+		if not props.isMultiplayer and localHints > 0 and puzzleDef and pieceImages then
 			children["HintButton"] = React.createElement("TextButton", {
 				Position = UDim2.new(0, 360, 0, topInset),
 				Size = UDim2.fromOffset(110, 36),
@@ -462,20 +531,42 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 					local displayW = math.floor(imageData.width * pixelScale)
 					local displayH = math.floor(imageData.height * pixelScale)
 
+						-- Multiplayer claimed state
+					local claimedByOther = false
+					local claimerColor = nil
+					if props.isMultiplayer and state.claimedPieces then
+						local claimerId = state.claimedPieces[pieceId]
+						if claimerId and claimerId ~= localUserId then
+							claimedByOther = true
+							claimerColor = PLAYER_COLORS[((claimerId % #PLAYER_COLORS)) + 1]
+						end
+					end
+
+					-- In multiplayer, state stores virtual coords; convert to screen image position for display
+					local displayX, displayY = pieceState.x, pieceState.y
+					if props.isMultiplayer then
+						local scaledOffX = math.floor(imageData.offsetX * pixelScale)
+						local scaledOffY = math.floor(imageData.offsetY * pixelScale)
+						displayX, displayY = virtualToScreen(pieceState.x, pieceState.y, scaledOffX, scaledOffY)
+					end
+
 					children["Piece_" .. pieceId] = React.createElement(PuzzlePiece, {
 						pieceId = pieceId,
 						editableImage = imageData.image,
 						outlineImage = imageData.outlineImage,
 						pieceWidth = displayW,
 						pieceHeight = displayH,
-						position = Vector2.new(pieceState.x, pieceState.y),
+						position = Vector2.new(displayX, displayY),
 						zIndex = pieceState.zIndex,
 						isLocked = pieceState.locked,
 						isHovered = (pieceId == topmostHoveredId),
 						onDragStart = onDragStart,
+						onDragMove = if props.isMultiplayer then onDragMove else nil,
 						onDragEnd = onDragEnd,
 						onHoverStart = onPieceHoverStart,
 						onHoverEnd = onPieceHoverEnd,
+						claimedByOther = claimedByOther,
+						claimerColor = claimerColor,
 					})
 				end
 			end

@@ -20,6 +20,8 @@ export type PuzzlePieceProps = {
 	onDragEnd: ((id: number, x: number, y: number) -> ())?,
 	onHoverStart: ((id: number) -> ())?,
 	onHoverEnd: ((id: number) -> ())?,
+	claimedByOther: boolean?,
+	claimerColor: Color3?,
 }
 
 local function PuzzlePiece(props: PuzzlePieceProps)
@@ -28,7 +30,7 @@ local function PuzzlePiece(props: PuzzlePieceProps)
 	local drag = useDrag({
 		id = props.pieceId,
 		initialPosition = props.position,
-		enabled = not props.isLocked,
+		enabled = not props.isLocked and not props.claimedByOther,
 		onDragStart = function()
 			if props.onDragStart then
 				props.onDragStart(props.pieceId)
@@ -114,6 +116,17 @@ local function PuzzlePiece(props: PuzzlePieceProps)
 			ImageTransparency = outlineTransparency,
 			ZIndex = 1,
 		}),
+		ClaimedTint = if props.claimedByOther
+			then React.createElement("Frame", {
+				Size = UDim2.fromScale(1, 1),
+				BackgroundColor3 = props.claimerColor or Color3.fromRGB(255, 100, 100),
+				BackgroundTransparency = 0.7,
+				BorderSizePixel = 0,
+				ZIndex = 2,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
+			})
+			else nil,
 	})
 end
 

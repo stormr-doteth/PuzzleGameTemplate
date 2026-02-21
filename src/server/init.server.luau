@@ -14,6 +14,10 @@ local PuzzleHandler = require(script:WaitForChild("handlers"):WaitForChild("Puzz
 PuzzleHandler.Init()
 print("PuzzleHandler started")
 
+local RoomManager = require(script:WaitForChild("handlers"):WaitForChild("RoomManager"))
+RoomManager.Init()
+print("RoomManager started")
+
 -- Initialize MonetizationHandler if available
 pcall(function()
 	local MonetizationHandler = require(script:WaitForChild("handlers"):WaitForChild("MonetizationHandler"))

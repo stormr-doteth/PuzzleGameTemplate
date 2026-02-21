@@ -6,6 +6,23 @@ local FOLDER_NAME = "PuzzleRemotes"
 local REMOTE_EVENTS = {
 	"PuzzleCompleted",  -- client → server: { imageId, difficultyId, completionTime }
 	"XPAwarded",        -- server → client: { xpGained, cashGained, newLevel?, unlockedImages?, isPersonalBest, previousBest? }
+
+	-- Multiplayer room events (server → client)
+	"RoomPlayerJoined",   -- server → clients: { player: RoomPlayer }
+	"RoomPlayerLeft",     -- server → clients: { userId, newHostUserId? }
+	"RoomConfigUpdated",  -- server → clients: { config: RoomConfig }
+	"RoomPuzzleStarted",  -- server → clients: { puzzleDef, pieces, config }
+	"RoomPieceMoved",     -- server → clients: { id, x, y, userId }
+	"RoomPieceSnapped",   -- server → all: { id, x, y }
+	"RoomPieceClaimed",   -- server → others: { id, userId }
+	"RoomPieceReleased",  -- server → others: { id }
+	"RoomCompleted",      -- server → all: room complete
+	"RoomDestroyed",      -- server → all: room was closed
+
+	-- Multiplayer piece events (client → server)
+	"PieceMove",          -- client → server: { id, x, y } (throttled drag position)
+	"PieceDragStart",     -- client → server: { id }
+	"PieceDragEnd",       -- client → server: { id, x, y }
 }
 
 local REMOTE_FUNCTIONS = {
@@ -16,6 +33,13 @@ local REMOTE_FUNCTIONS = {
 	"DeleteSavedPuzzle", -- client → server: slotIndex (number), returns { success }
 	"EquipItem",        -- client → server: (itemId, category), returns { success, message }
 	"UseHint",          -- client → server: returns { success, hintsRemaining }
+
+	-- Multiplayer room functions (client → server)
+	"CreateRoom",       -- returns { roomId } or { error }
+	"JoinRoom",         -- (roomId) → { roomInfo } or { error }
+	"LeaveRoom",        -- returns { success }
+	"ConfigureRoom",    -- (config) → { success }
+	"StartRoom",        -- returns { success } or { error }
 }
 
 local Remotes = {}

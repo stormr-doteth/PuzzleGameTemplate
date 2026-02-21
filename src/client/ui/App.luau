@@ -9,6 +9,8 @@ local React = require(Packages.React)
 local MenuScreen = require(script.Parent.components.MenuScreen)
 local PuzzleBoard = require(script.Parent.components.PuzzleBoard)
 local CompleteScreen = require(script.Parent.components.CompleteScreen)
+local RoomJoinDialog = require(script.Parent.components.RoomJoinDialog)
+local RoomLobbyScreen = require(script.Parent.components.RoomLobbyScreen)
 
 -- XPBar loaded optionally (created in Phase 2)
 local XPBar = nil
@@ -16,7 +18,7 @@ pcall(function()
 	XPBar = require(script.Parent.components.XPBar)
 end)
 
-type GameState = "menu" | "playing" | "complete" | "admiring"
+type GameState = "menu" | "playing" | "complete" | "admiring" | "room_lobby" | "room_playing" | "room_complete"
 
 local function App()
 	local gameState, setGameState = React.useState("menu" :: GameState)
@@ -31,6 +33,13 @@ local function App()
 	-- Saved puzzles state
 	local savedPuzzles, setSavedPuzzles = React.useState({} :: { any })
 	local resumeState, setResumeState = React.useState(nil :: any)
+
+	-- Multiplayer room state
+	local showRoomDialog, setShowRoomDialog = React.useState(false)
+	local roomInfo, setRoomInfo = React.useState(nil :: any)
+	local roomPuzzleDef, setRoomPuzzleDef = React.useState(nil :: any)
+	local roomInitialPieces, setRoomInitialPieces = React.useState(nil :: any)
+	local roomConfig, setRoomConfig = React.useState(nil :: any)
 
 	-- Player data state (populated by remotes in Phase 2)
 	local playerData, setPlayerData = React.useState(nil :: {
@@ -215,7 +224,214 @@ local function App()
 		end)
 	end
 
+	-- === Multiplayer handlers ===
+	local function onMultiplayer()
+		setShowRoomDialog(true)
+	end
+
+	local function onCreateRoom()
+		setShowRoomDialog(false)
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local createRoom = remotes:FindFirstChild("CreateRoom")
+			if not createRoom or not createRoom:IsA("RemoteFunction") then return end
+
+			local ok, result = pcall(function() return createRoom:InvokeServer() end)
+			if ok and result then
+				if result.error then
+					warn("[App] CreateRoom error:", result.error)
+					return
+				end
+				setRoomInfo(result.roomInfo)
+				setRoomConfig(result.roomInfo and result.roomInfo.config)
+				setGameState("room_lobby")
+			end
+		end)
+	end
+
+	local function onJoinRoom(roomCode: string)
+		setShowRoomDialog(false)
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local joinRemote = remotes:FindFirstChild("JoinRoom")
+			if not joinRemote or not joinRemote:IsA("RemoteFunction") then return end
+
+			local ok, result = pcall(function() return joinRemote:InvokeServer(roomCode) end)
+			if ok and result then
+				if result.error then
+					warn("[App] JoinRoom error:", result.error)
+					return
+				end
+				setRoomInfo(result.roomInfo)
+				setRoomConfig(result.roomInfo and result.roomInfo.config)
+				setGameState("room_lobby")
+			end
+		end)
+	end
+
+	local function onLeaveRoom()
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local leaveRemote = remotes:FindFirstChild("LeaveRoom")
+			if leaveRemote and leaveRemote:IsA("RemoteFunction") then
+				pcall(function() leaveRemote:InvokeServer() end)
+			end
+		end)
+		setRoomInfo(nil)
+		setRoomPuzzleDef(nil)
+		setRoomInitialPieces(nil)
+		setRoomConfig(nil)
+		setGameState("menu")
+	end
+
+	local function onConfigureRoom(config: any)
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local configRemote = remotes:FindFirstChild("ConfigureRoom")
+			if configRemote and configRemote:IsA("RemoteFunction") then
+				pcall(function() configRemote:InvokeServer(config) end)
+			end
+		end)
+	end
+
+	local function onStartRoom()
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local startRemote = remotes:FindFirstChild("StartRoom")
+			if startRemote and startRemote:IsA("RemoteFunction") then
+				local ok, result = pcall(function() return startRemote:InvokeServer() end)
+				if ok and result and result.error then
+					warn("[App] StartRoom error:", result.error)
+				end
+			end
+		end)
+	end
+
+	-- Listen for multiplayer room events
+	React.useEffect(function()
+		local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+		if not remotes then return end
+
+		local connections: { RBXScriptConnection } = {}
+
+		-- RoomPlayerJoined
+		local playerJoined = remotes:FindFirstChild("RoomPlayerJoined")
+		if playerJoined and playerJoined:IsA("RemoteEvent") then
+			table.insert(connections, playerJoined.OnClientEvent:Connect(function(data)
+				setRoomInfo(function(prev)
+					if not prev then return prev end
+					local updated = table.clone(prev)
+					updated.players = table.clone(updated.players)
+					table.insert(updated.players, data.player)
+					return updated
+				end)
+			end))
+		end
+
+		-- RoomPlayerLeft
+		local playerLeft = remotes:FindFirstChild("RoomPlayerLeft")
+		if playerLeft and playerLeft:IsA("RemoteEvent") then
+			table.insert(connections, playerLeft.OnClientEvent:Connect(function(data)
+				setRoomInfo(function(prev)
+					if not prev then return prev end
+					local updated = table.clone(prev)
+					updated.players = {}
+					for _, p in prev.players do
+						if p.userId ~= data.userId then
+							local playerCopy = table.clone(p)
+							if data.newHostUserId and p.userId == data.newHostUserId then
+								playerCopy.isHost = true
+								updated.hostUserId = data.newHostUserId
+							end
+							table.insert(updated.players, playerCopy)
+						end
+					end
+					return updated
+				end)
+			end))
+		end
+
+		-- RoomConfigUpdated
+		local configUpdated = remotes:FindFirstChild("RoomConfigUpdated")
+		if configUpdated and configUpdated:IsA("RemoteEvent") then
+			table.insert(connections, configUpdated.OnClientEvent:Connect(function(data)
+				setRoomConfig(data.config)
+				setRoomInfo(function(prev)
+					if not prev then return prev end
+					local updated = table.clone(prev)
+					updated.config = data.config
+					return updated
+				end)
+			end))
+		end
+
+		-- RoomPuzzleStarted
+		local puzzleStarted = remotes:FindFirstChild("RoomPuzzleStarted")
+		if puzzleStarted and puzzleStarted:IsA("RemoteEvent") then
+			table.insert(connections, puzzleStarted.OnClientEvent:Connect(function(data)
+				local config = data.config
+				setRows(config.rows)
+				setCols(config.cols)
+				setImageAssetId(config.imageAssetId)
+				setImageId(config.imageId)
+				setDifficultyId(config.difficultyId)
+				setRoomPuzzleDef(data.puzzleDef)
+				setRoomInitialPieces(data.pieces)
+				setRoomConfig(config)
+				setCompletionTime(0)
+				setRewardData(nil)
+				setGameState("room_playing")
+			end))
+		end
+
+		-- RoomCompleted
+		local roomCompleted = remotes:FindFirstChild("RoomCompleted")
+		if roomCompleted and roomCompleted:IsA("RemoteEvent") then
+			table.insert(connections, roomCompleted.OnClientEvent:Connect(function()
+				setGameState("room_complete")
+			end))
+		end
+
+		-- RoomDestroyed
+		local roomDestroyed = remotes:FindFirstChild("RoomDestroyed")
+		if roomDestroyed and roomDestroyed:IsA("RemoteEvent") then
+			table.insert(connections, roomDestroyed.OnClientEvent:Connect(function()
+				setRoomInfo(nil)
+				setRoomPuzzleDef(nil)
+				setRoomInitialPieces(nil)
+				setRoomConfig(nil)
+				setGameState("menu")
+			end))
+		end
+
+		return function()
+			for _, conn in connections do
+				conn:Disconnect()
+			end
+		end
+	end, {} :: { any })
+
 	local function onPlayAgain()
+		-- Clean up room state if coming from multiplayer
+		if roomInfo then
+			task.spawn(function()
+				local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+				if not remotes then return end
+				local leaveRemote = remotes:FindFirstChild("LeaveRoom")
+				if leaveRemote and leaveRemote:IsA("RemoteFunction") then
+					pcall(function() leaveRemote:InvokeServer() end)
+				end
+			end)
+			setRoomInfo(nil)
+			setRoomPuzzleDef(nil)
+			setRoomInitialPieces(nil)
+			setRoomConfig(nil)
+		end
 		setGameState("menu")
 		setRewardData(nil)
 	end
@@ -270,12 +486,42 @@ local function App()
 			onDeleteSave = onDeleteSave,
 			playerData = playerData,
 			onEquip = onEquip,
+			onMultiplayer = onMultiplayer,
+		})
+
+		-- Room join dialog overlay
+		if showRoomDialog then
+			safeChildren["RoomJoinDialog"] = React.createElement(RoomJoinDialog, {
+				onCreateRoom = onCreateRoom,
+				onJoinRoom = onJoinRoom,
+				onCancel = function()
+					setShowRoomDialog(false)
+				end,
+			})
+		end
+	end
+
+	-- Room lobby screen
+	if gameState == "room_lobby" then
+		local localPlayer = game:GetService("Players").LocalPlayer
+		local localUserId = localPlayer and localPlayer.UserId or 0
+		local isHost = roomInfo and roomInfo.hostUserId == localUserId
+
+		safeChildren["RoomLobby"] = React.createElement(RoomLobbyScreen, {
+			roomInfo = roomInfo,
+			isHost = isHost,
+			onLeave = onLeaveRoom,
+			onConfigure = onConfigureRoom,
+			onStart = onStartRoom,
+			unlockedImages = if playerData then playerData.unlockedImages else nil,
+			playerLevel = if playerData then playerData.level else nil,
 		})
 	end
 
 	-- Board ScreenGui: full screen for piece dragging (rendered below safe UI)
 	local boardGui = nil
-	if gameState == "playing" or gameState == "complete" or gameState == "admiring" then
+	local isMultiplayerBoard = gameState == "room_playing" or gameState == "room_complete"
+	if gameState == "playing" or gameState == "complete" or gameState == "admiring" or isMultiplayerBoard then
 		boardGui = React.createElement("ScreenGui", {
 			Name = "PuzzleAppBoard",
 			ResetOnSpawn = false,
@@ -290,20 +536,25 @@ local function App()
 				difficultyId = difficultyId,
 				rows = rows,
 				cols = cols,
-				onComplete = onComplete,
-				onGiveUp = onGiveUp,
-				onBackToMenu = onBackToMenu,
-				savedState = resumeState,
+				onComplete = if isMultiplayerBoard then function()
+					-- In multiplayer, completion is handled by RoomCompleted event
+				end else onComplete,
+				onGiveUp = if isMultiplayerBoard then onLeaveRoom else onGiveUp,
+				onBackToMenu = if isMultiplayerBoard then nil else onBackToMenu,
+				savedState = if isMultiplayerBoard then nil else resumeState,
 				equippedBoardSkin = if playerData then playerData.equippedBoardSkin else nil,
 				hintsRemaining = if playerData then playerData.hintsRemaining else 0,
 				onHintUsed = onHintUsed,
+				isMultiplayer = isMultiplayerBoard,
+				roomPuzzleDef = roomPuzzleDef,
+				roomInitialPieces = roomInitialPieces,
 			}),
 		})
 	end
 
 	-- Complete ScreenGui: full screen so confetti ignores top bar
 	local completeGui = nil
-	if gameState == "complete" then
+	if gameState == "complete" or gameState == "room_complete" then
 		completeGui = React.createElement("ScreenGui", {
 			Name = "PuzzleAppComplete",
 			ResetOnSpawn = false,
