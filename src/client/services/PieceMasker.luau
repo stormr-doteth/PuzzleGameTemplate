@@ -161,7 +161,8 @@ local function getPieceAlpha(
 	padRight: number,
 	padBottom: number,
 	padLeft: number,
-	edges: PuzzleTypes.PieceEdges
+	edges: PuzzleTypes.PieceEdges,
+	aaRadius: number
 ): number
 	-- Convert to cell-local coordinates where (0,0) is top-left of the base cell
 	local cx = px - padLeft
@@ -274,8 +275,8 @@ local function getPieceAlpha(
 	end
 
 	-- Anti-aliasing: smooth alpha near boundaries
-	if minDist < AA_RADIUS then
-		return math.clamp(minDist / AA_RADIUS, 0, 1)
+	if minDist < aaRadius then
+		return math.clamp(minDist / aaRadius, 0, 1)
 	end
 
 	return 1
@@ -299,6 +300,11 @@ function PieceMasker.createPieceImages(
 	-- Tab height used as padding (the protrusion depth)
 	-- For semicircles, the radius equals tabW/2, and the protrusion = radius
 	local tabRadius = math.floor(tabW / 2)
+
+	-- Scale outline/AA thickness relative to cell size (tuned for ~500px cells)
+	local scaleFactor = math.min(cellW, cellH) / 500
+	local outlineThickness = math.max(1, math.floor(OUTLINE_THICKNESS * scaleFactor + 0.5))
+	local aaRadius = math.max(1, math.floor(AA_RADIUS * scaleFactor + 0.5))
 
 	local result: { [number]: PieceImageData } = {}
 
@@ -345,7 +351,7 @@ function PieceMasker.createPieceImages(
 						local alpha = getPieceAlpha(
 							px, py, cellW, cellH, tabW, tabH,
 							padTop, padRight, padBottom, padLeft,
-							piece.edges
+							piece.edges, aaRadius
 						)
 
 						if alpha > 0 and sourcePx >= 0 and sourcePx < sourceWidth then
@@ -391,7 +397,7 @@ function PieceMasker.createPieceImages(
 				)
 
 				-- Outline band: covers boundary and extends slightly outside to hide AA fringe
-				if sd <= AA_RADIUS and -sd <= OUTLINE_THICKNESS then
+				if sd <= aaRadius and -sd <= outlineThickness then
 					local offset = px * 4
 					buffer.writeu8(outlineRowBuffer, offset, 255)
 					buffer.writeu8(outlineRowBuffer, offset + 1, 255)

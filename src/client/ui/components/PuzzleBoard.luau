@@ -74,6 +74,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local cellSize, setCellSize = React.useState(Vector2.new(100, 100))
 	local pixelScale, setPixelScale = React.useState(1)
 
+	-- Ref to track group follower offsets during drag
+	local groupDragOffsets = React.useRef({})
+
 	-- Load image and generate/restore puzzle on mount
 	React.useEffect(function()
 		setIsLoading(true)
@@ -127,7 +130,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				-- No scramble or restore needed
 			elseif props.savedState then
 				-- Restore piece positions and timer from saved state
-				actions.restorePieces(props.savedState.pieces)
+				actions.restorePieces(props.savedState.pieces, props.savedState.groups)
 				timer.restore(props.savedState.elapsedSeconds)
 			else
 				local pieceIds = {}
@@ -144,10 +147,8 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 
 				actions.scramblePieces(
 					pieceIds,
-					viewportW - displayCellW,
-					viewportH - displayCellH,
-					displayCellW,
-					displayCellH,
+					viewportW,
+					viewportH,
 					bOffX,
 					bOffY,
 					displayBoardW,
@@ -227,10 +228,68 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		if props.isMultiplayer and actions.claimPiece then
 			actions.claimPiece(pieceId)
 		end
+
+		-- Compute group follower offsets for drag (in screen coords)
+		local piece = state.pieces[pieceId]
+		local groupId = piece and piece.groupId
+		if groupId and state.groups and state.groups[groupId] then
+			local offsets = {}
+			if props.isMultiplayer and pieceImages then
+				-- Multiplayer: piece positions are virtual coords, convert to screen for offsets
+				local dragImg = pieceImages[pieceId]
+				if dragImg then
+					local dragSox = math.floor(dragImg.offsetX * pixelScale)
+					local dragSoy = math.floor(dragImg.offsetY * pixelScale)
+					local dragScreenX, dragScreenY = virtualToScreen(piece.x, piece.y, dragSox, dragSoy)
+					for _, memberId in state.groups[groupId] do
+						if memberId ~= pieceId then
+							local memberPiece = state.pieces[memberId]
+							local memberImg = pieceImages[memberId]
+							if memberPiece and memberImg then
+								local mSox = math.floor(memberImg.offsetX * pixelScale)
+								local mSoy = math.floor(memberImg.offsetY * pixelScale)
+								local mScreenX, mScreenY = virtualToScreen(memberPiece.x, memberPiece.y, mSox, mSoy)
+								offsets[memberId] = {
+									dx = mScreenX - dragScreenX,
+									dy = mScreenY - dragScreenY,
+								}
+							end
+						end
+					end
+				end
+			else
+				-- Solo: positions are already screen coords
+				for _, memberId in state.groups[groupId] do
+					if memberId ~= pieceId then
+						local memberPiece = state.pieces[memberId]
+						if memberPiece then
+							offsets[memberId] = {
+								dx = memberPiece.x - piece.x,
+								dy = memberPiece.y - piece.y,
+							}
+						end
+					end
+				end
+			end
+			groupDragOffsets.current = offsets
+		else
+			groupDragOffsets.current = {}
+		end
 	end
 
 	local function onDragMove(pieceId: number, x: number, y: number)
 		if props.isMultiplayer and pieceImages then
+			-- Multiplayer: move followers locally (server handles their network broadcast)
+			for memberId, offset in groupDragOffsets.current do
+				local memberImg = pieceImages[memberId]
+				if memberImg and actions.movePieceLocal then
+					local mSox = math.floor(memberImg.offsetX * pixelScale)
+					local mSoy = math.floor(memberImg.offsetY * pixelScale)
+					local mvx, mvy = screenToVirtual(x + offset.dx, y + offset.dy, mSox, mSoy)
+					actions.movePieceLocal(memberId, mvx, mvy)
+				end
+			end
+			-- Send dragged piece to server
 			local imageData = pieceImages[pieceId]
 			if imageData then
 				local sox = math.floor(imageData.offsetX * pixelScale)
@@ -238,10 +297,23 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				local vx, vy = screenToVirtual(x, y, sox, soy)
 				actions.movePiece(pieceId, vx, vy)
 			end
+		else
+			-- Solo: move all followers via movePiece (screen coords)
+			for memberId, offset in groupDragOffsets.current do
+				actions.movePiece(memberId, x + offset.dx, y + offset.dy)
+			end
 		end
 	end
 
 	local function onDragEnd(pieceId: number, x: number, y: number)
+		groupDragOffsets.current = {}
+
+		-- Always persist drop position to state so it stays in sync
+		-- (prevents snap-back via initialPosition effect and fixes save/restore)
+		if not props.isMultiplayer then
+			actions.movePiece(pieceId, x, y)
+		end
+
 		if not puzzleDef or not pieceImages then
 			return
 		end
@@ -267,7 +339,10 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			actions.trySnap(pieceId, vx, vy, 0, 0)
 			-- Hook always returns false; server handles snap sound via events
 		else
-			local snapped = actions.trySnap(pieceId, x, y, correctX, correctY)
+			local snapped = actions.trySnap(
+				pieceId, x, y, correctX, correctY,
+				puzzleDef, pieceImages, cellSize, pixelScale, boardOffsetX, boardOffsetY
+			)
 			if snapped then
 				SoundService.playSnap()
 			end
@@ -334,7 +409,12 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 						table.insert(savePieces, {
 							id = id, x = p.x, y = p.y,
 							zIndex = p.zIndex, locked = p.locked,
+						groupId = p.groupId,
 						})
+					end
+					local saveGroups = {}
+					for gid, memberIds in state.groups do
+						table.insert(saveGroups, { id = gid, pieceIds = memberIds })
 					end
 					props.onBackToMenu({
 						imageId = props.imageId,
@@ -346,6 +426,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 						savedAt = os.time(),
 						puzzleDef = puzzleDef,
 						pieces = savePieces,
+						groups = saveGroups,
 					})
 				end
 			end,
@@ -561,7 +642,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 						isLocked = pieceState.locked,
 						isHovered = (pieceId == topmostHoveredId),
 						onDragStart = onDragStart,
-						onDragMove = if props.isMultiplayer then onDragMove else nil,
+						onDragMove = onDragMove,
 						onDragEnd = onDragEnd,
 						onHoverStart = onPieceHoverStart,
 						onHoverEnd = onPieceHoverEnd,

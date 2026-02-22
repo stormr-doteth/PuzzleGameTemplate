@@ -16,13 +16,21 @@ local REMOTE_EVENTS = {
 	"RoomPieceSnapped",   -- server → all: { id, x, y }
 	"RoomPieceClaimed",   -- server → others: { id, userId }
 	"RoomPieceReleased",  -- server → others: { id }
+	"RoomGroupFormed",    -- server → all: { groupId, pieces: { { id, x, y } } }
+	"RoomPiecesSnapped",  -- server → all: { pieces: { { id, x, y } } } (batch grid lock)
 	"RoomCompleted",      -- server → all: room complete
 	"RoomDestroyed",      -- server → all: room was closed
+	"RoomReturnedToLobby", -- server → all: { config: RoomConfig? } (room reset to lobby)
 
 	-- Multiplayer piece events (client → server)
 	"PieceMove",          -- client → server: { id, x, y } (throttled drag position)
 	"PieceDragStart",     -- client → server: { id }
 	"PieceDragEnd",       -- client → server: { id, x, y }
+
+	-- Cafe seating events (server → client)
+	"PlayerSeated",           -- server → client: { tableId, tableType, seatIndex, roomId? }
+	"PlayerUnseated",         -- server → client: {}
+	"TableOccupancyChanged",  -- server → all: { tableId, occupants }
 }
 
 local REMOTE_FUNCTIONS = {
@@ -40,6 +48,10 @@ local REMOTE_FUNCTIONS = {
 	"LeaveRoom",        -- returns { success }
 	"ConfigureRoom",    -- (config) → { success }
 	"StartRoom",        -- returns { success } or { error }
+	"RestartRoom",      -- (sameConfig: boolean) → { success } or { error }
+
+	-- Cafe table functions
+	"GetTableInfo",     -- (tableId) → { tableType, occupants, roomId? }
 }
 
 local Remotes = {}

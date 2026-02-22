@@ -10,12 +10,14 @@ export type PieceState = {
 	y: number,
 	zIndex: number,
 	locked: boolean,
+	groupId: number?,
 }
 
 export type PuzzleState = {
 	pieces: { [number]: PieceState },
 	isComplete: boolean,
 	claimedPieces: { [number]: number }, -- pieceId → userId
+	groups: { [number]: { number } },
 }
 
 export type PuzzleActions = {
@@ -31,6 +33,7 @@ export type PuzzleActions = {
 		boardH: number
 	) -> (),
 	movePiece: (id: number, x: number, y: number) -> (),
+	movePieceLocal: (id: number, x: number, y: number) -> (),
 	trySnap: (
 		id: number,
 		x: number,
@@ -50,6 +53,7 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 	local zCounter, setZCounter = React.useState(1)
 	local isComplete, setIsComplete = React.useState(false)
 	local claimedPieces, setClaimedPieces = React.useState({} :: { [number]: number })
+	local groups, setGroups = React.useState({} :: { [number]: { number } })
 	local lastSendTime = React.useRef(0)
 
 	-- Initialize pieces from server data
@@ -64,12 +68,14 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 					y = pieceData.y,
 					zIndex = pieceData.zIndex or 1,
 					locked = pieceData.locked or false,
+					groupId = nil,
 				}
 			end
 		end
 		setPieces(newPieces)
 		setIsComplete(false)
 		setZCounter(2)
+		setGroups({})
 	end, { initialPieces } :: { any })
 
 	-- Listen for server events
@@ -96,24 +102,153 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 			end))
 		end
 
-		-- RoomPieceSnapped — piece locked in place
+		-- RoomPieceSnapped — single piece locked in place
 		local snappedEvent = remotes:FindFirstChild("RoomPieceSnapped")
 		if snappedEvent and snappedEvent:IsA("RemoteEvent") then
 			table.insert(connections, snappedEvent.OnClientEvent:Connect(function(data)
 				if type(data) ~= "table" or type(data.id) ~= "number" then return end
+				local snappedId = data.id
 				setPieces(function(prev)
 					local updated = table.clone(prev)
-					updated[data.id] = {
+					local oldPiece = updated[snappedId]
+					local oldGroupId = oldPiece and oldPiece.groupId
+					updated[snappedId] = {
 						x = data.x,
 						y = data.y,
 						zIndex = 1,
 						locked = true,
+						groupId = nil,
 					}
+					-- If piece was in a group, remove it
+					if oldGroupId then
+						setGroups(function(prevGroups)
+							local newGroups = table.clone(prevGroups)
+							local members = newGroups[oldGroupId]
+							if members then
+								local newMembers = {}
+								for _, mid in members do
+									if mid ~= snappedId then
+										table.insert(newMembers, mid)
+									end
+								end
+								if #newMembers <= 1 then
+									-- Dissolve group
+									if #newMembers == 1 then
+										-- Clear groupId on remaining piece
+										setPieces(function(prev2)
+											local u = table.clone(prev2)
+											local remainId = newMembers[1]
+											if u[remainId] then
+												u[remainId] = table.clone(u[remainId])
+												u[remainId].groupId = nil
+											end
+											return u
+										end)
+									end
+									newGroups[oldGroupId] = nil
+								else
+									newGroups[oldGroupId] = newMembers
+								end
+							end
+							return newGroups
+						end)
+					end
 					return updated
 				end)
 				setClaimedPieces(function(prev)
 					local updated = table.clone(prev)
-					updated[data.id] = nil
+					updated[snappedId] = nil
+					return updated
+				end)
+			end))
+		end
+
+		-- RoomGroupFormed — group created/merged
+		local groupFormedEvent = remotes:FindFirstChild("RoomGroupFormed")
+		if groupFormedEvent and groupFormedEvent:IsA("RemoteEvent") then
+			table.insert(connections, groupFormedEvent.OnClientEvent:Connect(function(data)
+				if type(data) ~= "table" or type(data.groupId) ~= "number" or type(data.pieces) ~= "table" then return end
+				local groupId = data.groupId
+				local memberIds = {}
+
+				setPieces(function(prev)
+					local updated = table.clone(prev)
+					for _, pieceData in data.pieces do
+						if type(pieceData) == "table" and type(pieceData.id) == "number" then
+							updated[pieceData.id] = table.clone(updated[pieceData.id] or { x = 0, y = 0, zIndex = 1, locked = false })
+							updated[pieceData.id].x = pieceData.x
+							updated[pieceData.id].y = pieceData.y
+							updated[pieceData.id].groupId = groupId
+							table.insert(memberIds, pieceData.id)
+						end
+					end
+					return updated
+				end)
+
+				setGroups(function(prevGroups)
+					local newGroups = table.clone(prevGroups)
+					newGroups[groupId] = memberIds
+					return newGroups
+				end)
+
+				-- Clear claims on all members
+				setClaimedPieces(function(prev)
+					local updated = table.clone(prev)
+					for _, pieceData in data.pieces do
+						if type(pieceData) == "table" and type(pieceData.id) == "number" then
+							updated[pieceData.id] = nil
+						end
+					end
+					return updated
+				end)
+			end))
+		end
+
+		-- RoomPiecesSnapped — batch grid lock
+		local piecesSnappedEvent = remotes:FindFirstChild("RoomPiecesSnapped")
+		if piecesSnappedEvent and piecesSnappedEvent:IsA("RemoteEvent") then
+			table.insert(connections, piecesSnappedEvent.OnClientEvent:Connect(function(data)
+				if type(data) ~= "table" or type(data.pieces) ~= "table" then return end
+
+				-- Collect group IDs to remove
+				local groupsToRemove: { [number]: boolean } = {}
+
+				setPieces(function(prev)
+					local updated = table.clone(prev)
+					for _, pieceData in data.pieces do
+						if type(pieceData) == "table" and type(pieceData.id) == "number" then
+							local oldPiece = updated[pieceData.id]
+							if oldPiece and oldPiece.groupId then
+								groupsToRemove[oldPiece.groupId] = true
+							end
+							updated[pieceData.id] = {
+								x = pieceData.x,
+								y = pieceData.y,
+								zIndex = 1,
+								locked = true,
+								groupId = nil,
+							}
+						end
+					end
+					return updated
+				end)
+
+				setGroups(function(prevGroups)
+					local newGroups = table.clone(prevGroups)
+					for gid in groupsToRemove do
+						newGroups[gid] = nil
+					end
+					return newGroups
+				end)
+
+				-- Clear claims
+				setClaimedPieces(function(prev)
+					local updated = table.clone(prev)
+					for _, pieceData in data.pieces do
+						if type(pieceData) == "table" and type(pieceData.id) == "number" then
+							updated[pieceData.id] = nil
+						end
+					end
 					return updated
 				end)
 			end))
@@ -168,12 +303,24 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 		if event and event:IsA("RemoteEvent") then
 			event:FireServer({ id = id })
 		end
-		-- Optimistic local claim
+		-- Optimistic local claim (piece + group members)
 		local localPlayer = game:GetService("Players").LocalPlayer
 		if localPlayer then
 			setClaimedPieces(function(prev)
 				local updated = table.clone(prev)
 				updated[id] = localPlayer.UserId
+				-- Also claim group members
+				local currentPieces = pieces
+				local p = currentPieces[id]
+				if p and p.groupId then
+					local currentGroups = groups
+					local members = currentGroups[p.groupId]
+					if members then
+						for _, mid in members do
+							updated[mid] = localPlayer.UserId
+						end
+					end
+				end
 				return updated
 			end)
 		end
@@ -205,6 +352,19 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 		end
 	end
 
+	-- Local-only move (no server send) — used for group followers during drag
+	local function movePieceLocal(id: number, x: number, y: number)
+		setPieces(function(prev)
+			local updated = table.clone(prev)
+			if updated[id] and not updated[id].locked then
+				updated[id] = table.clone(updated[id])
+				updated[id].x = x
+				updated[id].y = y
+			end
+			return updated
+		end)
+	end
+
 	local function releasePiece(id: number, x: number, y: number)
 		-- x, y are already in virtual coords
 		local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
@@ -214,10 +374,21 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 				event:FireServer({ id = id, x = x, y = y })
 			end
 		end
-		-- Clear local claim (server will confirm snap or release)
+		-- Clear local claim on piece and group members
 		setClaimedPieces(function(prev)
 			local updated = table.clone(prev)
 			updated[id] = nil
+			local currentPieces = pieces
+			local p = currentPieces[id]
+			if p and p.groupId then
+				local currentGroups = groups
+				local members = currentGroups[p.groupId]
+				if members then
+					for _, mid in members do
+						updated[mid] = nil
+					end
+				end
+			end
 			return updated
 		end)
 	end
@@ -243,9 +414,20 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 			local newZ = prev + 1
 			setPieces(function(prevPieces)
 				local updated = table.clone(prevPieces)
-				if updated[id] and not updated[id].locked then
-					updated[id] = table.clone(updated[id])
+				local piece = updated[id]
+				if piece and not piece.locked then
+					updated[id] = table.clone(piece)
 					updated[id].zIndex = newZ
+
+					-- Also bring all group members to front
+					if piece.groupId then
+						for pid, ps in updated do
+							if pid ~= id and ps.groupId == piece.groupId and not ps.locked then
+								updated[pid] = table.clone(ps)
+								updated[pid].zIndex = newZ
+							end
+						end
+					end
 				end
 				return updated
 			end)
@@ -257,11 +439,13 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 		pieces = pieces,
 		isComplete = isComplete,
 		claimedPieces = claimedPieces,
+		groups = groups,
 	}
 
 	local actions: PuzzleActions = {
 		scramblePieces = scramblePieces,
 		movePiece = movePiece,
+		movePieceLocal = movePieceLocal,
 		trySnap = trySnap,
 		bringToFront = bringToFront,
 		restorePieces = restorePieces,

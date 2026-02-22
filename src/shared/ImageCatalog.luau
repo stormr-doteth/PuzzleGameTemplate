@@ -19,9 +19,9 @@ local IMAGES: { ImageEntry } = {
 	},
 	{
 		id = "ocean_waves",
-		assetId = "rbxassetid://136820067070498",
+		assetId = "rbxassetid://87562993721412",
 		name = "Ocean Waves",
-		thumbnailId = "rbxassetid://136820067070498",
+		thumbnailId = "rbxassetid://87562993721412",
 		category = "Nature",
 		defaultUnlocked = true,
 	},

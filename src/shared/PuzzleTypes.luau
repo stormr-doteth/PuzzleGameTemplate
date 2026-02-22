@@ -48,7 +48,8 @@ export type SavedPuzzleData = {
 	elapsedSeconds: number,
 	savedAt: number,
 	puzzleDef: PuzzleDefinition,
-	pieces: { { id: number, x: number, y: number, zIndex: number, locked: boolean } },
+	pieces: { { id: number, x: number, y: number, zIndex: number, locked: boolean, groupId: number? } },
+	groups: { { id: number, pieceIds: { number } } }?,
 }
 
 return {}

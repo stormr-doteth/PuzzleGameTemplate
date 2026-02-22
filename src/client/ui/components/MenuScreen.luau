@@ -17,7 +17,6 @@ export type MenuScreenProps = {
 	onDeleteSave: ((slotIndex: number) -> ())?,
 	playerData: any?,
 	onEquip: ((itemId: string, category: string) -> ())?,
-	onMultiplayer: (() -> ())?,
 }
 
 local DIFFICULTIES = {
@@ -132,22 +131,6 @@ local function MenuScreen(props: MenuScreenProps)
 				Font = Enum.Font.GothamMedium,
 				[React.Event.Activated] = function()
 					setShowStats(true)
-				end,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-			}),
-			MultiplayerBtn = React.createElement("TextButton", {
-				LayoutOrder = 4,
-				Size = UDim2.new(0, 120, 0, 36),
-				BackgroundColor3 = Color3.fromRGB(80, 60, 140),
-				Text = "Multiplayer",
-				TextColor3 = Color3.fromRGB(220, 200, 255),
-				TextSize = 14,
-				Font = Enum.Font.GothamMedium,
-				[React.Event.Activated] = function()
-					if props.onMultiplayer then
-						props.onMultiplayer()
-					end
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),

@@ -28,7 +28,7 @@ local function useDrag(options: UseDragOptions): UseDragReturn
 	local dragOffset, setDragOffset = React.useState(Vector2.zero)
 	local enabled = if options.enabled ~= nil then options.enabled else true
 
-	-- Update position when initialPosition changes (for snapping)
+	-- Update position when initialPosition changes (for snapping / group follower movement)
 	React.useEffect(function()
 		setPosition(options.initialPosition)
 	end, { options.initialPosition })

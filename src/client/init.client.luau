@@ -10,6 +10,10 @@ local ReactRoblox = require(Packages.ReactRoblox)
 local Remotes = require(Shared.Remotes)
 Remotes.Init()
 
+-- Initialize SeatingService before mounting UI
+local SeatingService = require(script:WaitForChild("services"):WaitForChild("SeatingService"))
+SeatingService.Init()
+
 local App = require(script:WaitForChild("ui"):WaitForChild("App"))
 
 local localPlayer = Players.LocalPlayer

@@ -18,6 +18,15 @@ local RoomManager = require(script:WaitForChild("handlers"):WaitForChild("RoomMa
 RoomManager.Init()
 print("RoomManager started")
 
+-- Build cafe environment and initialize table manager
+local CafeBuilder = require(script:WaitForChild("cafe"):WaitForChild("CafeBuilder"))
+local tableModels = CafeBuilder.Build()
+print("CafeBuilder built")
+
+local TableManager = require(script:WaitForChild("cafe"):WaitForChild("TableManager"))
+TableManager.Init(tableModels, RoomManager)
+print("TableManager started")
+
 -- Initialize MonetizationHandler if available
 pcall(function()
 	local MonetizationHandler = require(script:WaitForChild("handlers"):WaitForChild("MonetizationHandler"))

@@ -1,4 +1,5 @@
 local CaptureService = game:GetService("CaptureService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 
@@ -9,8 +10,13 @@ local React = require(Packages.React)
 local MenuScreen = require(script.Parent.components.MenuScreen)
 local PuzzleBoard = require(script.Parent.components.PuzzleBoard)
 local CompleteScreen = require(script.Parent.components.CompleteScreen)
-local RoomJoinDialog = require(script.Parent.components.RoomJoinDialog)
 local RoomLobbyScreen = require(script.Parent.components.RoomLobbyScreen)
+
+-- SeatingService loaded optionally
+local SeatingService = nil
+pcall(function()
+	SeatingService = require(script.Parent.Parent.services.SeatingService)
+end)
 
 -- XPBar loaded optionally (created in Phase 2)
 local XPBar = nil
@@ -18,10 +24,10 @@ pcall(function()
 	XPBar = require(script.Parent.components.XPBar)
 end)
 
-type GameState = "menu" | "playing" | "complete" | "admiring" | "room_lobby" | "room_playing" | "room_complete"
+type GameState = "walking" | "menu" | "playing" | "complete" | "admiring" | "room_lobby" | "room_playing" | "room_complete"
 
 local function App()
-	local gameState, setGameState = React.useState("menu" :: GameState)
+	local gameState, setGameState = React.useState("walking" :: GameState)
 	local rows, setRows = React.useState(3)
 	local cols, setCols = React.useState(3)
 	local imageAssetId, setImageAssetId = React.useState("")
@@ -35,11 +41,16 @@ local function App()
 	local resumeState, setResumeState = React.useState(nil :: any)
 
 	-- Multiplayer room state
-	local showRoomDialog, setShowRoomDialog = React.useState(false)
 	local roomInfo, setRoomInfo = React.useState(nil :: any)
 	local roomPuzzleDef, setRoomPuzzleDef = React.useState(nil :: any)
 	local roomInitialPieces, setRoomInitialPieces = React.useState(nil :: any)
 	local roomConfig, setRoomConfig = React.useState(nil :: any)
+
+	-- Admire mode tracking for multiplayer
+	local admireIsMultiplayer, setAdmireIsMultiplayer = React.useState(false)
+
+	-- Seating state
+	local seatingInfo, setSeatingInfo = React.useState(nil :: any)
 
 	-- Player data state (populated by remotes in Phase 2)
 	local playerData, setPlayerData = React.useState(nil :: {
@@ -138,6 +149,66 @@ local function App()
 		end
 	end, {} :: { any })
 
+	-- Listen for seating events from server
+	React.useEffect(function()
+		local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+		if not remotes then return end
+
+		local connections: { RBXScriptConnection } = {}
+
+		local playerSeated = remotes:FindFirstChild("PlayerSeated")
+		if playerSeated and playerSeated:IsA("RemoteEvent") then
+			table.insert(connections, playerSeated.OnClientEvent:Connect(function(data)
+				setSeatingInfo(data)
+				if SeatingService then
+					SeatingService.SetSeated(data)
+					SeatingService.TransitionCameraToTable(data.tableId)
+				end
+
+				if data.tableType == "single" then
+					setGameState("menu")
+				elseif data.tableType == "multi" then
+					-- Fetch room info via GetTableInfo
+					task.spawn(function()
+						local getTableInfo = remotes:FindFirstChild("GetTableInfo")
+						if getTableInfo and getTableInfo:IsA("RemoteFunction") then
+							local ok, result = pcall(function() return getTableInfo:InvokeServer(data.tableId) end)
+							if ok and result and result.roomInfo then
+								setRoomInfo(result.roomInfo)
+								setRoomConfig(result.roomInfo.config)
+								setGameState("room_lobby")
+							end
+						end
+					end)
+				end
+			end))
+		end
+
+		local playerUnseated = remotes:FindFirstChild("PlayerUnseated")
+		if playerUnseated and playerUnseated:IsA("RemoteEvent") then
+			table.insert(connections, playerUnseated.OnClientEvent:Connect(function()
+				setSeatingInfo(nil)
+				if SeatingService then
+					SeatingService.ClearSeated()
+					SeatingService.RestoreCamera()
+				end
+
+				-- Clean up room state if in multiplayer
+				setRoomInfo(nil)
+				setRoomPuzzleDef(nil)
+				setRoomInitialPieces(nil)
+				setRoomConfig(nil)
+				setGameState("walking")
+			end))
+		end
+
+		return function()
+			for _, conn in connections do
+				conn:Disconnect()
+			end
+		end
+	end, {} :: { any })
+
 	local function onStart(selectedRows: number, selectedCols: number, selectedImageAssetId: string, selectedImageId: string, selectedDifficultyId: string)
 		setRows(selectedRows)
 		setCols(selectedCols)
@@ -190,7 +261,11 @@ local function App()
 
 	local function onGiveUp()
 		setResumeState(nil)
-		setGameState("menu")
+		if seatingInfo then
+			setGameState("menu")
+		else
+			setGameState("walking")
+		end
 	end
 
 	local function onResume(slotIndex: number)
@@ -225,12 +300,7 @@ local function App()
 	end
 
 	-- === Multiplayer handlers ===
-	local function onMultiplayer()
-		setShowRoomDialog(true)
-	end
-
 	local function onCreateRoom()
-		setShowRoomDialog(false)
 		task.spawn(function()
 			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
 			if not remotes then return end
@@ -251,7 +321,6 @@ local function App()
 	end
 
 	local function onJoinRoom(roomCode: string)
-		setShowRoomDialog(false)
 		task.spawn(function()
 			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
 			if not remotes then return end
@@ -284,7 +353,11 @@ local function App()
 		setRoomPuzzleDef(nil)
 		setRoomInitialPieces(nil)
 		setRoomConfig(nil)
-		setGameState("menu")
+		if seatingInfo then
+			setGameState("menu")
+		else
+			setGameState("walking")
+		end
 	end
 
 	local function onConfigureRoom(config: any)
@@ -397,6 +470,30 @@ local function App()
 			end))
 		end
 
+		-- RoomReturnedToLobby
+		local roomReturnedToLobby = remotes:FindFirstChild("RoomReturnedToLobby")
+		if roomReturnedToLobby and roomReturnedToLobby:IsA("RemoteEvent") then
+			table.insert(connections, roomReturnedToLobby.OnClientEvent:Connect(function(data)
+				setRoomPuzzleDef(nil)
+				setRoomInitialPieces(nil)
+				setRewardData(nil)
+				setCompletionTime(0)
+				if data.config then
+					setRoomConfig(data.config)
+				else
+					setRoomConfig(nil)
+				end
+				setRoomInfo(function(prev)
+					if not prev then return prev end
+					local updated = table.clone(prev)
+					updated.state = "lobby"
+					updated.config = data.config
+					return updated
+				end)
+				setGameState("room_lobby")
+			end))
+		end
+
 		-- RoomDestroyed
 		local roomDestroyed = remotes:FindFirstChild("RoomDestroyed")
 		if roomDestroyed and roomDestroyed:IsA("RemoteEvent") then
@@ -405,7 +502,15 @@ local function App()
 				setRoomPuzzleDef(nil)
 				setRoomInitialPieces(nil)
 				setRoomConfig(nil)
-				setGameState("menu")
+				-- Stay at menu if seated, otherwise walk
+				setSeatingInfo(function(prev)
+					if prev then
+						setGameState("menu")
+					else
+						setGameState("walking")
+					end
+					return prev
+				end)
 			end))
 		end
 
@@ -432,11 +537,45 @@ local function App()
 			setRoomInitialPieces(nil)
 			setRoomConfig(nil)
 		end
-		setGameState("menu")
+		-- Stay at the table (menu) if seated, otherwise go to walking
+		if seatingInfo then
+			setGameState("menu")
+		else
+			setGameState("walking")
+		end
 		setRewardData(nil)
 	end
 
+	local function onRoomPlayAgain()
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local restartRemote = remotes:FindFirstChild("RestartRoom")
+			if restartRemote and restartRemote:IsA("RemoteFunction") then
+				local ok, result = pcall(function() return restartRemote:InvokeServer(true) end)
+				if ok and result and result.error then
+					warn("[App] RestartRoom error:", result.error)
+				end
+			end
+		end)
+	end
+
+	local function onRoomChooseNewPuzzle()
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local restartRemote = remotes:FindFirstChild("RestartRoom")
+			if restartRemote and restartRemote:IsA("RemoteFunction") then
+				local ok, result = pcall(function() return restartRemote:InvokeServer(false) end)
+				if ok and result and result.error then
+					warn("[App] RestartRoom error:", result.error)
+				end
+			end
+		end)
+	end
+
 	local function onAdmire()
+		setAdmireIsMultiplayer(gameState == "room_complete")
 		setGameState("admiring")
 	end
 
@@ -475,6 +614,27 @@ local function App()
 		end)
 	end
 
+	if gameState == "walking" then
+		safeChildren["WalkingHint"] = React.createElement("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -30),
+			Size = UDim2.new(0, 500, 0, 50),
+			BackgroundColor3 = Color3.fromRGB(30, 30, 40),
+			BackgroundTransparency = 0.3,
+			Text = "Walk to a table and sit down to start a puzzle!",
+			TextColor3 = Color3.fromRGB(255, 255, 255),
+			TextSize = 20,
+			Font = Enum.Font.GothamMedium,
+			TextWrapped = true,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			Padding = React.createElement("UIPadding", {
+				PaddingLeft = UDim.new(0, 16),
+				PaddingRight = UDim.new(0, 16),
+			}),
+		})
+	end
+
 	if gameState == "menu" then
 		safeChildren["Menu"] = React.createElement(MenuScreen, {
 			onStart = onStart,
@@ -486,19 +646,30 @@ local function App()
 			onDeleteSave = onDeleteSave,
 			playerData = playerData,
 			onEquip = onEquip,
-			onMultiplayer = onMultiplayer,
 		})
 
-		-- Room join dialog overlay
-		if showRoomDialog then
-			safeChildren["RoomJoinDialog"] = React.createElement(RoomJoinDialog, {
-				onCreateRoom = onCreateRoom,
-				onJoinRoom = onJoinRoom,
-				onCancel = function()
-					setShowRoomDialog(false)
-				end,
-			})
-		end
+		-- Leave Table button
+		safeChildren["LeaveTableBtn"] = React.createElement("TextButton", {
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 20, 1, -20),
+			Size = UDim2.new(0, 140, 0, 40),
+			BackgroundColor3 = Color3.fromRGB(140, 60, 60),
+			Text = "Leave Table",
+			TextColor3 = Color3.fromRGB(255, 255, 255),
+			TextSize = 16,
+			Font = Enum.Font.GothamBold,
+			[React.Event.Activated] = function()
+				local localPlayer = Players.LocalPlayer
+				if localPlayer and localPlayer.Character then
+					local humanoid = localPlayer.Character:FindFirstChildOfClass("Humanoid")
+					if humanoid then
+						humanoid.Sit = false
+					end
+				end
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		})
 	end
 
 	-- Room lobby screen
@@ -564,13 +735,16 @@ local function App()
 			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		}, {
 			Complete = React.createElement(CompleteScreen, {
-				onPlayAgain = onPlayAgain,
+				onPlayAgain = if gameState == "room_complete" then onRoomPlayAgain else onPlayAgain,
 				onAdmire = onAdmire,
 				completionTime = completionTime,
 				rewardData = rewardData,
 				isPersonalBest = if rewardData then rewardData.isPersonalBest else false,
 				previousBest = if rewardData then rewardData.previousBest else nil,
 				equippedConfettiStyle = if playerData then playerData.equippedConfettiStyle else nil,
+				isMultiplayer = gameState == "room_complete",
+				isHost = gameState == "room_complete" and roomInfo ~= nil and roomInfo.hostUserId == (Players.LocalPlayer and Players.LocalPlayer.UserId or 0),
+				onChooseNewPuzzle = onRoomChooseNewPuzzle,
 			}),
 		})
 	end
@@ -630,12 +804,16 @@ local function App()
 					LayoutOrder = 2,
 					Size = UDim2.new(0, 220, 0, 48),
 					BackgroundColor3 = Color3.fromRGB(100, 100, 120),
-					Text = "Back to Menu",
+					Text = if admireIsMultiplayer then "Back to Lobby" else "Back to Menu",
 					TextColor3 = Color3.fromRGB(255, 255, 255),
 					TextSize = 22,
 					Font = Enum.Font.GothamBold,
 					[React.Event.Activated] = function()
-						onPlayAgain()
+						if admireIsMultiplayer then
+							onRoomPlayAgain()
+						else
+							onPlayAgain()
+						end
 					end,
 				}, {
 					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),

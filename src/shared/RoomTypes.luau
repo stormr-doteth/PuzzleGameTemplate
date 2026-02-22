@@ -30,6 +30,7 @@ export type ServerPieceState = {
 	zIndex: number,
 	locked: boolean,
 	claimedBy: number?, -- userId
+	groupId: number?,
 }
 
 export type PieceMovePayload = {

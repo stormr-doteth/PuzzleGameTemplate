@@ -19,6 +19,9 @@ export type CompleteScreenProps = {
 	isPersonalBest: boolean?,
 	previousBest: number?,
 	equippedConfettiStyle: string?,
+	isMultiplayer: boolean?,
+	isHost: boolean?,
+	onChooseNewPuzzle: (() -> ())?,
 }
 
 local CONFETTI_COUNT = 50
@@ -310,20 +313,66 @@ local function CompleteScreen(props: CompleteScreenProps)
 		Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
 	})
 
-	cardChildren["PlayAgainButton"] = React.createElement("TextButton", {
-		LayoutOrder = 11,
-		Size = UDim2.new(0, 220, 0, 48),
-		BackgroundColor3 = Color3.fromRGB(80, 140, 230),
-		Text = "PLAY AGAIN",
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		TextSize = 22,
-		Font = Enum.Font.GothamBold,
-		[React.Event.Activated] = function()
-			props.onPlayAgain()
-		end,
-	}, {
-		Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
-	})
+	if props.isMultiplayer then
+		if props.isHost then
+			cardChildren["PlayAgainButton"] = React.createElement("TextButton", {
+				LayoutOrder = 11,
+				Size = UDim2.new(0, 220, 0, 48),
+				BackgroundColor3 = Color3.fromRGB(80, 140, 230),
+				Text = "PLAY AGAIN",
+				TextColor3 = Color3.fromRGB(255, 255, 255),
+				TextSize = 22,
+				Font = Enum.Font.GothamBold,
+				[React.Event.Activated] = function()
+					props.onPlayAgain()
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+			})
+
+			cardChildren["ChooseNewButton"] = React.createElement("TextButton", {
+				LayoutOrder = 12,
+				Size = UDim2.new(0, 220, 0, 48),
+				BackgroundColor3 = Color3.fromRGB(100, 100, 120),
+				Text = "CHOOSE NEW PUZZLE",
+				TextColor3 = Color3.fromRGB(255, 255, 255),
+				TextSize = 18,
+				Font = Enum.Font.GothamBold,
+				[React.Event.Activated] = function()
+					if props.onChooseNewPuzzle then
+						props.onChooseNewPuzzle()
+					end
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+			})
+		else
+			cardChildren["WaitingLabel"] = React.createElement("TextLabel", {
+				LayoutOrder = 11,
+				Size = UDim2.new(0, 220, 0, 48),
+				BackgroundTransparency = 1,
+				Text = "Waiting for host...",
+				TextColor3 = Color3.fromRGB(180, 180, 200),
+				TextSize = 20,
+				Font = Enum.Font.GothamMedium,
+			})
+		end
+	else
+		cardChildren["PlayAgainButton"] = React.createElement("TextButton", {
+			LayoutOrder = 11,
+			Size = UDim2.new(0, 220, 0, 48),
+			BackgroundColor3 = Color3.fromRGB(80, 140, 230),
+			Text = "PLAY AGAIN",
+			TextColor3 = Color3.fromRGB(255, 255, 255),
+			TextSize = 22,
+			Font = Enum.Font.GothamBold,
+			[React.Event.Activated] = function()
+				props.onPlayAgain()
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+		})
+	end
 
 	return React.createElement("Frame", {
 		Size = UDim2.fromScale(1, 1),

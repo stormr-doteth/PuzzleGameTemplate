@@ -97,45 +97,53 @@ local function destroyRoom(roomId: string)
 end
 
 -- Generate scrambled piece positions in virtual canvas coordinates
+local SCATTER_PAD = 300
+
 local function generateScrambledPositions(puzzleDef: any, config: any): { [number]: any }
 	local pieces: { [number]: any } = {}
-	local cellW = VIRTUAL_W / config.cols
-	local cellH = VIRTUAL_H / config.rows
 	local margin = 20
 
-	-- Board area in virtual coords (centered)
-	local boardW = cellW * config.cols
-	local boardH = cellH * config.rows
-	local boardX = (VIRTUAL_W - boardW) / 2
-	local boardY = (VIRTUAL_H - boardH) / 2
+	-- Board area in virtual coords
+	local boardX = 0
+	local boardY = 0
+	local boardW = VIRTUAL_W
+	local boardH = VIRTUAL_H
 
-	-- Scatter pieces around the edges of the virtual canvas
+	-- Scatter area extends beyond the virtual canvas so pieces land outside the board
+	local scatterXMin = -SCATTER_PAD
+	local scatterXMax = VIRTUAL_W + SCATTER_PAD
+	local scatterYMin = -SCATTER_PAD
+	local scatterYMax = VIRTUAL_H + SCATTER_PAD
+
+	-- Scatter pieces around the edges of the board
 	type Zone = { xMin: number, xMax: number, yMin: number, yMax: number }
 	local zones: { Zone } = {}
 	local gap = 10
 
-	local topYMax = boardY - cellH - gap
-	if topYMax >= margin then
-		table.insert(zones, { xMin = margin, xMax = math.max(margin, VIRTUAL_W - cellW - margin), yMin = margin, yMax = topYMax })
+	-- Top zone
+	local topYMax = boardY - gap
+	if topYMax > scatterYMin + margin then
+		table.insert(zones, { xMin = scatterXMin + margin, xMax = scatterXMax - margin, yMin = scatterYMin + margin, yMax = topYMax })
 	end
+	-- Bottom zone
 	local bottomYMin = boardY + boardH + gap
-	local bottomYMax = VIRTUAL_H - cellH - margin
-	if bottomYMax >= bottomYMin then
-		table.insert(zones, { xMin = margin, xMax = math.max(margin, VIRTUAL_W - cellW - margin), yMin = bottomYMin, yMax = bottomYMax })
+	if scatterYMax - margin > bottomYMin then
+		table.insert(zones, { xMin = scatterXMin + margin, xMax = scatterXMax - margin, yMin = bottomYMin, yMax = scatterYMax - margin })
 	end
-	local leftXMax = boardX - cellW - gap
-	if leftXMax >= margin then
-		table.insert(zones, { xMin = margin, xMax = leftXMax, yMin = margin, yMax = math.max(margin, VIRTUAL_H - cellH - margin) })
+	-- Left zone
+	local leftXMax = boardX - gap
+	if leftXMax > scatterXMin + margin then
+		table.insert(zones, { xMin = scatterXMin + margin, xMax = leftXMax, yMin = scatterYMin + margin, yMax = scatterYMax - margin })
 	end
+	-- Right zone
 	local rightXMin = boardX + boardW + gap
-	local rightXMax = VIRTUAL_W - cellW - margin
-	if rightXMax >= rightXMin then
-		table.insert(zones, { xMin = rightXMin, xMax = rightXMax, yMin = margin, yMax = math.max(margin, VIRTUAL_H - cellH - margin) })
+	if scatterXMax - margin > rightXMin then
+		table.insert(zones, { xMin = rightXMin, xMax = scatterXMax - margin, yMin = scatterYMin + margin, yMax = scatterYMax - margin })
 	end
 
-	-- Fallback
+	-- Fallback: scatter in the padded area but avoid the board
 	if #zones == 0 then
-		table.insert(zones, { xMin = margin, xMax = math.max(margin + 1, VIRTUAL_W - cellW - margin), yMin = margin, yMax = math.max(margin + 1, VIRTUAL_H - cellH - margin) })
+		table.insert(zones, { xMin = scatterXMin + margin, xMax = math.max(scatterXMin + margin + 1, boardX - gap), yMin = scatterYMin + margin, yMax = scatterYMax - margin })
 	end
 
 	for _, pieceDef in puzzleDef.pieces do
@@ -147,6 +155,7 @@ local function generateScrambledPositions(puzzleDef: any, config: any): { [numbe
 			locked = false,
 			claimedBy = nil,
 			claimedAt = nil,
+			groupId = nil,
 		}
 	end
 
@@ -250,6 +259,156 @@ local function releaseAllClaims(room: any, userId: number)
 	end
 end
 
+-- Reusable leave-room logic
+local function leavePlayer(player: Player)
+	local userId = player.UserId
+	local roomId = playerRooms[userId]
+	if not roomId then
+		return { success = false }
+	end
+
+	local room = rooms[roomId]
+	if not room then
+		playerRooms[userId] = nil
+		return { success = false }
+	end
+
+	-- Release any claims
+	releaseAllClaims(room, userId)
+
+	-- Remove player
+	room.players[userId] = nil
+	playerRooms[userId] = nil
+
+	-- Check if room is empty
+	local hasPlayers = false
+	for _ in room.players do
+		hasPlayers = true
+		break
+	end
+
+	if not hasPlayers then
+		destroyRoom(roomId)
+		print(string.format("[RoomManager] Room %s destroyed (empty)", roomId))
+	else
+		-- Promote new host if needed
+		local newHostUserId = nil
+		if userId == room.hostUserId then
+			for nextUserId in room.players do
+				room.hostUserId = nextUserId
+				newHostUserId = nextUserId
+				break
+			end
+		end
+
+		fireToAll(room, "RoomPlayerLeft", {
+			userId = userId,
+			newHostUserId = newHostUserId,
+		})
+
+		print(string.format("[RoomManager] %s left room %s", player.Name, roomId))
+	end
+
+	return { success = true }
+end
+
+-- Internal API: create room without going through remotes
+function RoomManager.CreateRoomInternal(player: Player): string?
+	local userId = player.UserId
+
+	if playerRooms[userId] then
+		return nil
+	end
+
+	local roomId = generateRoomCode()
+	rooms[roomId] = {
+		roomId = roomId,
+		state = "lobby",
+		hostUserId = userId,
+		players = {
+			[userId] = {
+				displayName = player.DisplayName,
+			},
+		},
+		config = nil,
+		pieces = nil,
+		puzzleDef = nil,
+		zCounter = 1,
+		startTime = nil,
+		createdAt = os.clock(),
+		groups = {},
+		nextGroupId = 1,
+	}
+	playerRooms[userId] = roomId
+
+	print(string.format("[RoomManager] %s created room %s (internal)", player.Name, roomId))
+	return roomId
+end
+
+-- Internal API: join room without going through remotes
+function RoomManager.JoinRoomInternal(player: Player, roomId: string): boolean
+	local userId = player.UserId
+
+	if playerRooms[userId] then
+		return false
+	end
+
+	local room = rooms[roomId]
+	if not room then
+		return false
+	end
+
+	if room.state ~= "lobby" then
+		return false
+	end
+
+	-- Count players
+	local count = 0
+	for _ in room.players do count += 1 end
+	if count >= MAX_PLAYERS then
+		return false
+	end
+
+	room.players[userId] = {
+		displayName = player.DisplayName,
+	}
+	playerRooms[userId] = roomId
+
+	-- Broadcast to existing players
+	fireToRoom(room, "RoomPlayerJoined", {
+		player = {
+			userId = userId,
+			displayName = player.DisplayName,
+			isHost = false,
+		},
+	}, userId)
+
+	print(string.format("[RoomManager] %s joined room %s (internal)", player.Name, roomId))
+	return true
+end
+
+-- Internal API: leave room
+function RoomManager.LeaveRoomInternal(player: Player)
+	leavePlayer(player)
+end
+
+-- Internal API: leave player (also used by Players.PlayerRemoving)
+function RoomManager.LeavePlayer(player: Player)
+	leavePlayer(player)
+end
+
+-- Internal API: get room info for a given roomId
+function RoomManager.GetRoomInfo(roomId: string): any
+	local room = rooms[roomId]
+	if not room then return nil end
+	return getRoomInfo(room)
+end
+
+-- Internal API: get the roomId for a player
+function RoomManager.GetPlayerRoom(player: Player): string?
+	return playerRooms[player.UserId]
+end
+
 function RoomManager.Init()
 	-- RemoteFunctions
 	local createRoom = Remotes.GetFunction("CreateRoom")
@@ -257,6 +416,7 @@ function RoomManager.Init()
 	local leaveRoom = Remotes.GetFunction("LeaveRoom")
 	local configureRoom = Remotes.GetFunction("ConfigureRoom")
 	local startRoom = Remotes.GetFunction("StartRoom")
+	local restartRoom = Remotes.GetFunction("RestartRoom")
 
 	-- RemoteEvents (client → server)
 	local pieceDragStart = Remotes.GetEvent("PieceDragStart")
@@ -288,6 +448,8 @@ function RoomManager.Init()
 			zCounter = 1,
 			startTime = nil,
 			createdAt = os.clock(),
+			groups = {},
+			nextGroupId = 1,
 		}
 		playerRooms[userId] = roomId
 
@@ -344,55 +506,7 @@ function RoomManager.Init()
 
 	-- LeaveRoom
 	leaveRoom.OnServerInvoke = function(player)
-		local userId = player.UserId
-		local roomId = playerRooms[userId]
-		if not roomId then
-			return { success = false }
-		end
-
-		local room = rooms[roomId]
-		if not room then
-			playerRooms[userId] = nil
-			return { success = false }
-		end
-
-		-- Release any claims
-		releaseAllClaims(room, userId)
-
-		-- Remove player
-		room.players[userId] = nil
-		playerRooms[userId] = nil
-
-		-- Check if room is empty
-		local hasPlayers = false
-		for _ in room.players do
-			hasPlayers = true
-			break
-		end
-
-		if not hasPlayers then
-			destroyRoom(roomId)
-			print(string.format("[RoomManager] Room %s destroyed (empty)", roomId))
-		else
-			-- Promote new host if needed
-			local newHostUserId = nil
-			if userId == room.hostUserId then
-				for nextUserId in room.players do
-					room.hostUserId = nextUserId
-					newHostUserId = nextUserId
-					break
-				end
-			end
-
-			fireToAll(room, "RoomPlayerLeft", {
-				userId = userId,
-				newHostUserId = newHostUserId,
-			})
-
-			print(string.format("[RoomManager] %s left room %s", player.Name, roomId))
-		end
-
-		return { success = true }
+		return leavePlayer(player)
 	end
 
 	-- ConfigureRoom
@@ -468,7 +582,37 @@ function RoomManager.Init()
 		return { success = true }
 	end
 
-	-- PieceDragStart — claim a piece
+	-- RestartRoom — host resets room back to lobby after completion
+	restartRoom.OnServerInvoke = function(player, sameConfig)
+		local userId = player.UserId
+		local roomId = playerRooms[userId]
+		if not roomId then return { error = "Not in a room" } end
+
+		local room = rooms[roomId]
+		if not room then return { error = "Room not found" } end
+		if room.hostUserId ~= userId then return { error = "Only the host can restart" } end
+		if room.state ~= "complete" then return { error = "Room is not complete" } end
+
+		-- Reset puzzle state
+		room.state = "lobby"
+		room.pieces = nil
+		room.puzzleDef = nil
+		room.groups = {}
+		room.nextGroupId = 1
+		room.zCounter = 1
+		room.startTime = nil
+
+		if sameConfig == false then
+			room.config = nil
+		end
+
+		fireToAll(room, "RoomReturnedToLobby", { config = room.config })
+
+		print(string.format("[RoomManager] Room %s returned to lobby (sameConfig=%s)", roomId, tostring(sameConfig ~= false)))
+		return { success = true }
+	end
+
+	-- PieceDragStart — claim a piece (and all group members)
 	pieceDragStart.OnServerEvent:Connect(function(player, data)
 		local userId = player.UserId
 		local roomId = playerRooms[userId]
@@ -488,17 +632,36 @@ function RoomManager.Init()
 			return
 		end
 
-		piece.claimedBy = userId
-		piece.claimedAt = os.clock()
+		-- Collect all pieces to claim (piece + group members)
+		local piecesToClaim = { pieceId }
+		if piece.groupId and room.groups[piece.groupId] then
+			piecesToClaim = {}
+			for _, memberId in room.groups[piece.groupId] do
+				local memberPiece = room.pieces[memberId]
+				if memberPiece and not memberPiece.locked then
+					-- If any group member is claimed by someone else, reject
+					if memberPiece.claimedBy and memberPiece.claimedBy ~= userId then
+						return
+					end
+					table.insert(piecesToClaim, memberId)
+				end
+			end
+		end
 
-		-- Bring to front
+		local now = os.clock()
 		room.zCounter += 1
-		piece.zIndex = room.zCounter
+		local newZ = room.zCounter
 
-		fireToRoom(room, "RoomPieceClaimed", { id = pieceId, userId = userId }, userId)
+		for _, claimId in piecesToClaim do
+			local p = room.pieces[claimId]
+			p.claimedBy = userId
+			p.claimedAt = now
+			p.zIndex = newZ
+			fireToRoom(room, "RoomPieceClaimed", { id = claimId, userId = userId }, userId)
+		end
 	end)
 
-	-- PieceMove — relay drag position
+	-- PieceMove — relay drag position (with group movement)
 	pieceMove.OnServerEvent:Connect(function(player, data)
 		local userId = player.UserId
 		local roomId = playerRooms[userId]
@@ -516,6 +679,11 @@ function RoomManager.Init()
 		if piece.locked then return end
 		if piece.claimedBy ~= userId then return end
 
+		-- Capture old position for delta
+		local oldX, oldY = piece.x, piece.y
+		local dx = data.x - oldX
+		local dy = data.y - oldY
+
 		-- Update server-side position
 		piece.x = data.x
 		piece.y = data.y
@@ -527,9 +695,84 @@ function RoomManager.Init()
 			y = data.y,
 			userId = userId,
 		}, userId)
+
+		-- Move group members by the same delta
+		if piece.groupId and room.groups[piece.groupId] then
+			for _, memberId in room.groups[piece.groupId] do
+				if memberId ~= pieceId then
+					local memberPiece = room.pieces[memberId]
+					if memberPiece and not memberPiece.locked then
+						memberPiece.x = memberPiece.x + dx
+						memberPiece.y = memberPiece.y + dy
+						fireToRoom(room, "RoomPieceMoved", {
+							id = memberId,
+							x = memberPiece.x,
+							y = memberPiece.y,
+							userId = userId,
+						}, userId)
+					end
+				end
+			end
+		end
 	end)
 
-	-- PieceDragEnd — check snap or release
+	-- Helper: lock a group of pieces at their correct grid positions, broadcast, dissolve group, check completion
+	local function lockGroupAtGrid(room: any, memberIds: { number }, roomId: string)
+		local piecesSnappedData = {}
+		for _, mid in memberIds do
+			local mPiece = room.pieces[mid]
+			if not mPiece then continue end
+			-- Find definition
+			local mDef = nil
+			for _, p in room.puzzleDef.pieces do
+				if p.id == mid then mDef = p break end
+			end
+			if not mDef then continue end
+			local cx, cy = getCorrectPosition(mDef, room.config)
+			mPiece.x = cx
+			mPiece.y = cy
+			mPiece.locked = true
+			mPiece.claimedBy = nil
+			mPiece.claimedAt = nil
+			mPiece.zIndex = 1
+			local gid = mPiece.groupId
+			mPiece.groupId = nil
+			-- Remove from group tracking
+			if gid and room.groups[gid] then
+				room.groups[gid] = nil
+			end
+			table.insert(piecesSnappedData, { id = mid, x = cx, y = cy })
+		end
+		fireToAll(room, "RoomPiecesSnapped", { pieces = piecesSnappedData })
+
+		if checkCompletion(room) then
+			room.state = "complete"
+			fireToAll(room, "RoomCompleted", {})
+			for pUserId in room.players do
+				local p = Players:GetPlayerByUserId(pUserId)
+				if p then
+					task.spawn(function()
+						awardCompletion(p, room)
+					end)
+				end
+			end
+			print(string.format("[RoomManager] Room %s completed!", roomId))
+		end
+	end
+
+	-- Helper: release claims on a list of pieces
+	local function releasePieces(room: any, pieceIds: { number })
+		for _, pid in pieceIds do
+			local p = room.pieces[pid]
+			if p then
+				p.claimedBy = nil
+				p.claimedAt = nil
+			end
+			fireToRoom(room, "RoomPieceReleased", { id = pid }, nil)
+		end
+	end
+
+	-- PieceDragEnd — three-phase snap: grid snap, neighbor snap, post-merge grid snap
 	pieceDragEnd.OnServerEvent:Connect(function(player, data)
 		local userId = player.UserId
 		local roomId = playerRooms[userId]
@@ -547,58 +790,277 @@ function RoomManager.Init()
 		if piece.locked then return end
 		if piece.claimedBy ~= userId then return end
 
-		-- Find piece definition
-		local pieceDef = nil
-		for _, p in room.puzzleDef.pieces do
-			if p.id == pieceId then
-				pieceDef = p
-				break
-			end
-		end
-		if not pieceDef then return end
+		-- Update drop position (and sync group followers)
+		local oldX, oldY = piece.x, piece.y
+		piece.x = data.x
+		piece.y = data.y
 
-		local correctX, correctY = getCorrectPosition(pieceDef, room.config)
-		local dx = data.x - correctX
-		local dy = data.y - correctY
-		local dist = math.sqrt(dx * dx + dy * dy)
-
-		if dist <= SNAP_THRESHOLD then
-			-- Snap!
-			piece.x = correctX
-			piece.y = correctY
-			piece.locked = true
-			piece.claimedBy = nil
-			piece.claimedAt = nil
-			piece.zIndex = 1
-
-			fireToAll(room, "RoomPieceSnapped", { id = pieceId, x = correctX, y = correctY })
-
-			-- Check completion
-			if checkCompletion(room) then
-				room.state = "complete"
-				fireToAll(room, "RoomCompleted", {})
-
-				-- Award XP to each player
-				for pUserId in room.players do
-					local p = Players:GetPlayerByUserId(pUserId)
-					if p then
-						task.spawn(function()
-							awardCompletion(p, room)
-						end)
+		if piece.groupId and room.groups[piece.groupId] then
+			local dx = data.x - oldX
+			local dy = data.y - oldY
+			for _, memberId in room.groups[piece.groupId] do
+				if memberId ~= pieceId then
+					local memberPiece = room.pieces[memberId]
+					if memberPiece and not memberPiece.locked then
+						memberPiece.x += dx
+						memberPiece.y += dy
 					end
 				end
+			end
+		end
 
-				print(string.format("[RoomManager] Room %s completed!", roomId))
+		-- Build defById lookup
+		local defById: { [number]: any } = {}
+		for _, p in room.puzzleDef.pieces do
+			defById[p.id] = p
+		end
+
+		local pieceDef = defById[pieceId]
+		if not pieceDef then return end
+
+		-- Collect all pieces to release on no-snap
+		local allInvolved = { pieceId }
+		if piece.groupId and room.groups[piece.groupId] then
+			allInvolved = {}
+			for _, mid in room.groups[piece.groupId] do
+				table.insert(allInvolved, mid)
+			end
+		end
+
+		local config = room.config
+		local cellW = VIRTUAL_W / config.cols
+		local cellH = VIRTUAL_H / config.rows
+
+		-- ========== PHASE 1: Grid snap ==========
+		local correctX, correctY = getCorrectPosition(pieceDef, config)
+		local gdx = data.x - correctX
+		local gdy = data.y - correctY
+		local gdist = math.sqrt(gdx * gdx + gdy * gdy)
+
+		if gdist <= SNAP_THRESHOLD then
+			if piece.groupId and room.groups[piece.groupId] then
+				-- Lock entire group
+				local memberIds = room.groups[piece.groupId]
+				lockGroupAtGrid(room, memberIds, roomId)
+			else
+				-- Single piece grid snap
+				piece.x = correctX
+				piece.y = correctY
+				piece.locked = true
+				piece.claimedBy = nil
+				piece.claimedAt = nil
+				piece.zIndex = 1
+
+				fireToAll(room, "RoomPieceSnapped", { id = pieceId, x = correctX, y = correctY })
+
+				if checkCompletion(room) then
+					room.state = "complete"
+					fireToAll(room, "RoomCompleted", {})
+					for pUserId in room.players do
+						local p = Players:GetPlayerByUserId(pUserId)
+						if p then
+							task.spawn(function()
+								awardCompletion(p, room)
+							end)
+						end
+					end
+					print(string.format("[RoomManager] Room %s completed!", roomId))
+				end
+			end
+			return
+		end
+
+		-- ========== PHASE 2: Neighbor snap ==========
+		-- Build (row,col) → pieceId lookup
+		local gridLookup: { [string]: number } = {}
+		for _, pDef in room.puzzleDef.pieces do
+			gridLookup[pDef.row .. "," .. pDef.col] = pDef.id
+		end
+
+		-- Collect dropped set
+		local droppedSet: { number } = {}
+		local droppedSetLookup: { [number]: boolean } = {}
+		if piece.groupId and room.groups[piece.groupId] then
+			for _, mid in room.groups[piece.groupId] do
+				table.insert(droppedSet, mid)
+				droppedSetLookup[mid] = true
 			end
 		else
-			-- No snap, release
-			piece.x = data.x
-			piece.y = data.y
-			piece.claimedBy = nil
-			piece.claimedAt = nil
-
-			fireToRoom(room, "RoomPieceReleased", { id = pieceId }, nil)
+			table.insert(droppedSet, pieceId)
+			droppedSetLookup[pieceId] = true
 		end
+
+		local directions = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }
+		local snappedNeighbor = false
+		local mergedGroupId: number? = nil
+
+		for _, memberId in droppedSet do
+			local memberDef = defById[memberId]
+			if not memberDef then continue end
+			local memberPiece = room.pieces[memberId]
+			if not memberPiece then continue end
+
+			for _, dir in directions do
+				local nRow = memberDef.row + dir[1]
+				local nCol = memberDef.col + dir[2]
+				local neighborId = gridLookup[nRow .. "," .. nCol]
+				if not neighborId then continue end
+
+				local neighborPiece = room.pieces[neighborId]
+				if not neighborPiece or neighborPiece.locked then continue end
+				if droppedSetLookup[neighborId] then continue end
+
+				-- Skip if already in same group
+				local neighborGid = neighborPiece.groupId
+				local memberGid = memberPiece.groupId
+				if memberGid and neighborGid and memberGid == neighborGid then continue end
+
+				local neighborDef = defById[neighborId]
+				if not neighborDef then continue end
+
+				-- Expected relative position (virtual coords, no image offsets)
+				local expectedDx = (neighborDef.col - memberDef.col) * cellW
+				local expectedDy = (neighborDef.row - memberDef.row) * cellH
+
+				local actualDx = neighborPiece.x - memberPiece.x
+				local actualDy = neighborPiece.y - memberPiece.y
+
+				local snapDx = actualDx - expectedDx
+				local snapDy = actualDy - expectedDy
+				local snapDist = math.sqrt(snapDx * snapDx + snapDy * snapDy)
+
+				if snapDist <= SNAP_THRESHOLD then
+					snappedNeighbor = true
+
+					-- Correct dropped group positions by the snap delta
+					local currentDroppedGid = room.pieces[pieceId].groupId
+					local piecesToCorrect: { number } = {}
+					if currentDroppedGid and room.groups[currentDroppedGid] then
+						for _, pid in room.groups[currentDroppedGid] do
+							table.insert(piecesToCorrect, pid)
+						end
+					else
+						table.insert(piecesToCorrect, pieceId)
+					end
+
+					for _, pid in piecesToCorrect do
+						local wp = room.pieces[pid]
+						if wp then
+							wp.x = wp.x + snapDx
+							wp.y = wp.y + snapDy
+						end
+					end
+
+					-- Merge groups
+					local targetGroupMembers: { number } = {}
+					if neighborGid and room.groups[neighborGid] then
+						for _, pid in room.groups[neighborGid] do
+							table.insert(targetGroupMembers, pid)
+						end
+					else
+						table.insert(targetGroupMembers, neighborId)
+					end
+
+					local sourceGroupMembers: { number } = {}
+					local sourceGid = room.pieces[pieceId].groupId
+					if sourceGid and room.groups[sourceGid] then
+						for _, pid in room.groups[sourceGid] do
+							table.insert(sourceGroupMembers, pid)
+						end
+					else
+						table.insert(sourceGroupMembers, pieceId)
+					end
+
+					-- Pick or create group ID
+					local finalGid: number
+					if neighborGid then
+						finalGid = neighborGid
+					elseif sourceGid then
+						finalGid = sourceGid
+					else
+						finalGid = room.nextGroupId
+						room.nextGroupId = room.nextGroupId + 1
+					end
+
+					-- Merge all into finalGid
+					local finalSet: { [number]: boolean } = {}
+					for _, pid in targetGroupMembers do finalSet[pid] = true end
+					for _, pid in sourceGroupMembers do finalSet[pid] = true end
+
+					local finalList: { number } = {}
+					for pid in finalSet do table.insert(finalList, pid) end
+
+					-- Remove old groups
+					if neighborGid and neighborGid ~= finalGid then
+						room.groups[neighborGid] = nil
+					end
+					if sourceGid and sourceGid ~= finalGid then
+						room.groups[sourceGid] = nil
+					end
+
+					-- Set merged group
+					room.groups[finalGid] = finalList
+
+					-- Update all member pieces
+					for _, pid in finalList do
+						local wp = room.pieces[pid]
+						if wp then
+							wp.groupId = finalGid
+						end
+					end
+
+					mergedGroupId = finalGid
+
+					-- Build group formed payload
+					local groupPieces = {}
+					for _, pid in finalList do
+						local wp = room.pieces[pid]
+						if wp then
+							table.insert(groupPieces, { id = pid, x = wp.x, y = wp.y })
+						end
+					end
+					fireToAll(room, "RoomGroupFormed", { groupId = finalGid, pieces = groupPieces })
+
+					-- Clear claims on all members
+					for _, pid in finalList do
+						local wp = room.pieces[pid]
+						if wp then
+							wp.claimedBy = nil
+							wp.claimedAt = nil
+						end
+					end
+
+					break -- stop checking after first merge
+				end
+			end
+
+			if snappedNeighbor then break end
+		end
+
+		if snappedNeighbor then
+			-- ========== PHASE 3: Post-merge grid snap ==========
+			if mergedGroupId and room.groups[mergedGroupId] then
+				-- Check if the dropped piece is near its correct grid position
+				local testPiece = room.pieces[pieceId]
+				local testDef = defById[pieceId]
+				if testPiece and testDef then
+					local cx, cy = getCorrectPosition(testDef, config)
+					local pgdx = testPiece.x - cx
+					local pgdy = testPiece.y - cy
+					local pgdist = math.sqrt(pgdx * pgdx + pgdy * pgdy)
+
+					if pgdist <= SNAP_THRESHOLD then
+						lockGroupAtGrid(room, room.groups[mergedGroupId], roomId)
+					end
+				end
+			end
+			return
+		end
+
+		-- ========== No snap — release all involved pieces ==========
+		piece.x = data.x
+		piece.y = data.y
+		releasePieces(room, allInvolved)
 	end)
 
 	-- Player disconnect handling
