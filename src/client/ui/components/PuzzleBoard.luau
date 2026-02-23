@@ -17,6 +17,7 @@ local PuzzlePiece = require(script.Parent.PuzzlePiece)
 local usePuzzleState = require(script.Parent.Parent.hooks.usePuzzleState)
 local useMultiplayerPuzzle = require(script.Parent.Parent.hooks.useMultiplayerPuzzle)
 local useTimer = require(script.Parent.Parent.hooks.useTimer)
+local useZoomPan = require(script.Parent.Parent.hooks.useZoomPan)
 
 export type PuzzleBoardProps = {
 	imageAssetId: string,
@@ -57,6 +58,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local state = if props.isMultiplayer then mpState else soloState
 	local actions = if props.isMultiplayer then mpActions else soloActions
 	local timer = useTimer()
+	local zoomState, zoomActions = useZoomPan()
 	local localHints, setLocalHints = React.useState(props.hintsRemaining or 0)
 	local localUserId = game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.UserId or 0
 
@@ -341,7 +343,8 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		else
 			local snapped = actions.trySnap(
 				pieceId, x, y, correctX, correctY,
-				puzzleDef, pieceImages, cellSize, pixelScale, boardOffsetX, boardOffsetY
+				puzzleDef, pieceImages, cellSize, pixelScale, boardOffsetX, boardOffsetY,
+				zoomState.zoom
 			)
 			if snapped then
 				SoundService.playSnap()
@@ -531,6 +534,85 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 			})
 		end
+
+		-- Zoom controls (top-right, fixed screen position)
+		children["ZoomControls"] = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -20, 0, topInset),
+			Size = UDim2.fromOffset(140, 36),
+			BackgroundTransparency = 1,
+			ZIndex = 50,
+		}, {
+			Layout = React.createElement("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				Padding = UDim.new(0, 4),
+				HorizontalAlignment = Enum.HorizontalAlignment.Right,
+			}),
+			ZoomOut = React.createElement("TextButton", {
+				LayoutOrder = 1,
+				Size = UDim2.fromOffset(32, 36),
+				BackgroundColor3 = Color3.fromRGB(50, 50, 70),
+				Text = "-",
+				TextColor3 = Color3.fromRGB(220, 220, 240),
+				TextSize = 20,
+				Font = Enum.Font.GothamBold,
+				ZIndex = 50,
+				[React.Event.Activated] = function()
+					local camera = workspace.CurrentCamera
+					local cx = if camera then camera.ViewportSize.X / 2 else 600
+					local cy = if camera then camera.ViewportSize.Y / 2 else 400
+					zoomActions.zoomAtPoint(cx, cy, -0.15)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+			}),
+			ZoomLabel = React.createElement("TextLabel", {
+				LayoutOrder = 2,
+				Size = UDim2.fromOffset(48, 36),
+				BackgroundColor3 = Color3.fromRGB(40, 40, 55),
+				Text = math.floor(zoomState.zoom * 100 + 0.5) .. "%",
+				TextColor3 = Color3.fromRGB(200, 200, 220),
+				TextSize = 13,
+				Font = Enum.Font.GothamMedium,
+				ZIndex = 50,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+			}),
+			ZoomIn = React.createElement("TextButton", {
+				LayoutOrder = 3,
+				Size = UDim2.fromOffset(32, 36),
+				BackgroundColor3 = Color3.fromRGB(50, 50, 70),
+				Text = "+",
+				TextColor3 = Color3.fromRGB(220, 220, 240),
+				TextSize = 20,
+				Font = Enum.Font.GothamBold,
+				ZIndex = 50,
+				[React.Event.Activated] = function()
+					local camera = workspace.CurrentCamera
+					local cx = if camera then camera.ViewportSize.X / 2 else 600
+					local cy = if camera then camera.ViewportSize.Y / 2 else 400
+					zoomActions.zoomAtPoint(cx, cy, 0.15)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+			}),
+			ResetBtn = React.createElement("TextButton", {
+				LayoutOrder = 4,
+				Size = UDim2.fromOffset(20, 36),
+				BackgroundColor3 = Color3.fromRGB(50, 50, 70),
+				Text = "0",
+				TextColor3 = Color3.fromRGB(180, 180, 200),
+				TextSize = 11,
+				Font = Enum.Font.GothamMedium,
+				ZIndex = 50,
+				[React.Event.Activated] = function()
+					zoomActions.resetView()
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+			}),
+		})
 	end
 
 	if isLoading then
@@ -546,13 +628,14 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		})
 	else
 		-- Grid outline showing target positions
+		local gridScreenX, gridScreenY = zoomActions.worldToScreen(boardOffsetX, boardOffsetY)
 		local gridCells: { [string]: any } = {
 			Border = React.createElement("UIStroke", {
 				Color = Color3.fromRGB(80, 80, 100),
 				Thickness = 2,
 			}),
 			Grid = React.createElement("UIGridLayout", {
-				CellSize = UDim2.fromOffset(cellSize.X, cellSize.Y),
+				CellSize = UDim2.fromOffset(cellSize.X * zoomState.zoom, cellSize.Y * zoomState.zoom),
 				CellPadding = UDim2.fromOffset(0, 0),
 				SortOrder = Enum.SortOrder.LayoutOrder,
 			}),
@@ -572,8 +655,8 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		end
 
 		children["GridOutline"] = React.createElement("Frame", {
-			Position = UDim2.fromOffset(boardOffsetX, boardOffsetY),
-			Size = UDim2.fromOffset(boardSize.X, boardSize.Y),
+			Position = UDim2.fromOffset(gridScreenX, gridScreenY),
+			Size = UDim2.fromOffset(boardSize.X * zoomState.zoom, boardSize.Y * zoomState.zoom),
 			BackgroundColor3 = gridBgColor,
 			BackgroundTransparency = 0.5,
 			BorderSizePixel = 0,
@@ -648,6 +731,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 						onHoverEnd = onPieceHoverEnd,
 						claimedByOther = claimedByOther,
 						claimerColor = claimerColor,
+						screenToWorld = zoomActions.screenToWorld,
+						worldToScreen = zoomActions.worldToScreen,
+						zoom = zoomState.zoom,
 					})
 				end
 			end

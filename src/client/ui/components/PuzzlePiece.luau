@@ -22,6 +22,9 @@ export type PuzzlePieceProps = {
 	onHoverEnd: ((id: number) -> ())?,
 	claimedByOther: boolean?,
 	claimerColor: Color3?,
+	screenToWorld: ((screenX: number, screenY: number) -> (number, number))?,
+	worldToScreen: ((worldX: number, worldY: number) -> (number, number))?,
+	zoom: number?,
 }
 
 local function PuzzlePiece(props: PuzzlePieceProps)
@@ -31,6 +34,7 @@ local function PuzzlePiece(props: PuzzlePieceProps)
 		id = props.pieceId,
 		initialPosition = props.position,
 		enabled = not props.isLocked and not props.claimedByOther,
+		screenToWorld = props.screenToWorld,
 		onDragStart = function()
 			if props.onDragStart then
 				props.onDragStart(props.pieceId)
@@ -86,10 +90,17 @@ local function PuzzlePiece(props: PuzzlePieceProps)
 		outlineTransparency = 0.3
 	end
 
+	local sx, sy = drag.position.X, drag.position.Y
+	if props.worldToScreen then
+		sx, sy = props.worldToScreen(drag.position.X, drag.position.Y)
+	end
+	local zoomedW = props.pieceWidth * (props.zoom or 1)
+	local zoomedH = props.pieceHeight * (props.zoom or 1)
+
 	return React.createElement("ImageLabel", {
 		ref = imageRef,
-		Position = UDim2.fromOffset(drag.position.X, drag.position.Y),
-		Size = UDim2.fromOffset(props.pieceWidth, props.pieceHeight),
+		Position = UDim2.fromOffset(sx, sy),
+		Size = UDim2.fromOffset(zoomedW, zoomedH),
 		BackgroundTransparency = 1,
 		ImageTransparency = if props.isLocked then 0 else (if drag.isDragging then 0.05 else 0),
 		ZIndex = if drag.isDragging then 9999 else props.zIndex,

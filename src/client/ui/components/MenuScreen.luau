@@ -52,10 +52,12 @@ local function MenuScreen(props: MenuScreenProps)
 	local showLeaderboards, setShowLeaderboards = React.useState(false)
 	local showShop, setShowShop = React.useState(false)
 	local showStats, setShowStats = React.useState(false)
+	local warningText, setWarningText = React.useState("")
 
 	local function onSelectImage(imageId: string, assetId: string)
 		setSelectedImageId(imageId)
 		setSelectedImageAssetId(assetId)
+		setWarningText("")
 	end
 
 	-- === Top Bar ===
@@ -368,14 +370,30 @@ local function MenuScreen(props: MenuScreenProps)
 				TextSize = 22,
 				Font = Enum.Font.GothamBold,
 				[React.Event.Activated] = function()
-					if selectedImageId and selectedImageAssetId then
+					if selectedImageId and selectedImageAssetId and selectedImageAssetId ~= "" then
 						local d = DIFFICULTIES[selectedDifficulty]
 						props.onStart(d.rows, d.cols, selectedImageAssetId, selectedImageId, d.difficultyId)
+					else
+						setWarningText("Choose a puzzle first!")
 					end
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
 			})
+
+			-- Warning text (shown when user clicks Start without a valid image)
+			if warningText ~= "" then
+				panelChildren["WarningText"] = React.createElement("TextLabel", {
+					LayoutOrder = 12,
+					Size = UDim2.new(1, 0, 0, 24),
+					BackgroundTransparency = 1,
+					Text = warningText,
+					TextColor3 = Color3.fromRGB(255, 80, 80),
+					TextSize = 15,
+					Font = Enum.Font.GothamBold,
+					TextXAlignment = Enum.TextXAlignment.Center,
+				})
+			end
 		else
 			-- Locked image: show unlock requirements
 			local unlockLevel = selectedEntry and selectedEntry.unlockLevel or 0

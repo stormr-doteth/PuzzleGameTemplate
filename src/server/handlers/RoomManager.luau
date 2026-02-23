@@ -97,7 +97,7 @@ local function destroyRoom(roomId: string)
 end
 
 -- Generate scrambled piece positions in virtual canvas coordinates
-local SCATTER_PAD = 300
+local SCATTER_PAD = 150
 
 local function generateScrambledPositions(puzzleDef: any, config: any): { [number]: any }
 	local pieces: { [number]: any } = {}
@@ -148,9 +148,14 @@ local function generateScrambledPositions(puzzleDef: any, config: any): { [numbe
 
 	for _, pieceDef in puzzleDef.pieces do
 		local zone = zones[math.random(1, #zones)]
+		local x = math.random(math.floor(zone.xMin), math.floor(zone.xMax))
+		local y = math.random(math.floor(zone.yMin), math.floor(zone.yMax))
+		-- Clamp to keep pieces visible on typical viewports
+		x = math.clamp(x, -150, VIRTUAL_W + 150)
+		y = math.clamp(y, -100, VIRTUAL_H + 100)
 		pieces[pieceDef.id] = {
-			x = math.random(math.floor(zone.xMin), math.floor(zone.xMax)),
-			y = math.random(math.floor(zone.yMin), math.floor(zone.yMax)),
+			x = x,
+			y = y,
 			zIndex = 1,
 			locked = false,
 			claimedBy = nil,

@@ -13,6 +13,7 @@ type UseDragOptions = {
 	onDragStart: (() -> ())?,
 	onDrop: ((finalPosition: Vector2) -> ())?,
 	enabled: boolean?,
+	screenToWorld: ((screenX: number, screenY: number) -> (number, number))?,
 }
 
 type UseDragReturn = {
@@ -27,6 +28,12 @@ local function useDrag(options: UseDragOptions): UseDragReturn
 	local isDragging, setIsDragging = React.useState(false)
 	local dragOffset, setDragOffset = React.useState(Vector2.zero)
 	local enabled = if options.enabled ~= nil then options.enabled else true
+
+	-- Store screenToWorld in a ref so the effect doesn't re-run when the function reference changes
+	local screenToWorldRef = React.useRef(options.screenToWorld)
+	React.useEffect(function()
+		screenToWorldRef.current = options.screenToWorld
+	end, { options.screenToWorld } :: { any })
 
 	-- Update position when initialPosition changes (for snapping / group follower movement)
 	React.useEffect(function()
@@ -47,6 +54,10 @@ local function useDrag(options: UseDragOptions): UseDragReturn
 				or input.UserInputType == Enum.UserInputType.Touch
 			then
 				local mousePos = Vector2.new(input.Position.X, input.Position.Y)
+				if screenToWorldRef.current then
+					local wx, wy = screenToWorldRef.current(mousePos.X, mousePos.Y)
+					mousePos = Vector2.new(wx, wy)
+				end
 				setPosition(mousePos - dragOffset)
 			end
 		end)
@@ -91,6 +102,10 @@ local function useDrag(options: UseDragOptions): UseDragReturn
 		then
 			activeDragId = options.id
 			local mousePos = Vector2.new(input.Position.X, input.Position.Y)
+			if screenToWorldRef.current then
+				local wx, wy = screenToWorldRef.current(mousePos.X, mousePos.Y)
+				mousePos = Vector2.new(wx, wy)
+			end
 			setDragOffset(mousePos - position)
 			setIsDragging(true)
 			if options.onDragStart then

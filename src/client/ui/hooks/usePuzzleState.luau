@@ -41,7 +41,8 @@ export type PuzzleActions = {
 		cellSize: Vector2?,
 		pixelScale: number?,
 		boardOffsetX: number?,
-		boardOffsetY: number?
+		boardOffsetY: number?,
+		zoom: number?
 	) -> boolean,
 	bringToFront: (id: number) -> (),
 	restorePieces: (savedPieces: { { id: number, x: number, y: number, zIndex: number, locked: boolean, groupId: number? } }, savedGroups: { { id: number, pieceIds: { number } } }?) -> (),
@@ -222,14 +223,16 @@ local function usePuzzleState(): (PuzzleState, PuzzleActions)
 		cellSize: Vector2?,
 		pixelScale: number?,
 		boardOffsetX: number?,
-		boardOffsetY: number?
+		boardOffsetY: number?,
+		zoom: number?
 	): boolean
+		local threshold = SNAP_THRESHOLD / (zoom or 1)
 		local dx = x - correctX
 		local dy = y - correctY
 		local dist = math.sqrt(dx * dx + dy * dy)
 
 		-- Try grid snap for the individual piece first
-		if dist <= SNAP_THRESHOLD then
+		if dist <= threshold then
 			-- If piece is in a group, try to grid-snap the whole group
 			local currentPieces = pieces
 			local pieceData = currentPieces[id]
@@ -470,7 +473,7 @@ local function usePuzzleState(): (PuzzleState, PuzzleActions)
 				local snapDy = actualDy - expectedDy
 				local snapDist = math.sqrt(snapDx * snapDx + snapDy * snapDy)
 
-				if snapDist <= SNAP_THRESHOLD then
+				if snapDist <= threshold then
 					snappedAny = true
 
 					-- Correct the dropped group's positions so alignment is exact
@@ -605,7 +608,7 @@ local function usePuzzleState(): (PuzzleState, PuzzleActions)
 				local gdy = testPiece.y - cy
 				local gdist = math.sqrt(gdx * gdx + gdy * gdy)
 
-				if gdist <= SNAP_THRESHOLD then
+				if gdist <= threshold then
 					-- Lock all group members at correct grid positions
 					local corrections = {}
 					local canSnap = true
