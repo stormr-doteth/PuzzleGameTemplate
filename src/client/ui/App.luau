@@ -1,5 +1,6 @@
 local CaptureService = game:GetService("CaptureService")
 local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 
@@ -49,6 +50,11 @@ local function App()
 	-- Admire mode tracking for multiplayer
 	local admireIsMultiplayer, setAdmireIsMultiplayer = React.useState(false)
 
+	-- NPC overlay state
+	local npcShopOpen, setNpcShopOpen = React.useState(false)
+	local npcLeaderboardOpen, setNpcLeaderboardOpen = React.useState(false)
+	local npcStatsOpen, setNpcStatsOpen = React.useState(false)
+
 	-- Seating state
 	local seatingInfo, setSeatingInfo = React.useState(nil :: any)
 
@@ -62,10 +68,12 @@ local function App()
 		equippedBoardSkin: string?,
 		equippedConfettiStyle: string?,
 		equippedBadge: string?,
+		equippedSnapEffect: string?,
 		hintsRemaining: number?,
 		ownedBoardSkins: { [string]: boolean }?,
 		ownedConfettiStyles: { [string]: boolean }?,
 		ownedBadges: { [string]: boolean }?,
+		ownedSnapEffects: { [string]: boolean }?,
 		totalPuzzlesCompleted: number?,
 		totalPlayTime: number?,
 		totalPiecesPlaced: number?,
@@ -208,6 +216,40 @@ local function App()
 			end
 		end
 	end, {} :: { any })
+
+	-- Listen for NPC ProximityPrompt triggers
+	React.useEffect(function()
+		local conn = ProximityPromptService.PromptTriggered:Connect(function(prompt)
+			local rootPart = prompt.Parent
+			if not rootPart then return end
+			local model = rootPart.Parent
+			if not model then return end
+			local npcTypeValue = model:FindFirstChild("NPCType")
+			if not npcTypeValue or not npcTypeValue:IsA("StringValue") then return end
+
+			local npcType = npcTypeValue.Value
+			if npcType == "shop" then
+				setNpcShopOpen(true)
+			elseif npcType == "leaderboard" then
+				setNpcLeaderboardOpen(true)
+			elseif npcType == "stats" then
+				setNpcStatsOpen(true)
+			end
+		end)
+
+		return function()
+			conn:Disconnect()
+		end
+	end, {} :: { any })
+
+	-- Close NPC overlays when leaving walking state
+	React.useEffect(function()
+		if gameState ~= "walking" then
+			setNpcShopOpen(false)
+			setNpcLeaderboardOpen(false)
+			setNpcStatsOpen(false)
+		end
+	end, { gameState })
 
 	local function onStart(selectedRows: number, selectedCols: number, selectedImageAssetId: string, selectedImageId: string, selectedDifficultyId: string)
 		setRows(selectedRows)
@@ -609,6 +651,8 @@ local function App()
 				updated.equippedConfettiStyle = itemId
 			elseif category == "badges" then
 				updated.equippedBadge = itemId
+			elseif category == "snap_effects" then
+				updated.equippedSnapEffect = itemId
 			end
 			return updated
 		end)
@@ -633,6 +677,60 @@ local function App()
 				PaddingRight = UDim.new(0, 16),
 			}),
 		})
+
+		-- NPC Shop overlay
+		if npcShopOpen then
+			local ShopScreen = nil
+			local ok = pcall(function()
+				ShopScreen = require(script.Parent.components.ShopScreen)
+			end)
+			if ok and ShopScreen then
+				safeChildren["NpcShopOverlay"] = React.createElement(ShopScreen, {
+					onClose = function()
+						setNpcShopOpen(false)
+					end,
+					playerData = playerData,
+					onEquip = onEquip,
+				})
+			else
+				setNpcShopOpen(false)
+			end
+		end
+
+		-- NPC Leaderboard overlay
+		if npcLeaderboardOpen then
+			local LeaderboardScreen = nil
+			local ok = pcall(function()
+				LeaderboardScreen = require(script.Parent.components.LeaderboardScreen)
+			end)
+			if ok and LeaderboardScreen then
+				safeChildren["NpcLeaderboardOverlay"] = React.createElement(LeaderboardScreen, {
+					onClose = function()
+						setNpcLeaderboardOpen(false)
+					end,
+				})
+			else
+				setNpcLeaderboardOpen(false)
+			end
+		end
+
+		-- NPC Stats overlay
+		if npcStatsOpen then
+			local StatsScreen = nil
+			local ok = pcall(function()
+				StatsScreen = require(script.Parent.components.StatsScreen)
+			end)
+			if ok and StatsScreen then
+				safeChildren["NpcStatsOverlay"] = React.createElement(StatsScreen, {
+					onClose = function()
+						setNpcStatsOpen(false)
+					end,
+					playerData = playerData,
+				})
+			else
+				setNpcStatsOpen(false)
+			end
+		end
 	end
 
 	if gameState == "menu" then
@@ -714,6 +812,7 @@ local function App()
 				onBackToMenu = if isMultiplayerBoard then nil else onBackToMenu,
 				savedState = if isMultiplayerBoard then nil else resumeState,
 				equippedBoardSkin = if playerData then playerData.equippedBoardSkin else nil,
+				equippedSnapEffect = if playerData then playerData.equippedSnapEffect else nil,
 				hintsRemaining = if playerData then playerData.hintsRemaining else 0,
 				onHintUsed = onHintUsed,
 				isMultiplayer = isMultiplayerBoard,

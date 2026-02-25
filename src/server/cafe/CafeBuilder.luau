@@ -18,6 +18,35 @@ local PLANT_POT_COLOR = Color3.fromRGB(140, 80, 40)
 local PLANT_GREEN = Color3.fromRGB(34, 120, 50)
 local LIGHT_COLOR = Color3.fromRGB(255, 223, 160)
 local CHAIR_CUSHION = Color3.fromRGB(165, 42, 42)
+local SKIN_COLOR = Color3.fromRGB(234, 192, 153)
+local PANTS_COLOR = Color3.fromRGB(50, 50, 60)
+
+local NPC_CONFIGS = {
+	{
+		name = "Shopkeeper",
+		npcType = "shop",
+		position = Vector3.new(0, 0, -33),
+		faceDirection = Vector3.new(0, 0, 1),
+		promptText = "Browse Shop",
+		torsoColor = Color3.fromRGB(60, 150, 60),
+	},
+	{
+		name = "Scorekeeper",
+		npcType = "leaderboard",
+		position = Vector3.new(40, 0, 30),
+		faceDirection = Vector3.new(0, 0, -1),
+		promptText = "View Leaderboards",
+		torsoColor = Color3.fromRGB(60, 100, 180),
+	},
+	{
+		name = "Statistician",
+		npcType = "stats",
+		position = Vector3.new(-40, 0, 30),
+		faceDirection = Vector3.new(0, 0, -1),
+		promptText = "View Stats",
+		torsoColor = Color3.fromRGB(130, 60, 170),
+	},
+}
 
 local CafeBuilder = {}
 
@@ -286,6 +315,102 @@ local function buildDecorations(parent: Instance)
 	end
 end
 
+-- Build an NPC character model
+local function buildNPC(parent: Instance, config: { name: string, npcType: string, position: Vector3, faceDirection: Vector3, promptText: string, torsoColor: Color3 })
+	local model = Instance.new("Model")
+	model.Name = "NPC_" .. config.npcType
+
+	local npcTypeValue = Instance.new("StringValue")
+	npcTypeValue.Name = "NPCType"
+	npcTypeValue.Value = config.npcType
+	npcTypeValue.Parent = model
+
+	local humanoid = Instance.new("Humanoid")
+	humanoid.DisplayName = config.name
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.Parent = model
+
+	-- HumanoidRootPart (invisible, PrimaryPart)
+	local rootPart = Instance.new("Part")
+	rootPart.Name = "HumanoidRootPart"
+	rootPart.Size = Vector3.new(2, 2, 1)
+	rootPart.Transparency = 1
+	rootPart.Anchored = true
+	rootPart.CanCollide = true
+	rootPart.Parent = model
+
+	local lookAt = config.position + config.faceDirection
+	rootPart.CFrame = CFrame.lookAt(
+		Vector3.new(config.position.X, 3, config.position.Z),
+		Vector3.new(lookAt.X, 3, lookAt.Z)
+	)
+
+	model.PrimaryPart = rootPart
+
+	-- ProximityPrompt
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = config.promptText
+	prompt.ObjectText = config.name
+	prompt.MaxActivationDistance = 8
+	prompt.HoldDuration = 0
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = rootPart
+
+	-- Head (ball)
+	local head = Instance.new("Part")
+	head.Name = "Head"
+	head.Shape = Enum.PartType.Ball
+	head.Size = Vector3.new(1.6, 1.6, 1.6)
+	head.Color = SKIN_COLOR
+	head.Material = Enum.Material.SmoothPlastic
+	head.Anchored = true
+	head.CanCollide = false
+	head.CFrame = rootPart.CFrame * CFrame.new(0, 2.4, 0)
+	head.Parent = model
+
+	-- Torso
+	local torso = Instance.new("Part")
+	torso.Name = "Torso"
+	torso.Size = Vector3.new(2, 2.4, 1.2)
+	torso.Color = config.torsoColor
+	torso.Material = Enum.Material.SmoothPlastic
+	torso.Anchored = true
+	torso.CanCollide = false
+	torso.CFrame = rootPart.CFrame * CFrame.new(0, 0.8, 0)
+	torso.Parent = model
+
+	-- Arms
+	local armSize = Vector3.new(1, 2.2, 1)
+	for _, side in { { name = "LeftArm", x = -1.5 }, { name = "RightArm", x = 1.5 } } do
+		local arm = Instance.new("Part")
+		arm.Name = side.name
+		arm.Size = armSize
+		arm.Color = SKIN_COLOR
+		arm.Material = Enum.Material.SmoothPlastic
+		arm.Anchored = true
+		arm.CanCollide = false
+		arm.CFrame = rootPart.CFrame * CFrame.new(side.x, 0.7, 0)
+		arm.Parent = model
+	end
+
+	-- Legs
+	local legSize = Vector3.new(1, 2.2, 1)
+	for _, side in { { name = "LeftLeg", x = -0.55 }, { name = "RightLeg", x = 0.55 } } do
+		local leg = Instance.new("Part")
+		leg.Name = side.name
+		leg.Size = legSize
+		leg.Color = PANTS_COLOR
+		leg.Material = Enum.Material.SmoothPlastic
+		leg.Anchored = true
+		leg.CanCollide = false
+		leg.CFrame = rootPart.CFrame * CFrame.new(side.x, -1.5, 0)
+		leg.Parent = model
+	end
+
+	model.Parent = parent
+	return model
+end
+
 -- Configure lighting for cozy atmosphere
 local function configureLighting()
 	Lighting.Ambient = Color3.fromRGB(80, 60, 40)
@@ -411,10 +536,15 @@ function CafeBuilder.Build(): { [string]: Model }
 	-- Build decorations
 	buildDecorations(cafeFolder)
 
+	-- Build NPCs
+	for _, config in NPC_CONFIGS do
+		buildNPC(cafeFolder, config)
+	end
+
 	-- Configure lighting
 	configureLighting()
 
-	print("[CafeBuilder] Cafe built with " .. tostring(#singlePositions + #twoPlayerPositions + #fourPlayerPositions) .. " tables")
+	print("[CafeBuilder] Cafe built with " .. tostring(#singlePositions + #twoPlayerPositions + #fourPlayerPositions) .. " tables and " .. tostring(#NPC_CONFIGS) .. " NPCs")
 	return tableModels
 end
 
