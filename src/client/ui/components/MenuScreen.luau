@@ -6,6 +6,7 @@ local React = require(Packages.React)
 
 local ImageCatalog = require(Shared.ImageCatalog)
 local ImagePicker = require(script.Parent.ImagePicker)
+local PackPicker = require(script.Parent.PackPicker)
 
 export type MenuScreenProps = {
 	onStart: (rows: number, cols: number, imageAssetId: string, imageId: string, difficultyId: string) -> (),
@@ -49,6 +50,7 @@ local function MenuScreen(props: MenuScreenProps)
 	local selectedDifficulty, setSelectedDifficulty = React.useState(3) -- default Medium (4x4)
 	local selectedImageId, setSelectedImageId = React.useState(firstImage and firstImage.id or nil :: string?)
 	local selectedImageAssetId, setSelectedImageAssetId = React.useState(firstImage and firstImage.assetId or nil :: string?)
+	local selectedPackId, setSelectedPackId = React.useState(nil :: string?)
 	local showLeaderboards, setShowLeaderboards = React.useState(false)
 	local showShop, setShowShop = React.useState(false)
 	local showStats, setShowStats = React.useState(false)
@@ -421,6 +423,43 @@ local function MenuScreen(props: MenuScreenProps)
 	end
 
 	-- === Content Area (grid + panel) ===
+	local contentArea
+	if selectedPackId then
+		-- Show images within the selected pack + selection panel
+		local gridWidth = UDim2.fromScale(0.6, 1)
+
+		contentArea = React.createElement("Frame", {
+			Size = UDim2.new(1, 0, 1, if savedBanner then -110 else -50),
+			Position = UDim2.new(0, 0, 0, if savedBanner then 110 else 50),
+			BackgroundTransparency = 1,
+			LayoutOrder = 3,
+		}, {
+			ImageGrid = React.createElement("Frame", {
+				Size = gridWidth,
+				BackgroundTransparency = 1,
+			}, {
+				Picker = React.createElement(ImagePicker, {
+					selectedImageId = selectedImageId,
+					onSelectImage = onSelectImage,
+					unlockedImages = props.unlockedImages,
+					playerLevel = props.playerLevel,
+					personalBests = props.personalBests,
+					packId = selectedPackId,
+					onBack = function()
+						setSelectedPackId(nil)
+						setSelectedImageId(nil)
+						setSelectedImageAssetId(nil)
+						setWarningText("")
+					end,
+				}),
+			}),
+			SelectionPanel = selectionPanel,
+		})
+	else
+		-- Show pack selector (no selection panel)
+		contentArea = React.createElement("Frame", {
+			Size = UDim2.new(1, 0, 1, if savedBanner then -110 else -50),
+			Position = UDim2.new(0, 0, 0, if savedBanner then 110 else 50),
 	local gridWidth = UDim2.fromScale(0.6, 1)
 
 	local contentArea = React.createElement("Frame", {
@@ -432,17 +471,19 @@ local function MenuScreen(props: MenuScreenProps)
 		ImageGrid = React.createElement("Frame", {
 			Size = gridWidth,
 			BackgroundTransparency = 1,
+			LayoutOrder = 3,
 		}, {
-			Picker = React.createElement(ImagePicker, {
-				selectedImageId = selectedImageId,
-				onSelectImage = onSelectImage,
+			PackGrid = React.createElement(PackPicker, {
+				onSelectPack = function(packId: string)
+					setSelectedPackId(packId)
+					setSelectedImageId(nil)
+					setSelectedImageAssetId(nil)
+					setWarningText("")
+				end,
 				unlockedImages = props.unlockedImages,
-				playerLevel = props.playerLevel,
-				personalBests = props.personalBests,
 			}),
-		}),
-		SelectionPanel = selectionPanel,
-	})
+		})
+	end
 
 	-- === Assemble root ===
 	local menuChildren: { [string]: any } = {}
