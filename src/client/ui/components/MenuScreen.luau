@@ -52,6 +52,7 @@ local function MenuScreen(props: MenuScreenProps)
 	local showLeaderboards, setShowLeaderboards = React.useState(false)
 	local showShop, setShowShop = React.useState(false)
 	local showStats, setShowStats = React.useState(false)
+	local showSavedPuzzles, setShowSavedPuzzles = React.useState(false)
 	local warningText, setWarningText = React.useState("")
 
 	local function onSelectImage(imageId: string, assetId: string)
@@ -60,7 +61,79 @@ local function MenuScreen(props: MenuScreenProps)
 		setWarningText("")
 	end
 
+	local savedPuzzles = props.savedPuzzles
+	local hasSaves = savedPuzzles and #savedPuzzles > 0
+
 	-- === Top Bar ===
+	local navChildren: { [string]: any } = {
+		Layout = React.createElement("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Right,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 10),
+		}),
+		LeaderboardsBtn = React.createElement("TextButton", {
+			LayoutOrder = 1,
+			Size = UDim2.new(0, 130, 0, 36),
+			BackgroundColor3 = Color3.fromRGB(55, 55, 75),
+			Text = "Leaderboards",
+			TextColor3 = Color3.fromRGB(200, 200, 220),
+			TextSize = 14,
+			Font = Enum.Font.GothamMedium,
+			[React.Event.Activated] = function()
+				setShowLeaderboards(true)
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		}),
+		ShopBtn = React.createElement("TextButton", {
+			LayoutOrder = 2,
+			Size = UDim2.new(0, 80, 0, 36),
+			BackgroundColor3 = Color3.fromRGB(55, 55, 75),
+			Text = "Shop",
+			TextColor3 = Color3.fromRGB(200, 200, 220),
+			TextSize = 14,
+			Font = Enum.Font.GothamMedium,
+			[React.Event.Activated] = function()
+				setShowShop(true)
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		}),
+		StatsBtn = React.createElement("TextButton", {
+			LayoutOrder = 3,
+			Size = UDim2.new(0, 80, 0, 36),
+			BackgroundColor3 = Color3.fromRGB(55, 55, 75),
+			Text = "Stats",
+			TextColor3 = Color3.fromRGB(200, 200, 220),
+			TextSize = 14,
+			Font = Enum.Font.GothamMedium,
+			[React.Event.Activated] = function()
+				setShowStats(true)
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		}),
+	}
+
+	if hasSaves then
+		navChildren["SavedPuzzlesBtn"] = React.createElement("TextButton", {
+			LayoutOrder = 0,
+			Size = UDim2.new(0, 130, 0, 36),
+			BackgroundColor3 = Color3.fromRGB(55, 55, 75),
+			Text = "Saved Puzzles",
+			TextColor3 = Color3.fromRGB(200, 200, 220),
+			TextSize = 14,
+			Font = Enum.Font.GothamMedium,
+			[React.Event.Activated] = function()
+				setShowSavedPuzzles(true)
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		})
+	end
+
 	local topBar = React.createElement("Frame", {
 		Size = UDim2.new(1, 0, 0, 50),
 		BackgroundTransparency = 1,
@@ -87,157 +160,8 @@ local function MenuScreen(props: MenuScreenProps)
 			AutomaticSize = Enum.AutomaticSize.X,
 			Size = UDim2.new(0, 0, 0, 36),
 			BackgroundTransparency = 1,
-		}, {
-			Layout = React.createElement("UIListLayout", {
-				FillDirection = Enum.FillDirection.Horizontal,
-				HorizontalAlignment = Enum.HorizontalAlignment.Right,
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				SortOrder = Enum.SortOrder.LayoutOrder,
-				Padding = UDim.new(0, 10),
-			}),
-			LeaderboardsBtn = React.createElement("TextButton", {
-				LayoutOrder = 1,
-				Size = UDim2.new(0, 130, 0, 36),
-				BackgroundColor3 = Color3.fromRGB(55, 55, 75),
-				Text = "Leaderboards",
-				TextColor3 = Color3.fromRGB(200, 200, 220),
-				TextSize = 14,
-				Font = Enum.Font.GothamMedium,
-				[React.Event.Activated] = function()
-					setShowLeaderboards(true)
-				end,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-			}),
-			ShopBtn = React.createElement("TextButton", {
-				LayoutOrder = 2,
-				Size = UDim2.new(0, 80, 0, 36),
-				BackgroundColor3 = Color3.fromRGB(55, 55, 75),
-				Text = "Shop",
-				TextColor3 = Color3.fromRGB(200, 200, 220),
-				TextSize = 14,
-				Font = Enum.Font.GothamMedium,
-				[React.Event.Activated] = function()
-					setShowShop(true)
-				end,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-			}),
-			StatsBtn = React.createElement("TextButton", {
-				LayoutOrder = 3,
-				Size = UDim2.new(0, 80, 0, 36),
-				BackgroundColor3 = Color3.fromRGB(55, 55, 75),
-				Text = "Stats",
-				TextColor3 = Color3.fromRGB(200, 200, 220),
-				TextSize = 14,
-				Font = Enum.Font.GothamMedium,
-				[React.Event.Activated] = function()
-					setShowStats(true)
-				end,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-			}),
-		}),
+		}, navChildren),
 	})
-
-	-- === Saved Puzzles Banner ===
-	local savedPuzzles = props.savedPuzzles
-	local savedBanner = nil
-	if savedPuzzles and #savedPuzzles > 0 then
-		local saveCards: { [string]: any } = {}
-		saveCards["Layout"] = React.createElement("UIListLayout", {
-			FillDirection = Enum.FillDirection.Horizontal,
-			HorizontalAlignment = Enum.HorizontalAlignment.Left,
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			Padding = UDim.new(0, 10),
-		})
-		saveCards["Padding"] = React.createElement("UIPadding", {
-			PaddingLeft = UDim.new(0, 20),
-			PaddingRight = UDim.new(0, 20),
-		})
-		saveCards["SavedLabel"] = React.createElement("TextLabel", {
-			LayoutOrder = 0,
-			Size = UDim2.new(0, 110, 0, 20),
-			BackgroundTransparency = 1,
-			Text = "Saved Puzzles:",
-			TextColor3 = Color3.fromRGB(180, 180, 200),
-			TextSize = 14,
-			Font = Enum.Font.GothamMedium,
-			TextXAlignment = Enum.TextXAlignment.Left,
-		})
-
-		for i, save in savedPuzzles do
-			local imageEntry = ImageCatalog.getById(save.imageId)
-			local imageName = if imageEntry then imageEntry.name else save.imageId
-			local timeStr = formatTime(save.elapsedSeconds or 0)
-			local label = save.difficultyId .. " " .. imageName .. " " .. timeStr
-
-			saveCards["Save_" .. i] = React.createElement("Frame", {
-				LayoutOrder = i,
-				Size = UDim2.new(0, 260, 0, 46),
-				BackgroundColor3 = Color3.fromRGB(40, 40, 55),
-				BorderSizePixel = 0,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-				Label = React.createElement("TextLabel", {
-					Position = UDim2.new(0, 10, 0, 3),
-					Size = UDim2.new(1, -20, 0, 18),
-					BackgroundTransparency = 1,
-					Text = label,
-					TextColor3 = Color3.fromRGB(210, 210, 230),
-					TextSize = 12,
-					Font = Enum.Font.GothamMedium,
-					TextXAlignment = Enum.TextXAlignment.Left,
-					TextTruncate = Enum.TextTruncate.AtEnd,
-				}),
-				ResumeBtn = React.createElement("TextButton", {
-					Position = UDim2.new(0, 10, 0, 23),
-					Size = UDim2.fromOffset(80, 20),
-					BackgroundColor3 = Color3.fromRGB(50, 180, 80),
-					Text = "Resume",
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 12,
-					Font = Enum.Font.GothamMedium,
-					[React.Event.Activated] = function()
-						if props.onResume then
-							props.onResume(i)
-						end
-					end,
-				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
-				}),
-				DeleteBtn = React.createElement("TextButton", {
-					Position = UDim2.new(0, 96, 0, 23),
-					Size = UDim2.fromOffset(60, 20),
-					BackgroundColor3 = Color3.fromRGB(140, 50, 50),
-					Text = "Delete",
-					TextColor3 = Color3.fromRGB(255, 220, 220),
-					TextSize = 12,
-					Font = Enum.Font.GothamMedium,
-					[React.Event.Activated] = function()
-						if props.onDeleteSave then
-							props.onDeleteSave(i)
-						end
-					end,
-				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
-				}),
-			})
-		end
-
-		savedBanner = React.createElement("ScrollingFrame", {
-			Size = UDim2.new(1, 0, 0, 60),
-			CanvasSize = UDim2.new(0, #savedPuzzles * 270 + 150, 0, 0),
-			ScrollBarThickness = 3,
-			ScrollBarImageColor3 = Color3.fromRGB(80, 80, 100),
-			BackgroundColor3 = Color3.fromRGB(30, 30, 42),
-			BackgroundTransparency = 0.3,
-			BorderSizePixel = 0,
-			ScrollingDirection = Enum.ScrollingDirection.X,
-			LayoutOrder = 2,
-		}, saveCards)
-	end
 
 	-- === Selection Panel (right side) ===
 	local selectionPanel = nil
@@ -500,8 +424,8 @@ local function MenuScreen(props: MenuScreenProps)
 	local gridWidth = UDim2.fromScale(0.6, 1)
 
 	local contentArea = React.createElement("Frame", {
-		Size = UDim2.new(1, 0, 1, if savedBanner then -110 else -50),
-		Position = UDim2.new(0, 0, 0, if savedBanner then 110 else 50),
+		Size = UDim2.new(1, 0, 1, -50),
+		Position = UDim2.new(0, 0, 0, 50),
 		BackgroundTransparency = 1,
 		LayoutOrder = 3,
 	}, {
@@ -523,9 +447,6 @@ local function MenuScreen(props: MenuScreenProps)
 	-- === Assemble root ===
 	local menuChildren: { [string]: any } = {}
 	menuChildren["TopBar"] = topBar
-	if savedBanner then
-		menuChildren["SavedBanner"] = savedBanner
-	end
 	menuChildren["ContentArea"] = contentArea
 
 	local rootChildren: { [string]: any } = {}
@@ -587,6 +508,153 @@ local function MenuScreen(props: MenuScreenProps)
 		else
 			setShowStats(false)
 		end
+	end
+
+	-- Saved Puzzles modal overlay
+	if showSavedPuzzles then
+		local saveEntries: { [string]: any } = {}
+		saveEntries["Layout"] = React.createElement("UIListLayout", {
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 8),
+		})
+		saveEntries["Padding"] = React.createElement("UIPadding", {
+			PaddingLeft = UDim.new(0, 12),
+			PaddingRight = UDim.new(0, 12),
+			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 8),
+		})
+
+		if savedPuzzles and #savedPuzzles > 0 then
+			for i, save in savedPuzzles do
+				local imageEntry = ImageCatalog.getById(save.imageId)
+				local imageName = if imageEntry then imageEntry.name else save.imageId
+				local timeStr = formatTime(save.elapsedSeconds or 0)
+				local label = save.difficultyId .. " - " .. imageName .. " - " .. timeStr
+
+				saveEntries["Save_" .. i] = React.createElement("Frame", {
+					LayoutOrder = i,
+					Size = UDim2.new(1, 0, 0, 50),
+					BackgroundColor3 = Color3.fromRGB(45, 45, 60),
+					BorderSizePixel = 0,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+					Label = React.createElement("TextLabel", {
+						Position = UDim2.new(0, 10, 0, 4),
+						Size = UDim2.new(1, -20, 0, 18),
+						BackgroundTransparency = 1,
+						Text = label,
+						TextColor3 = Color3.fromRGB(210, 210, 230),
+						TextSize = 13,
+						Font = Enum.Font.GothamMedium,
+						TextXAlignment = Enum.TextXAlignment.Left,
+						TextTruncate = Enum.TextTruncate.AtEnd,
+					}),
+					ResumeBtn = React.createElement("TextButton", {
+						Position = UDim2.new(0, 10, 0, 25),
+						Size = UDim2.fromOffset(80, 22),
+						BackgroundColor3 = Color3.fromRGB(50, 180, 80),
+						Text = "Resume",
+						TextColor3 = Color3.fromRGB(255, 255, 255),
+						TextSize = 12,
+						Font = Enum.Font.GothamMedium,
+						[React.Event.Activated] = function()
+							if props.onResume then
+								setShowSavedPuzzles(false)
+								props.onResume(i)
+							end
+						end,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+					}),
+					DeleteBtn = React.createElement("TextButton", {
+						Position = UDim2.new(0, 100, 0, 25),
+						Size = UDim2.fromOffset(60, 22),
+						BackgroundColor3 = Color3.fromRGB(140, 50, 50),
+						Text = "Delete",
+						TextColor3 = Color3.fromRGB(255, 220, 220),
+						TextSize = 12,
+						Font = Enum.Font.GothamMedium,
+						[React.Event.Activated] = function()
+							if props.onDeleteSave then
+								props.onDeleteSave(i)
+							end
+						end,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+					}),
+				})
+			end
+		else
+			saveEntries["Empty"] = React.createElement("TextLabel", {
+				LayoutOrder = 1,
+				Size = UDim2.new(1, 0, 0, 40),
+				BackgroundTransparency = 1,
+				Text = "No saved puzzles",
+				TextColor3 = Color3.fromRGB(140, 140, 160),
+				TextSize = 15,
+				Font = Enum.Font.GothamMedium,
+				TextXAlignment = Enum.TextXAlignment.Center,
+			})
+		end
+
+		rootChildren["SavedPuzzlesBackdrop"] = React.createElement("TextButton", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 0.4,
+			Text = "",
+			ZIndex = 10,
+			[React.Event.Activated] = function()
+				setShowSavedPuzzles(false)
+			end,
+		})
+		rootChildren["SavedPuzzlesModal"] = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(420, 350),
+			BackgroundColor3 = Color3.fromRGB(30, 30, 42),
+			ZIndex = 11,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			Title = React.createElement("TextLabel", {
+				Position = UDim2.new(0, 16, 0, 10),
+				Size = UDim2.new(1, -60, 0, 30),
+				BackgroundTransparency = 1,
+				Text = "Saved Puzzles",
+				TextColor3 = Color3.fromRGB(255, 255, 255),
+				TextSize = 20,
+				Font = Enum.Font.GothamBold,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				ZIndex = 11,
+			}),
+			CloseBtn = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -8, 0, 8),
+				Size = UDim2.fromOffset(30, 30),
+				BackgroundColor3 = Color3.fromRGB(60, 60, 80),
+				Text = "X",
+				TextColor3 = Color3.fromRGB(200, 200, 220),
+				TextSize = 16,
+				Font = Enum.Font.GothamBold,
+				ZIndex = 11,
+				[React.Event.Activated] = function()
+					setShowSavedPuzzles(false)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+			}),
+			SavesList = React.createElement("ScrollingFrame", {
+				Position = UDim2.new(0, 0, 0, 46),
+				Size = UDim2.new(1, 0, 1, -46),
+				BackgroundTransparency = 1,
+				ScrollBarThickness = 3,
+				ScrollBarImageColor3 = Color3.fromRGB(80, 80, 100),
+				ScrollingDirection = Enum.ScrollingDirection.Y,
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				CanvasSize = UDim2.fromScale(0, 0),
+				ZIndex = 11,
+			}, saveEntries),
+		})
 	end
 
 	return React.createElement("Frame", {
