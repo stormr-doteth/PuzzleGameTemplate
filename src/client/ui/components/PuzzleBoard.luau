@@ -14,6 +14,7 @@ local RoomTypes = require(Shared.RoomTypes)
 local ShopItems = require(Shared.ShopItems)
 
 local PuzzlePiece = require(script.Parent.PuzzlePiece)
+local SnapEffect = require(script.Parent.SnapEffect)
 local usePuzzleState = require(script.Parent.Parent.hooks.usePuzzleState)
 local useMultiplayerPuzzle = require(script.Parent.Parent.hooks.useMultiplayerPuzzle)
 local useTimer = require(script.Parent.Parent.hooks.useTimer)
@@ -32,6 +33,7 @@ export type PuzzleBoardProps = {
 	equippedBoardSkin: string?,
 	hintsRemaining: number?,
 	onHintUsed: (() -> ())?,
+	equippedSnapEffect: string?,
 	isMultiplayer: boolean?,
 	roomPuzzleDef: any?,
 	roomInitialPieces: any?,
@@ -59,8 +61,12 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local actions = if props.isMultiplayer then mpActions else soloActions
 	local timer = useTimer()
 	local zoomState, zoomActions = useZoomPan()
+	local loadError, setLoadError = React.useState(false)
 	local localHints, setLocalHints = React.useState(props.hintsRemaining or 0)
 	local localUserId = game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.UserId or 0
+	local snapEffects, setSnapEffects = React.useState({} :: { { positionX: number, positionY: number, key: string, effectId: string } })
+	local snapEffectCounter = React.useRef(0)
+	local showSavePrompt, setShowSavePrompt = React.useState(false)
 
 	-- Dynamic top inset to clear Roblox top bar in full-screen ScreenGui
 	local topInset = React.useMemo(function()
@@ -88,6 +94,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			local sourceImage, sourceWidth, sourceHeight = ImageService.loadImage(props.imageAssetId)
 			if not sourceImage then
 				warn("[PuzzleBoard] Failed to load image")
+				setLoadError(true)
 				setIsLoading(false)
 				return
 			end
@@ -147,6 +154,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				local bOffX = math.floor((viewportW - displayBoardW) / 2)
 				local bOffY = math.floor((viewportH - displayBoardH) / 2)
 
+				local piecePad = math.max(displayCellW, displayCellH) * 1.3
 				actions.scramblePieces(
 					pieceIds,
 					viewportW,
@@ -154,7 +162,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 					bOffX,
 					bOffY,
 					displayBoardW,
-					displayBoardH
+					displayBoardH,
+					piecePad,
+					topInset
 				)
 			end
 
@@ -163,6 +173,22 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			timer.start()
 		end)
 	end, { props.imageAssetId, props.rows, props.cols } :: { any })
+
+	-- Cleanup pieceImages on unmount to prevent memory leaks
+	React.useEffect(function()
+		return function()
+			if pieceImages then
+				for _, imgData in pieceImages do
+					if imgData.image and typeof(imgData.image) == "Instance" then
+						imgData.image:Destroy()
+					end
+					if imgData.outlineImage and typeof(imgData.outlineImage) == "Instance" then
+						imgData.outlineImage:Destroy()
+					end
+				end
+			end
+		end
+	end, { pieceImages } :: { any })
 
 	-- Watch for completion
 	React.useEffect(function()
@@ -209,6 +235,10 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	end
 
 	local function onPieceHoverStart(pieceId: number)
+		local pieceState = state.pieces[pieceId]
+		if pieceState and not pieceState.locked then
+			SoundService.playHover()
+		end
 		setHoveredPieceIds(function(prev)
 			local next = table.clone(prev)
 			next[pieceId] = true
@@ -348,6 +378,28 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			)
 			if snapped then
 				SoundService.playSnap()
+				-- Trigger snap effect at the correct position (center of cell)
+				local effectX = correctX + scaledOffsetX + cellSize.X / 2
+				local effectY = correctY + scaledOffsetY + cellSize.Y / 2
+				snapEffectCounter.current += 1
+				local effectKey = "snap_" .. snapEffectCounter.current
+				local effectId = props.equippedSnapEffect or ""
+				setSnapEffects(function(prev)
+					local updated = table.clone(prev)
+					table.insert(updated, { positionX = effectX, positionY = effectY, key = effectKey, effectId = effectId })
+					return updated
+				end)
+				task.delay(0.7, function()
+					setSnapEffects(function(prev)
+						local updated = {}
+						for _, e in prev do
+							if e.key ~= effectKey then
+								table.insert(updated, e)
+							end
+						end
+						return updated
+					end)
+				end)
 			end
 		end
 	end
@@ -401,36 +453,12 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			ZIndex = 50,
 			[React.Event.Activated] = function()
 				if props.isMultiplayer then
-					-- In multiplayer, just give up (no save)
 					if props.onGiveUp then
 						props.onGiveUp()
 					end
-				elseif props.onBackToMenu and puzzleDef then
+				elseif puzzleDef then
 					timer.stop()
-					local savePieces = {}
-					for id, p in state.pieces do
-						table.insert(savePieces, {
-							id = id, x = p.x, y = p.y,
-							zIndex = p.zIndex, locked = p.locked,
-						groupId = p.groupId,
-						})
-					end
-					local saveGroups = {}
-					for gid, memberIds in state.groups do
-						table.insert(saveGroups, { id = gid, pieceIds = memberIds })
-					end
-					props.onBackToMenu({
-						imageId = props.imageId,
-						imageAssetId = props.imageAssetId,
-						difficultyId = props.difficultyId,
-						rows = props.rows,
-						cols = props.cols,
-						elapsedSeconds = timer.elapsedSeconds,
-						savedAt = os.time(),
-						puzzleDef = puzzleDef,
-						pieces = savePieces,
-						groups = saveGroups,
-					})
+					setShowSavePrompt(true)
 				end
 			end,
 		}, {
@@ -535,6 +563,43 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			})
 		end
 
+		-- Shuffle button (solo only, hidden when complete)
+		if not props.isMultiplayer and not state.isComplete then
+			children["ShuffleButton"] = React.createElement("TextButton", {
+				Position = UDim2.new(0, 480, 0, topInset),
+				Size = UDim2.fromOffset(80, 36),
+				BackgroundColor3 = Color3.fromRGB(50, 50, 70),
+				Text = "Shuffle",
+				TextColor3 = Color3.fromRGB(220, 220, 240),
+				TextSize = 14,
+				Font = Enum.Font.GothamMedium,
+				ZIndex = 50,
+				[React.Event.Activated] = function()
+					local camera = workspace.CurrentCamera
+					local viewportW = if camera then camera.ViewportSize.X else 1200
+					local viewportH = if camera then camera.ViewportSize.Y else 800
+
+					local bOffX = math.floor((viewportW - boardSize.X) / 2)
+					local bOffY = math.floor((viewportH - boardSize.Y) / 2)
+
+					local piecePad = math.max(cellSize.X, cellSize.Y) * 1.3
+					actions.shufflePieces(
+						viewportW,
+						viewportH,
+						bOffX,
+						bOffY,
+						boardSize.X,
+						boardSize.Y,
+						piecePad,
+						topInset
+					)
+					SoundService.playPickup()
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			})
+		end
+
 		-- Zoom controls (top-right, fixed screen position)
 		children["ZoomControls"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(1, 0),
@@ -615,7 +680,35 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		})
 	end
 
-	if isLoading then
+	if loadError then
+		children["ErrorMessage"] = React.createElement("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, -30),
+			Size = UDim2.fromOffset(400, 50),
+			BackgroundTransparency = 1,
+			Text = "Failed to load puzzle image.",
+			TextColor3 = Color3.fromRGB(255, 100, 100),
+			TextSize = 24,
+			Font = Enum.Font.GothamBold,
+		})
+		children["ErrorBackButton"] = React.createElement("TextButton", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 30),
+			Size = UDim2.fromOffset(200, 44),
+			BackgroundColor3 = Color3.fromRGB(80, 80, 100),
+			Text = "Return to Menu",
+			TextColor3 = Color3.fromRGB(255, 255, 255),
+			TextSize = 18,
+			Font = Enum.Font.GothamMedium,
+			[React.Event.Activated] = function()
+				if props.onGiveUp then
+					props.onGiveUp()
+				end
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		})
+	elseif isLoading then
 		children["Loading"] = React.createElement("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
@@ -738,6 +831,125 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end
 			end
 		end
+	end
+
+	-- Render active snap effects (solo)
+	for _, effect in snapEffects do
+		children["SnapEffect_" .. effect.key] = React.createElement(SnapEffect, {
+			positionX = effect.positionX,
+			positionY = effect.positionY,
+			effectId = effect.effectId,
+			effectKey = effect.key,
+		})
+	end
+
+	-- Render multiplayer snap effects (virtual coords → screen coords)
+	if props.isMultiplayer and state.snapEvents then
+		for _, event in state.snapEvents do
+			-- Convert virtual coords to screen center position
+			local vw = RoomTypes.VIRTUAL_CANVAS_WIDTH
+			local vh = RoomTypes.VIRTUAL_CANVAS_HEIGHT
+			local screenX = event.x / vw * boardSize.X + boardOffsetX
+			local screenY = event.y / vh * boardSize.Y + boardOffsetY
+			children["MPSnapEffect_" .. event.key] = React.createElement(SnapEffect, {
+				positionX = screenX,
+				positionY = screenY,
+				effectId = event.effectId,
+				effectKey = event.key,
+			})
+		end
+	end
+
+	-- Save confirmation prompt overlay
+	if showSavePrompt then
+		children["SavePromptBackdrop"] = React.createElement("TextButton", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 0.4,
+			Text = "",
+			ZIndex = 100,
+			[React.Event.Activated] = function() end,
+		})
+		children["SavePromptCard"] = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(300, 160),
+			BackgroundColor3 = Color3.fromRGB(35, 35, 50),
+			ZIndex = 101,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			PromptText = React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, 20),
+				Size = UDim2.new(1, -30, 0, 50),
+				BackgroundTransparency = 1,
+				Text = "Would you like to save\nyour progress?",
+				TextColor3 = Color3.fromRGB(220, 220, 240),
+				TextSize = 16,
+				Font = Enum.Font.GothamMedium,
+				TextWrapped = true,
+				ZIndex = 101,
+			}),
+			SaveExitBtn = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.3, 0, 0, 90),
+				Size = UDim2.fromOffset(120, 40),
+				BackgroundColor3 = Color3.fromRGB(50, 180, 80),
+				Text = "Save & Exit",
+				TextColor3 = Color3.fromRGB(255, 255, 255),
+				TextSize = 15,
+				Font = Enum.Font.GothamMedium,
+				ZIndex = 101,
+				[React.Event.Activated] = function()
+					if props.onBackToMenu and puzzleDef then
+						local savePieces = {}
+						for id, p in state.pieces do
+							table.insert(savePieces, {
+								id = id, x = p.x, y = p.y,
+								zIndex = p.zIndex, locked = p.locked,
+								groupId = p.groupId,
+							})
+						end
+						local saveGroups = {}
+						for gid, memberIds in state.groups do
+							table.insert(saveGroups, { id = gid, pieceIds = memberIds })
+						end
+						props.onBackToMenu({
+							imageId = props.imageId,
+							imageAssetId = props.imageAssetId,
+							difficultyId = props.difficultyId,
+							rows = props.rows,
+							cols = props.cols,
+							elapsedSeconds = timer.elapsedSeconds,
+							savedAt = os.time(),
+							puzzleDef = puzzleDef,
+							pieces = savePieces,
+							groups = saveGroups,
+						})
+					end
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			}),
+			ExitNoSaveBtn = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.7, 0, 0, 90),
+				Size = UDim2.fromOffset(120, 40),
+				BackgroundColor3 = Color3.fromRGB(100, 60, 60),
+				Text = "Exit Without Saving",
+				TextColor3 = Color3.fromRGB(255, 220, 220),
+				TextSize = 13,
+				Font = Enum.Font.GothamMedium,
+				ZIndex = 101,
+				[React.Event.Activated] = function()
+					if props.onGiveUp then
+						props.onGiveUp()
+					end
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			}),
+		})
 	end
 
 	return React.createElement("Frame", {

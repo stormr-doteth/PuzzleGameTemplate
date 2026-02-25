@@ -13,6 +13,10 @@ local ProfileService = require(script.Parent.Parent.data.ProfileService)
 
 local MonetizationHandler = {}
 
+-- Rate limiting for shop purchases (3s cooldown per player)
+local SHOP_COOLDOWN = 3
+local lastShopPurchaseTime: { [number]: number } = {}
+
 local function getPlayerByUserId(userId: number): Player?
 	for _, player in Players:GetPlayers() do
 		if player.UserId == userId then
@@ -60,7 +64,6 @@ function MonetizationHandler.Init()
 			-- Cash products
 			profileData.Cash = profileData.Cash + product.cashAmount
 			granted = true
-			print("[MonetizationHandler] Granted", product.cashAmount, "Cash to", player.Name)
 		end
 
 		if product == MonetizationConfig.DEV_PRODUCTS.SKIP_LEVEL then
@@ -82,16 +85,26 @@ function MonetizationHandler.Init()
 				end
 			end
 			granted = true
-			print("[MonetizationHandler] Skipped level for", player.Name, "-> Level", profileData.Level)
 		end
 
 		if granted then
-			-- Record purchase
+			-- Record purchase (cap history to prevent unbounded DataStore growth)
 			table.insert(profileData.PurchaseHistory, {
 				receiptId = receiptInfo.PurchaseId,
 				productId = productId,
 				timestamp = os.time(),
 			})
+			if #profileData.PurchaseHistory > 100 then
+				table.remove(profileData.PurchaseHistory, 1)
+			end
+
+			-- Force save immediately to prevent duplicate grants on crash
+			local profile = ProfileService.GetProfile(player)
+			if profile then
+				pcall(function()
+					profile:Save()
+				end)
+			end
 
 			-- Notify client of updated data
 			local xpAwarded = Remotes.GetEvent("XPAwarded")
@@ -123,6 +136,14 @@ function MonetizationHandler.Init()
 			return { success = false, message = "Invalid item" }
 		end
 
+		-- Rate limit shop purchases
+		local now = os.clock()
+		local lastTime = lastShopPurchaseTime[player.UserId]
+		if lastTime and (now - lastTime) < SHOP_COOLDOWN then
+			return { success = false, message = "Please wait before purchasing again" }
+		end
+		lastShopPurchaseTime[player.UserId] = now
+
 		local profileData = ProfileService.GetData(player)
 		if not profileData then
 			return { success = false, message = "Profile not loaded" }
@@ -131,6 +152,11 @@ function MonetizationHandler.Init()
 		local item = ShopItems.getById(itemId)
 		if not item then
 			return { success = false, message = "Item not found" }
+		end
+
+		-- Validate price is positive
+		if type(item.cashPrice) ~= "number" or item.cashPrice <= 0 then
+			return { success = false, message = "Invalid item price" }
 		end
 
 		-- Check if already owned (non-consumable items)
@@ -144,6 +170,10 @@ function MonetizationHandler.Init()
 			end
 		elseif item.category == "badges" then
 			if profileData.OwnedBadges and profileData.OwnedBadges[itemId] then
+				return { success = false, message = "Already owned" }
+			end
+		elseif item.category == "snap_effects" then
+			if profileData.OwnedSnapEffects and profileData.OwnedSnapEffects[itemId] then
 				return { success = false, message = "Already owned" }
 			end
 		end
@@ -166,12 +196,13 @@ function MonetizationHandler.Init()
 		elseif item.category == "badges" then
 			if not profileData.OwnedBadges then profileData.OwnedBadges = {} end
 			profileData.OwnedBadges[itemId] = true
+		elseif item.category == "snap_effects" then
+			if not profileData.OwnedSnapEffects then profileData.OwnedSnapEffects = {} end
+			profileData.OwnedSnapEffects[itemId] = true
 		elseif item.category == "hints" then
 			local hintCount = (item :: any).hintCount or 1
 			profileData.HintsRemaining = (profileData.HintsRemaining or 0) + hintCount
 		end
-
-		print("[MonetizationHandler] Shop purchase:", player.Name, "bought", item.name, "for", item.cashPrice, "Cash")
 
 		return { success = true, message = "Purchased!", newCash = profileData.Cash }
 	end
@@ -209,14 +240,17 @@ function MonetizationHandler.Init()
 				return { success = false, message = "Not owned" }
 			end
 			profileData.EquippedBadge = itemId
+		elseif category == "snap_effects" then
+			if not profileData.OwnedSnapEffects or not profileData.OwnedSnapEffects[itemId] then
+				return { success = false, message = "Not owned" }
+			end
+			profileData.EquippedSnapEffect = itemId
 		else
 			return { success = false, message = "Invalid category" }
 		end
 
 		return { success = true, message = "Equipped!" }
 	end
-
-	print("[MonetizationHandler] Initialized")
 end
 
 return MonetizationHandler

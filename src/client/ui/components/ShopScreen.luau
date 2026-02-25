@@ -18,6 +18,7 @@ export type ShopScreenProps = {
 local CATEGORIES = {
 	{ key = "board_skins", label = "Board Skins", items = ShopItems.BOARD_SKINS },
 	{ key = "confetti_styles", label = "Confetti", items = ShopItems.CONFETTI_STYLES },
+	{ key = "snap_effects", label = "Snap Effects", items = ShopItems.SNAP_EFFECTS },
 	{ key = "badges", label = "Badges", items = ShopItems.BADGES },
 	{ key = "hints", label = "Hints", items = ShopItems.HINTS },
 	{ key = "robux", label = "Robux Shop", items = {} },
@@ -27,16 +28,19 @@ local function ShopScreen(props: ShopScreenProps)
 	local selectedCategory, setSelectedCategory = React.useState(1)
 	local playerCash, setPlayerCash = React.useState(if props.playerData then props.playerData.cash or 0 else 0)
 	local purchaseMessage, setPurchaseMessage = React.useState("")
+	local isPurchasing, setIsPurchasing = React.useState(false)
 
 	-- Equipped state (local mirrors of server state)
 	local equippedSkin, setEquippedSkin = React.useState(if props.playerData then props.playerData.equippedBoardSkin or "" else "")
 	local equippedConfetti, setEquippedConfetti = React.useState(if props.playerData then props.playerData.equippedConfettiStyle or "" else "")
 	local equippedBadge, setEquippedBadge = React.useState(if props.playerData then props.playerData.equippedBadge or "" else "")
+	local equippedSnapEffect, setEquippedSnapEffect = React.useState(if props.playerData then props.playerData.equippedSnapEffect or "" else "")
 
 	-- Owned state (local mirrors)
 	local ownedBoardSkins, setOwnedBoardSkins = React.useState(if props.playerData then props.playerData.ownedBoardSkins or {} else {})
 	local ownedConfettiStyles, setOwnedConfettiStyles = React.useState(if props.playerData then props.playerData.ownedConfettiStyles or {} else {})
 	local ownedBadges, setOwnedBadges = React.useState(if props.playerData then props.playerData.ownedBadges or {} else {})
+	local ownedSnapEffects, setOwnedSnapEffects = React.useState(if props.playerData then props.playerData.ownedSnapEffects or {} else {})
 
 	-- Always fetch fresh player data on mount so owned/equipped state is up to date
 	React.useEffect(function()
@@ -54,9 +58,11 @@ local function ShopScreen(props: ShopScreenProps)
 				setEquippedSkin(data.equippedBoardSkin or "")
 				setEquippedConfetti(data.equippedConfettiStyle or "")
 				setEquippedBadge(data.equippedBadge or "")
+				setEquippedSnapEffect(data.equippedSnapEffect or "")
 				setOwnedBoardSkins(data.ownedBoardSkins or {})
 				setOwnedConfettiStyles(data.ownedConfettiStyles or {})
 				setOwnedBadges(data.ownedBadges or {})
+				setOwnedSnapEffects(data.ownedSnapEffects or {})
 			end
 		end)
 	end, {})
@@ -79,6 +85,8 @@ local function ShopScreen(props: ShopScreenProps)
 					setEquippedConfetti(itemId)
 				elseif category == "badges" then
 					setEquippedBadge(itemId)
+				elseif category == "snap_effects" then
+					setEquippedSnapEffect(itemId)
 				end
 				if props.onEquip then
 					props.onEquip(itemId, category)
@@ -90,15 +98,19 @@ local function ShopScreen(props: ShopScreenProps)
 	end
 
 	local function purchaseItem(itemId: string, category: string)
+		if isPurchasing then return end
+		setIsPurchasing(true)
 		task.spawn(function()
 			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
-			if not remotes then return end
+			if not remotes then setIsPurchasing(false) return end
 			local shopPurchase = remotes:FindFirstChild("ShopPurchase")
-			if not shopPurchase or not shopPurchase:IsA("RemoteFunction") then return end
+			if not shopPurchase or not shopPurchase:IsA("RemoteFunction") then setIsPurchasing(false) return end
 
 			local ok, result = pcall(function()
 				return shopPurchase:InvokeServer(itemId)
 			end)
+
+			setIsPurchasing(false)
 
 			if ok and result then
 				setPurchaseMessage(result.message or "")
@@ -123,6 +135,13 @@ local function ShopScreen(props: ShopScreenProps)
 						equipItem(itemId, category)
 					elseif category == "badges" then
 						setOwnedBadges(function(prev)
+							local updated = table.clone(prev)
+							updated[itemId] = true
+							return updated
+						end)
+						equipItem(itemId, category)
+					elseif category == "snap_effects" then
+						setOwnedSnapEffects(function(prev)
 							local updated = table.clone(prev)
 							updated[itemId] = true
 							return updated
@@ -345,9 +364,12 @@ local function ShopScreen(props: ShopScreenProps)
 			elseif item.category == "badges" then
 				isOwned = ownedBadges[item.id] == true
 				isEquipped = equippedBadge == item.id
+			elseif item.category == "snap_effects" then
+				isOwned = ownedSnapEffects[item.id] == true
+				isEquipped = equippedSnapEffect == item.id
 			end
 
-			local canAfford = playerCash >= item.cashPrice
+			local canAfford = playerCash >= item.cashPrice and not isPurchasing
 
 			if isEquipped then
 				-- Green "EQUIPPED" label

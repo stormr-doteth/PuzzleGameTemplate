@@ -24,10 +24,14 @@ local CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" -- no I/O/0/1 to avoid con
 local rooms: { [string]: any } = {}
 local playerRooms: { [number]: string } = {}
 
+-- Rate limiting for PieceMove events (~30 updates/sec per player)
+local MOVE_MIN_INTERVAL = 1 / 30
+local lastMoveTime: { [number]: number } = {}
+
 local RoomManager = {}
 
--- Generate a unique 6-char room code
-local function generateRoomCode(): string
+-- Generate a unique 6-char room code (returns nil if unable after 100 attempts)
+local function generateRoomCode(): string?
 	for _ = 1, 100 do
 		local code = ""
 		for _ = 1, 6 do
@@ -38,7 +42,8 @@ local function generateRoomCode(): string
 			return code
 		end
 	end
-	error("Failed to generate unique room code")
+	warn("[RoomManager] Failed to generate unique room code after 100 attempts")
+	return nil
 end
 
 -- Get list of players in a room as RoomPlayer objects
@@ -294,7 +299,6 @@ local function leavePlayer(player: Player)
 
 	if not hasPlayers then
 		destroyRoom(roomId)
-		print(string.format("[RoomManager] Room %s destroyed (empty)", roomId))
 	else
 		-- Promote new host if needed
 		local newHostUserId = nil
@@ -310,8 +314,6 @@ local function leavePlayer(player: Player)
 			userId = userId,
 			newHostUserId = newHostUserId,
 		})
-
-		print(string.format("[RoomManager] %s left room %s", player.Name, roomId))
 	end
 
 	return { success = true }
@@ -326,6 +328,10 @@ function RoomManager.CreateRoomInternal(player: Player): string?
 	end
 
 	local roomId = generateRoomCode()
+	if not roomId then
+		return nil
+	end
+
 	rooms[roomId] = {
 		roomId = roomId,
 		state = "lobby",
@@ -346,7 +352,6 @@ function RoomManager.CreateRoomInternal(player: Player): string?
 	}
 	playerRooms[userId] = roomId
 
-	print(string.format("[RoomManager] %s created room %s (internal)", player.Name, roomId))
 	return roomId
 end
 
@@ -388,7 +393,6 @@ function RoomManager.JoinRoomInternal(player: Player, roomId: string): boolean
 		},
 	}, userId)
 
-	print(string.format("[RoomManager] %s joined room %s (internal)", player.Name, roomId))
 	return true
 end
 
@@ -438,6 +442,10 @@ function RoomManager.Init()
 		end
 
 		local roomId = generateRoomCode()
+		if not roomId then
+			return { error = "Unable to create room, please try again" }
+		end
+
 		rooms[roomId] = {
 			roomId = roomId,
 			state = "lobby",
@@ -458,7 +466,6 @@ function RoomManager.Init()
 		}
 		playerRooms[userId] = roomId
 
-		print(string.format("[RoomManager] %s created room %s", player.Name, roomId))
 		return { roomId = roomId, roomInfo = getRoomInfo(rooms[roomId]) }
 	end
 
@@ -505,7 +512,6 @@ function RoomManager.Init()
 			},
 		}, userId)
 
-		print(string.format("[RoomManager] %s joined room %s", player.Name, roomId))
 		return { roomInfo = getRoomInfo(room) }
 	end
 
@@ -530,6 +536,14 @@ function RoomManager.Init()
 			return { success = false }
 		end
 		if type(config.difficultyId) ~= "string" or type(config.rows) ~= "number" or type(config.cols) ~= "number" then
+			return { success = false }
+		end
+
+		-- Validate row/col ranges to prevent abuse
+		if config.rows < 2 or config.rows > 25 or config.rows ~= math.floor(config.rows) then
+			return { success = false }
+		end
+		if config.cols < 2 or config.cols > 25 or config.cols ~= math.floor(config.cols) then
 			return { success = false }
 		end
 
@@ -583,7 +597,6 @@ function RoomManager.Init()
 			config = config,
 		})
 
-		print(string.format("[RoomManager] Room %s started (%dx%d)", roomId, config.rows, config.cols))
 		return { success = true }
 	end
 
@@ -613,7 +626,6 @@ function RoomManager.Init()
 
 		fireToAll(room, "RoomReturnedToLobby", { config = room.config })
 
-		print(string.format("[RoomManager] Room %s returned to lobby (sameConfig=%s)", roomId, tostring(sameConfig ~= false)))
 		return { success = true }
 	end
 
@@ -669,6 +681,15 @@ function RoomManager.Init()
 	-- PieceMove — relay drag position (with group movement)
 	pieceMove.OnServerEvent:Connect(function(player, data)
 		local userId = player.UserId
+
+		-- Rate limit move events
+		local now = os.clock()
+		local lastTime = lastMoveTime[userId]
+		if lastTime and (now - lastTime) < MOVE_MIN_INTERVAL then
+			return
+		end
+		lastMoveTime[userId] = now
+
 		local roomId = playerRooms[userId]
 		if not roomId then return end
 
@@ -722,7 +743,7 @@ function RoomManager.Init()
 	end)
 
 	-- Helper: lock a group of pieces at their correct grid positions, broadcast, dissolve group, check completion
-	local function lockGroupAtGrid(room: any, memberIds: { number }, roomId: string)
+	local function lockGroupAtGrid(room: any, memberIds: { number }, roomId: string, snapEffect: string?)
 		local piecesSnappedData = {}
 		for _, mid in memberIds do
 			local mPiece = room.pieces[mid]
@@ -748,7 +769,7 @@ function RoomManager.Init()
 			end
 			table.insert(piecesSnappedData, { id = mid, x = cx, y = cy })
 		end
-		fireToAll(room, "RoomPiecesSnapped", { pieces = piecesSnappedData })
+		fireToAll(room, "RoomPiecesSnapped", { pieces = piecesSnappedData, snapEffect = snapEffect or "" })
 
 		if checkCompletion(room) then
 			room.state = "complete"
@@ -761,7 +782,6 @@ function RoomManager.Init()
 					end)
 				end
 			end
-			print(string.format("[RoomManager] Room %s completed!", roomId))
 		end
 	end
 
@@ -846,7 +866,9 @@ function RoomManager.Init()
 			if piece.groupId and room.groups[piece.groupId] then
 				-- Lock entire group
 				local memberIds = room.groups[piece.groupId]
-				lockGroupAtGrid(room, memberIds, roomId)
+				local placerData2 = ProfileService.GetData(player)
+				local groupSnapEffect = if placerData2 then placerData2.EquippedSnapEffect or "" else ""
+				lockGroupAtGrid(room, memberIds, roomId, groupSnapEffect)
 			else
 				-- Single piece grid snap
 				piece.x = correctX
@@ -856,7 +878,10 @@ function RoomManager.Init()
 				piece.claimedAt = nil
 				piece.zIndex = 1
 
-				fireToAll(room, "RoomPieceSnapped", { id = pieceId, x = correctX, y = correctY })
+				-- Include placer's equipped snap effect
+				local placerData = ProfileService.GetData(player)
+				local placerSnapEffect = if placerData then placerData.EquippedSnapEffect or "" else ""
+				fireToAll(room, "RoomPieceSnapped", { id = pieceId, x = correctX, y = correctY, snapEffect = placerSnapEffect })
 
 				if checkCompletion(room) then
 					room.state = "complete"
@@ -869,7 +894,6 @@ function RoomManager.Init()
 							end)
 						end
 					end
-					print(string.format("[RoomManager] Room %s completed!", roomId))
 				end
 			end
 			return
@@ -1055,7 +1079,9 @@ function RoomManager.Init()
 					local pgdist = math.sqrt(pgdx * pgdx + pgdy * pgdy)
 
 					if pgdist <= SNAP_THRESHOLD then
-						lockGroupAtGrid(room, room.groups[mergedGroupId], roomId)
+						local placerData3 = ProfileService.GetData(player)
+						local mergeSnapEffect = if placerData3 then placerData3.EquippedSnapEffect or "" else ""
+						lockGroupAtGrid(room, room.groups[mergedGroupId], roomId, mergeSnapEffect)
 					end
 				end
 			end
@@ -1130,10 +1156,8 @@ function RoomManager.Init()
 				-- Destroy stale rooms
 				local age = now - room.createdAt
 				if room.state == "lobby" and age > LOBBY_TIMEOUT then
-					print(string.format("[RoomManager] Room %s expired (lobby timeout)", roomId))
 					destroyRoom(roomId)
 				elseif room.state == "playing" and age > PLAYING_TIMEOUT then
-					print(string.format("[RoomManager] Room %s expired (playing timeout)", roomId))
 					destroyRoom(roomId)
 				end
 
@@ -1151,8 +1175,6 @@ function RoomManager.Init()
 			end
 		end
 	end)
-
-	print("[RoomManager] Initialized")
 end
 
 return RoomManager

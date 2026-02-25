@@ -27,7 +27,9 @@ export type PuzzleActions = {
 		boardX: number,
 		boardY: number,
 		boardW: number,
-		boardH: number
+		boardH: number,
+		piecePadding: number?,
+		topMargin: number?
 	) -> (),
 	movePiece: (id: number, x: number, y: number) -> (),
 	trySnap: (
@@ -63,59 +65,64 @@ local function usePuzzleState(): (PuzzleState, PuzzleActions)
 		boardX: number,
 		boardY: number,
 		boardW: number,
-		boardH: number
+		boardH: number,
+		piecePadding: number?,
+		topMargin: number?
 	)
 		local newPieces: { [number]: PieceState } = {}
 		local margin = 20
+		local tMargin = math.max(margin, topMargin or 0)
 		local gap = 10
+		local pad = piecePadding or 0
 
 		-- Build edge zones that avoid the board rectangle
+		-- Only create a zone if it can actually fit a piece (accounting for padding)
 		type Zone = { xMin: number, xMax: number, yMin: number, yMax: number }
 		local zones: { Zone } = {}
 
 		-- Top zone: full width, above the board
 		local topYMax = boardY - gap
-		if topYMax >= margin then
+		if (topYMax - pad) >= tMargin then
 			table.insert(zones, {
 				xMin = margin,
-				xMax = math.max(margin, areaWidth - margin),
-				yMin = margin,
-				yMax = topYMax,
+				xMax = math.max(margin, areaWidth - margin - pad),
+				yMin = tMargin,
+				yMax = math.max(tMargin, topYMax - pad),
 			})
 		end
 
 		-- Bottom zone: full width, below the board
 		local bottomYMin = boardY + boardH + gap
 		local bottomYMax = areaHeight - margin
-		if bottomYMax >= bottomYMin then
+		if (bottomYMax - pad) >= bottomYMin then
 			table.insert(zones, {
 				xMin = margin,
-				xMax = math.max(margin, areaWidth - margin),
+				xMax = math.max(margin, areaWidth - margin - pad),
 				yMin = bottomYMin,
-				yMax = bottomYMax,
+				yMax = math.max(bottomYMin, bottomYMax - pad),
 			})
 		end
 
 		-- Left zone: left of board
 		local leftXMax = boardX - gap
-		if leftXMax >= margin then
+		if (leftXMax - pad) >= margin then
 			table.insert(zones, {
 				xMin = margin,
-				xMax = leftXMax,
-				yMin = margin,
-				yMax = math.max(margin, areaHeight - margin),
+				xMax = math.max(margin, leftXMax - pad),
+				yMin = tMargin,
+				yMax = math.max(tMargin, areaHeight - margin - pad),
 			})
 		end
 
 		-- Right zone: right of board
 		local rightXMin = boardX + boardW + gap
 		local rightXMax = areaWidth - margin
-		if rightXMax >= rightXMin then
+		if (rightXMax - pad) >= rightXMin then
 			table.insert(zones, {
 				xMin = rightXMin,
-				xMax = rightXMax,
-				yMin = margin,
-				yMax = math.max(margin, areaHeight - margin),
+				xMax = math.max(rightXMin, rightXMax - pad),
+				yMin = tMargin,
+				yMax = math.max(tMargin, areaHeight - margin - pad),
 			})
 		end
 
@@ -124,8 +131,8 @@ local function usePuzzleState(): (PuzzleState, PuzzleActions)
 			table.insert(zones, {
 				xMin = margin,
 				xMax = math.max(margin + 1, boardX - gap),
-				yMin = margin,
-				yMax = math.max(margin + 1, areaHeight - margin),
+				yMin = tMargin,
+				yMax = math.max(tMargin + 1, areaHeight - margin - pad),
 			})
 		end
 

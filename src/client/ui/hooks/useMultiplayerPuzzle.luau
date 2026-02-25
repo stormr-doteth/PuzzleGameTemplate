@@ -3,6 +3,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local React = require(Packages.React)
 
+local SoundService = require(script.Parent.Parent.Parent.services.SoundService)
+
 local THROTTLE_INTERVAL = 0.1 -- 100ms
 
 export type PieceState = {
@@ -18,6 +20,7 @@ export type PuzzleState = {
 	isComplete: boolean,
 	claimedPieces: { [number]: number }, -- pieceId → userId
 	groups: { [number]: { number } },
+	snapEvents: { { x: number, y: number, key: string, effectId: string } }?,
 }
 
 export type PuzzleActions = {
@@ -54,6 +57,8 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 	local isComplete, setIsComplete = React.useState(false)
 	local claimedPieces, setClaimedPieces = React.useState({} :: { [number]: number })
 	local groups, setGroups = React.useState({} :: { [number]: { number } })
+	local snapEvents, setSnapEvents = React.useState({} :: { { x: number, y: number, key: string, effectId: string } })
+	local snapEventCounter = React.useRef(0)
 	local lastSendTime = React.useRef(0)
 
 	-- Initialize pieces from server data
@@ -160,6 +165,27 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 					updated[snappedId] = nil
 					return updated
 				end)
+				-- Play snap sound and trigger snap effect
+				SoundService.playSnap()
+				snapEventCounter.current += 1
+				local effectKey = "mp_snap_" .. snapEventCounter.current
+				local effectId = data.snapEffect or ""
+				setSnapEvents(function(prev)
+					local updated = table.clone(prev)
+					table.insert(updated, { x = data.x, y = data.y, key = effectKey, effectId = effectId })
+					return updated
+				end)
+				task.delay(0.7, function()
+					setSnapEvents(function(prev)
+						local filtered = {}
+						for _, e in prev do
+							if e.key ~= effectKey then
+								table.insert(filtered, e)
+							end
+						end
+						return filtered
+					end)
+				end)
 			end))
 		end
 
@@ -251,6 +277,30 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 					end
 					return updated
 				end)
+				-- Play snap sound and trigger snap effect on first piece
+				SoundService.playSnap()
+				local firstPiece = data.pieces[1]
+				if firstPiece and type(firstPiece) == "table" then
+					snapEventCounter.current += 1
+					local effectKey = "mp_bsnap_" .. snapEventCounter.current
+					local effectId = data.snapEffect or ""
+					setSnapEvents(function(prev)
+						local updated = table.clone(prev)
+						table.insert(updated, { x = firstPiece.x, y = firstPiece.y, key = effectKey, effectId = effectId })
+						return updated
+					end)
+					task.delay(0.7, function()
+						setSnapEvents(function(prev)
+							local filtered = {}
+							for _, e in prev do
+								if e.key ~= effectKey then
+									table.insert(filtered, e)
+								end
+							end
+							return filtered
+						end)
+					end)
+				end
 			end))
 		end
 
@@ -440,6 +490,7 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 		isComplete = isComplete,
 		claimedPieces = claimedPieces,
 		groups = groups,
+		snapEvents = snapEvents,
 	}
 
 	local actions: PuzzleActions = {

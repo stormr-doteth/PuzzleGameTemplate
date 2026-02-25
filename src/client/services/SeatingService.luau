@@ -75,7 +75,6 @@ end
 
 function SeatingService.Init()
 	-- Nothing required at init time, service is stateless until seated
-	print("[SeatingService] Initialized")
 end
 
 return SeatingService

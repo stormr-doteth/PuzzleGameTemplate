@@ -544,7 +544,6 @@ function CafeBuilder.Build(): { [string]: Model }
 	-- Configure lighting
 	configureLighting()
 
-	print("[CafeBuilder] Cafe built with " .. tostring(#singlePositions + #twoPlayerPositions + #fourPlayerPositions) .. " tables and " .. tostring(#NPC_CONFIGS) .. " NPCs")
 	return tableModels
 end
 

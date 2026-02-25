@@ -1,5 +1,8 @@
 local MonetizationConfig = {}
 
+-- TODO: Replace all id = 0 values with actual IDs from Roblox Creator Dashboard before launch.
+-- Purchases will silently fail while IDs are 0 (see isConfigured() guard below).
+
 -- GamePass IDs (replace with actual IDs from Roblox after creating them)
 MonetizationConfig.GAME_PASSES = {
 	VIP = {
@@ -39,6 +42,21 @@ MonetizationConfig.DEV_PRODUCTS = {
 		robuxPrice = 99,
 	},
 }
+
+-- Returns true if all product IDs have been configured (non-zero)
+function MonetizationConfig.isConfigured(): boolean
+	for _, pass in MonetizationConfig.GAME_PASSES do
+		if pass.id == 0 then
+			return false
+		end
+	end
+	for _, product in MonetizationConfig.DEV_PRODUCTS do
+		if product.id == 0 then
+			return false
+		end
+	end
+	return true
+end
 
 -- Lookup DevProduct by its ID
 function MonetizationConfig.getDevProductById(productId: number): any

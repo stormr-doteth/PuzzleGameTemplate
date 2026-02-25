@@ -1,11 +1,15 @@
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Packages = ServerScriptService:WaitForChild("Packages")
 local ProfileStore = require(Packages.ProfileStore)
 
+local CURRENT_SCHEMA_VERSION = 1
+
 local PROFILE_TEMPLATE = {
-	Cash = 10000,
+	SchemaVersion = CURRENT_SCHEMA_VERSION,
+	Cash = 250,
 	Level = 1,
 	XP = 0,
 	UnlockedImages = {},         -- { [string]: true }
@@ -19,12 +23,38 @@ local PROFILE_TEMPLATE = {
 	OwnedBoardSkins = {},        -- { [string]: true }
 	OwnedConfettiStyles = {},    -- { [string]: true }
 	OwnedBadges = {},            -- { [string]: true }
+	OwnedSnapEffects = {},       -- { [string]: true }
 	HintsRemaining = 0,
 	EquippedBoardSkin = "",
 	EquippedConfettiStyle = "",
 	EquippedBadge = "",
+	EquippedSnapEffect = "",
 	SavedPuzzles = {},  -- { SavedPuzzleData }, max 3 entries
 }
+
+-- Cap PurchaseHistory to prevent unbounded growth toward DataStore limits
+local MAX_PURCHASE_HISTORY = 100
+
+-- Migrate data from older schema versions to current
+local function migrateProfile(data)
+	local version = data.SchemaVersion or 0
+
+	-- Migration from v0 (no schema version) to v1
+	if version < 1 then
+		-- Cap PurchaseHistory if it's grown too large
+		if data.PurchaseHistory and #data.PurchaseHistory > MAX_PURCHASE_HISTORY then
+			local trimmed = {}
+			for i = #data.PurchaseHistory - MAX_PURCHASE_HISTORY + 1, #data.PurchaseHistory do
+				table.insert(trimmed, data.PurchaseHistory[i])
+			end
+			data.PurchaseHistory = trimmed
+		end
+		data.SchemaVersion = 1
+	end
+
+	-- Future migrations go here:
+	-- if version < 2 then ... data.SchemaVersion = 2 end
+end
 
 local PlayerStore = ProfileStore.New("PlayerData", PROFILE_TEMPLATE)
 local activeProfiles = {}
@@ -47,6 +77,38 @@ local function loadProfile(player)
 
 	profile:AddUserId(player.UserId)
 	profile:Reconcile()
+	migrateProfile(profile.Data)
+
+	-- Seed test data in Studio so shop items are testable (double-check PlaceId to prevent accidental activation)
+	if RunService:IsStudio() and game.PlaceId == 0 then
+		local data = profile.Data
+		-- Give enough cash to buy things
+		if data.Cash < 50000 then
+			data.Cash = 50000
+		end
+		-- Own one of each item category for testing
+		data.OwnedBoardSkins["skin_midnight"] = true
+		data.OwnedBoardSkins["skin_forest"] = true
+		data.OwnedConfettiStyles["confetti_stars"] = true
+		data.OwnedSnapEffects["snap_sparkle"] = true
+		data.OwnedSnapEffects["snap_ripple"] = true
+		data.OwnedBadges["badge_puzzle_master"] = true
+		-- Equip defaults if nothing equipped
+		if data.EquippedBoardSkin == "" then
+			data.EquippedBoardSkin = "skin_midnight"
+		end
+		if data.EquippedSnapEffect == "" then
+			data.EquippedSnapEffect = "snap_sparkle"
+		end
+		-- Give some hints
+		if data.HintsRemaining < 5 then
+			data.HintsRemaining = 5
+		end
+		-- Set a reasonable level so level-gated images are accessible
+		if data.Level < 10 then
+			data.Level = 10
+		end
+	end
 
 	profile.OnSessionEnd:Connect(function()
 		activeProfiles[player] = nil
