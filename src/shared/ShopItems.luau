@@ -1,4 +1,4 @@
-export type ShopItemCategory = "board_skins" | "confetti_styles" | "badges" | "hints"
+export type ShopItemCategory = "board_skins" | "confetti_styles" | "badges" | "hints" | "snap_effects"
 
 export type ShopItem = {
 	id: string,
@@ -116,6 +116,33 @@ ShopItems.BADGES = {
 	},
 }
 
+ShopItems.SNAP_EFFECTS = {
+	{
+		id = "snap_sparkle",
+		name = "Sparkle Burst",
+		description = "Golden sparkle particles radiate outward",
+		category = "snap_effects",
+		cashPrice = 75,
+		previewColor = Color3.fromRGB(255, 215, 60),
+	},
+	{
+		id = "snap_ripple",
+		name = "Ripple Wave",
+		description = "A circular shockwave ring expands and fades",
+		category = "snap_effects",
+		cashPrice = 100,
+		previewColor = Color3.fromRGB(100, 180, 255),
+	},
+	{
+		id = "snap_hearts",
+		name = "Heart Pop",
+		description = "Small colored hearts burst outward and float up",
+		category = "snap_effects",
+		cashPrice = 75,
+		previewColor = Color3.fromRGB(255, 100, 140),
+	},
+}
+
 ShopItems.HINTS = {
 	{
 		id = "hint_pack_3",
@@ -140,6 +167,7 @@ function ShopItems.getAll(): { ShopItem }
 	for _, item in ShopItems.BOARD_SKINS do table.insert(all, item) end
 	for _, item in ShopItems.CONFETTI_STYLES do table.insert(all, item) end
 	for _, item in ShopItems.BADGES do table.insert(all, item) end
+	for _, item in ShopItems.SNAP_EFFECTS do table.insert(all, item) end
 	for _, item in ShopItems.HINTS do table.insert(all, item) end
 	return all
 end

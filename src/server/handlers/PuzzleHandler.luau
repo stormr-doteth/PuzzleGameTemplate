@@ -190,13 +190,6 @@ function PuzzleHandler.Init()
 			end
 		end
 
-		print(string.format(
-			"[PuzzleHandler] %s completed %s on %s in %.1fs (+%dXP +%dCash%s%s)",
-			player.Name, difficultyId, data.imageId, completionTime,
-			xpGained, cashGained,
-			if isSpeedBonus then " SPEED BONUS" else "",
-			if newLevel > oldLevel then " LEVEL UP to " .. newLevel else ""
-		))
 	end)
 
 	-- Handle GetPlayerData requests
@@ -250,10 +243,12 @@ function PuzzleHandler.Init()
 			equippedBoardSkin = profileData.EquippedBoardSkin or "",
 			equippedConfettiStyle = profileData.EquippedConfettiStyle or "",
 			equippedBadge = profileData.EquippedBadge or "",
+			equippedSnapEffect = profileData.EquippedSnapEffect or "",
 			hintsRemaining = profileData.HintsRemaining or 0,
 			ownedBoardSkins = profileData.OwnedBoardSkins or {},
 			ownedConfettiStyles = profileData.OwnedConfettiStyles or {},
 			ownedBadges = profileData.OwnedBadges or {},
+			ownedSnapEffects = profileData.OwnedSnapEffects or {},
 			totalPuzzlesCompleted = profileData.TotalPuzzlesCompleted or 0,
 			totalPlayTime = profileData.TotalPlayTime or 0,
 			totalPiecesPlaced = profileData.TotalPiecesPlaced or 0,

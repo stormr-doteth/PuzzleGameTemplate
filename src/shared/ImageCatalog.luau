@@ -88,10 +88,10 @@ local IMAGES: { ImageEntry } = {
 		defaultUnlocked = true,
 	},
 	{
-		id = "golden_retriever",
-		assetId = "",
-		name = "Golden Retriever",
-		thumbnailId = "",
+		id = "seal_beach",
+		assetId = "rbxassetid://80051853985966",
+		name = "Seal Beach",
+		thumbnailId = "rbxassetid://80051853985966",
 		category = "Animals",
 		defaultUnlocked = true,
 	},
@@ -122,10 +122,10 @@ local IMAGES: { ImageEntry } = {
 		unlockLevel = 3,
 	},
 	{
-		id = "kitten_nap",
-		assetId = "",
-		name = "Kitten Nap",
-		thumbnailId = "",
+		id = "seal_portrait",
+		assetId = "rbxassetid://111469769800178",
+		name = "Seal Portrait",
+		thumbnailId = "rbxassetid://111469769800178",
 		category = "Animals",
 		defaultUnlocked = false,
 		unlockLevel = 4,
@@ -167,10 +167,10 @@ local IMAGES: { ImageEntry } = {
 		unlockLevel = 8,
 	},
 	{
-		id = "parrot_portrait",
-		assetId = "",
-		name = "Parrot Portrait",
-		thumbnailId = "",
+		id = "seal_rocks",
+		assetId = "rbxassetid://123106766909130",
+		name = "Seal Rocks",
+		thumbnailId = "rbxassetid://123106766909130",
 		category = "Animals",
 		defaultUnlocked = false,
 		unlockLevel = 9,
@@ -221,10 +221,10 @@ local IMAGES: { ImageEntry } = {
 		unlockLevel = 14,
 	},
 	{
-		id = "wolf_howl",
-		assetId = "",
-		name = "Wolf Howl",
-		thumbnailId = "",
+		id = "seal_closeup",
+		assetId = "rbxassetid://116484971166421",
+		name = "Seal Closeup",
+		thumbnailId = "rbxassetid://116484971166421",
 		category = "Animals",
 		defaultUnlocked = false,
 		unlockLevel = 15,
@@ -287,13 +287,24 @@ local IMAGES: { ImageEntry } = {
 
 local ImageCatalog = {}
 
+-- Returns true if the image has valid (non-empty) asset IDs
+local function hasValidAssets(entry: ImageEntry): boolean
+	return entry.assetId ~= nil and entry.assetId ~= ""
+end
+
 function ImageCatalog.getAll(): { ImageEntry }
-	return IMAGES
+	local result = {}
+	for _, entry in IMAGES do
+		if hasValidAssets(entry) then
+			table.insert(result, entry)
+		end
+	end
+	return result
 end
 
 function ImageCatalog.getById(id: string): ImageEntry?
 	for _, entry in IMAGES do
-		if entry.id == id then
+		if entry.id == id and hasValidAssets(entry) then
 			return entry
 		end
 	end
@@ -303,7 +314,7 @@ end
 function ImageCatalog.getDefaultUnlocked(): { ImageEntry }
 	local result = {}
 	for _, entry in IMAGES do
-		if entry.defaultUnlocked then
+		if entry.defaultUnlocked and hasValidAssets(entry) then
 			table.insert(result, entry)
 		end
 	end

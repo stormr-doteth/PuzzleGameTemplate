@@ -136,8 +136,6 @@ local function handleSit(seat: Seat, tableId: string, seatIndex: number)
 	})
 
 	fireOccupancyChanged(tableId)
-
-	print(string.format("[TableManager] %s sat at %s (seat %d, type=%s)", player.Name, tableId, seatIndex, tableType))
 end
 
 local function handleUnsit(player: Player, tableId: string, seatIndex: number)
@@ -179,8 +177,6 @@ local function handleUnsit(player: Player, tableId: string, seatIndex: number)
 	unseatedEvent:FireClient(player, {})
 
 	fireOccupancyChanged(tableId)
-
-	print(string.format("[TableManager] %s left %s (seat %d)", player.Name, tableId, seatIndex))
 end
 
 local function setupSeatListener(seat: Seat, tableId: string, seatIndex: number)
@@ -264,12 +260,6 @@ function TableManager.Init(models: { [string]: Model }, roomManager: any)
 			handleUnsit(player, tableId, seatIndex)
 		end
 	end)
-
-	print("[TableManager] Initialized with " .. tostring(#models == nil and 0 or (function()
-		local c = 0
-		for _ in models do c += 1 end
-		return c
-	end)()) .. " tables")
 end
 
 return TableManager

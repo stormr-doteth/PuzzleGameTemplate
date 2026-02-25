@@ -50,6 +50,9 @@ local function App()
 	-- Admire mode tracking for multiplayer
 	local admireIsMultiplayer, setAdmireIsMultiplayer = React.useState(false)
 
+	-- Loading state for initial data fetch
+	local isDataLoading, setIsDataLoading = React.useState(true)
+
 	-- NPC overlay state
 	local npcShopOpen, setNpcShopOpen = React.useState(false)
 	local npcLeaderboardOpen, setNpcLeaderboardOpen = React.useState(false)
@@ -84,9 +87,15 @@ local function App()
 	React.useEffect(function()
 		task.spawn(function()
 			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
-			if not remotes then return end
+			if not remotes then
+				setIsDataLoading(false)
+				return
+			end
 			local getPlayerData = remotes:FindFirstChild("GetPlayerData")
-			if not getPlayerData or not getPlayerData:IsA("RemoteFunction") then return end
+			if not getPlayerData or not getPlayerData:IsA("RemoteFunction") then
+				setIsDataLoading(false)
+				return
+			end
 
 			local ok, data = pcall(function()
 				return getPlayerData:InvokeServer()
@@ -103,6 +112,8 @@ local function App()
 					setSavedPuzzles(saves)
 				end
 			end
+
+			setIsDataLoading(false)
 		end)
 	end, {})
 
@@ -656,6 +667,23 @@ local function App()
 			end
 			return updated
 		end)
+	end
+
+	-- Show loading indicator while initial data is being fetched
+	if isDataLoading then
+		safeChildren["DataLoading"] = React.createElement("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -30),
+			Size = UDim2.new(0, 300, 0, 40),
+			BackgroundColor3 = Color3.fromRGB(30, 30, 40),
+			BackgroundTransparency = 0.3,
+			Text = "Loading player data...",
+			TextColor3 = Color3.fromRGB(200, 200, 220),
+			TextSize = 18,
+			Font = Enum.Font.GothamMedium,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+		})
 	end
 
 	if gameState == "walking" then
