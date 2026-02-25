@@ -18,25 +18,25 @@ type EffectConfig = {
 
 local EFFECT_CONFIGS: { [string]: EffectConfig } = {
 	default = {
-		particleCount = 6,
+		particleCount = 12,
 		colors = { Color3.fromRGB(255, 255, 255) },
-		size = 6,
-		duration = 0.4,
-		spread = 30,
+		size = 12,
+		duration = 0.55,
+		spread = 55,
 		cornerRadius = UDim.new(0, 1),
 		rotation = false,
 		gravity = 0,
 	},
 	snap_sparkle = {
-		particleCount = 10,
+		particleCount = 16,
 		colors = {
 			Color3.fromRGB(255, 215, 60),
 			Color3.fromRGB(255, 235, 100),
 			Color3.fromRGB(255, 200, 30),
 		},
-		size = 8,
-		duration = 0.6,
-		spread = 50,
+		size = 14,
+		duration = 0.7,
+		spread = 75,
 		cornerRadius = UDim.new(0, 1),
 		rotation = true,
 		gravity = 0,
@@ -44,25 +44,25 @@ local EFFECT_CONFIGS: { [string]: EffectConfig } = {
 	snap_ripple = {
 		particleCount = 1,
 		colors = { Color3.fromRGB(100, 180, 255) },
-		size = 10,
-		duration = 0.5,
-		spread = 60,
+		size = 14,
+		duration = 0.6,
+		spread = 90,
 		cornerRadius = UDim.new(1, 0),
 		rotation = false,
 		gravity = 0,
 		isRing = true,
 	},
 	snap_hearts = {
-		particleCount = 8,
+		particleCount = 14,
 		colors = {
 			Color3.fromRGB(255, 100, 140),
 			Color3.fromRGB(255, 80, 120),
 			Color3.fromRGB(255, 130, 160),
 			Color3.fromRGB(230, 60, 100),
 		},
-		size = 8,
-		duration = 0.6,
-		spread = 40,
+		size = 14,
+		duration = 0.7,
+		spread = 65,
 		cornerRadius = UDim.new(1, 0),
 		rotation = false,
 		gravity = 20,
@@ -95,7 +95,7 @@ local function SnapParticle(props: { config: EffectConfig, index: number, center
 				props.centerY + endY - config.size / 2
 			),
 			BackgroundTransparency = 1,
-			Size = UDim2.fromOffset(config.size * 0.3, config.size * 0.3),
+			Size = UDim2.fromOffset(config.size * 0.5, config.size * 0.5),
 		}
 
 		if config.rotation then
@@ -180,9 +180,49 @@ local function SnapRing(props: { config: EffectConfig, centerX: number, centerY:
 		Corner = React.createElement("UICorner", { CornerRadius = UDim.new(1, 0) }),
 		Stroke = React.createElement("UIStroke", {
 			Color = color,
-			Thickness = 2.5,
+			Thickness = 3.5,
 			Transparency = 0,
 		}),
+	})
+end
+
+local function SnapFlash(props: { centerX: number, centerY: number })
+	local ref = React.useRef(nil :: Frame?)
+
+	React.useEffect(function()
+		local frame = ref.current
+		if not frame then return end
+
+		local tweenInfo = TweenInfo.new(
+			0.25,
+			Enum.EasingStyle.Quad,
+			Enum.EasingDirection.Out
+		)
+
+		local finalSize = 40
+		local tween = TweenService:Create(frame, tweenInfo, {
+			Size = UDim2.fromOffset(finalSize, finalSize),
+			Position = UDim2.fromOffset(props.centerX - finalSize / 2, props.centerY - finalSize / 2),
+			BackgroundTransparency = 1,
+		})
+		tween:Play()
+
+		return function()
+			tween:Cancel()
+		end
+	end, {})
+
+	local startSize = 10
+	return React.createElement("Frame", {
+		ref = ref,
+		Size = UDim2.fromOffset(startSize, startSize),
+		Position = UDim2.fromOffset(props.centerX - startSize / 2, props.centerY - startSize / 2),
+		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundTransparency = 0.2,
+		BorderSizePixel = 0,
+		ZIndex = 91,
+	}, {
+		Corner = React.createElement("UICorner", { CornerRadius = UDim.new(1, 0) }),
 	})
 end
 
@@ -214,6 +254,10 @@ local function SnapEffect(props: SnapEffectProps)
 				centerY = props.positionY,
 			})
 		end
+		children["Flash"] = React.createElement(SnapFlash, {
+			centerX = props.positionX,
+			centerY = props.positionY,
+		})
 	end
 
 	return React.createElement("Frame", {
