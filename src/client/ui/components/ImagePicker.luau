@@ -5,6 +5,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local React = require(Packages.React)
 
 local ImageCatalog = require(Shared.ImageCatalog)
+local PuzzlePacks = require(Shared.PuzzlePacks)
 
 export type ImagePickerProps = {
 	selectedImageId: string?,
@@ -12,32 +13,81 @@ export type ImagePickerProps = {
 	unlockedImages: { [string]: boolean }?,
 	playerLevel: number?,
 	personalBests: { [string]: number }?,
+	packId: string?,
+	onBack: (() -> ())?,
 }
 
 local DIFFICULTY_IDS = { "2x2", "6x6", "9x9", "15x15", "25x25" }
 
 local function ImagePicker(props: ImagePickerProps)
-	local allImages = ImageCatalog.getAll()
+	local images
+	if props.packId then
+		images = ImageCatalog.getByPackId(props.packId)
+	else
+		images = ImageCatalog.getAll()
+	end
+
 	local unlockedImages = props.unlockedImages
-	local playerLevel = props.playerLevel or 1
 
 	local children: { [string]: any } = {}
 
-	children["GridLayout"] = React.createElement("UIGridLayout", {
+	-- Header with back button and pack name
+	if props.packId and props.onBack then
+		local pack = PuzzlePacks.getById(props.packId)
+		local packName = if pack then pack.name else props.packId
+
+		children["Header"] = React.createElement("Frame", {
+			LayoutOrder = 0,
+			Size = UDim2.new(1, 0, 0, 40),
+			BackgroundTransparency = 1,
+		}, {
+			BackButton = React.createElement("TextButton", {
+				Position = UDim2.fromOffset(0, 0),
+				Size = UDim2.new(0, 80, 0, 36),
+				BackgroundColor3 = Color3.fromRGB(55, 55, 75),
+				Text = "< Back",
+				TextColor3 = Color3.fromRGB(200, 200, 220),
+				TextSize = 14,
+				Font = Enum.Font.GothamMedium,
+				[React.Event.Activated] = function()
+					if props.onBack then
+						props.onBack()
+					end
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			}),
+			PackName = React.createElement("TextLabel", {
+				Position = UDim2.new(0, 90, 0, 0),
+				Size = UDim2.new(1, -90, 0, 36),
+				BackgroundTransparency = 1,
+				Text = packName,
+				TextColor3 = Color3.fromRGB(255, 255, 255),
+				TextSize = 20,
+				Font = Enum.Font.GothamBold,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			}),
+		})
+	end
+
+	-- Image grid container
+	local gridChildren: { [string]: any } = {}
+
+	gridChildren["GridLayout"] = React.createElement("UIGridLayout", {
 		CellSize = UDim2.new(0, 90, 0, 90),
 		CellPadding = UDim2.new(0, 8, 0, 8),
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 	})
 
-	children["Padding"] = React.createElement("UIPadding", {
+	gridChildren["Padding"] = React.createElement("UIPadding", {
 		PaddingLeft = UDim.new(0, 12),
 		PaddingRight = UDim.new(0, 12),
 		PaddingTop = UDim.new(0, 12),
 		PaddingBottom = UDim.new(0, 12),
 	})
 
-	for i, entry in allImages do
+	for i, entry in images do
 		local isSelected = entry.id == props.selectedImageId
 		local isUnlocked = entry.defaultUnlocked
 
@@ -108,7 +158,7 @@ local function ImagePicker(props: ImagePickerProps)
 			})
 		end
 
-		children["Image_" .. i] = React.createElement("ImageButton", {
+		gridChildren["Image_" .. i] = React.createElement("ImageButton", {
 			LayoutOrder = i,
 			BackgroundColor3 = Color3.fromRGB(50, 50, 60),
 			Image = entry.thumbnailId,
@@ -120,21 +170,40 @@ local function ImagePicker(props: ImagePickerProps)
 		}, imageChildren)
 	end
 
-	-- Calculate canvas height: rows * (90 + 8 padding) + top/bottom padding
-	local numColumns = 4
-	local numRows = math.ceil(#allImages / numColumns)
-	local canvasHeight = numRows * 98 + 24
-
-	return React.createElement("ScrollingFrame", {
-		Size = UDim2.fromScale(1, 1),
-		CanvasSize = UDim2.fromOffset(0, canvasHeight),
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120),
+	-- Wrap grid in a frame so we can place header above it
+	children["ImageGrid"] = React.createElement("Frame", {
+		LayoutOrder = 1,
+		Size = UDim2.new(1, 0, 1, if props.packId then -48 else 0),
 		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollingDirection = Enum.ScrollingDirection.Y,
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-	}, children)
+	}, {
+		Grid = React.createElement("ScrollingFrame", {
+			Size = UDim2.fromScale(1, 1),
+			CanvasSize = UDim2.fromScale(0, 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 4,
+			ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+		}, gridChildren),
+	})
+
+	return React.createElement("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+	}, {
+		Layout = React.createElement("UIListLayout", {
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 8),
+		}),
+		Padding = React.createElement("UIPadding", {
+			PaddingLeft = UDim.new(0, 4),
+			PaddingRight = UDim.new(0, 4),
+			PaddingTop = UDim.new(0, 4),
+		}),
+		Header = children["Header"],
+		ImageGrid = children["ImageGrid"],
+	})
 end
 
 return ImagePicker

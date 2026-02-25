@@ -4,6 +4,7 @@ export type ImageEntry = {
 	name: string,
 	thumbnailId: string,
 	category: string,
+	packId: string,
 	defaultUnlocked: boolean,
 	unlockLevel: number?,
 }
@@ -15,6 +16,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Sunset Mountains",
 		thumbnailId = "rbxassetid://129720055698342",
 		category = "Nature",
+		packId = "landscapes",
 		defaultUnlocked = true,
 	},
 	{
@@ -23,6 +25,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Ocean Waves",
 		thumbnailId = "rbxassetid://87562993721412",
 		category = "Nature",
+		packId = "landscapes",
 		defaultUnlocked = true,
 	},
 	{
@@ -31,6 +34,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Forest Path",
 		thumbnailId = "rbxassetid://100081078259498",
 		category = "Nature",
+		packId = "landscapes",
 		defaultUnlocked = true,
 	},
 	{
@@ -39,6 +43,7 @@ local IMAGES: { ImageEntry } = {
 		name = "City Skyline",
 		thumbnailId = "rbxassetid://108408685486498",
 		category = "Urban",
+		packId = "urban",
 		defaultUnlocked = false,
 		unlockLevel = 3,
 	},
@@ -48,6 +53,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Space Nebula",
 		thumbnailId = "rbxassetid://127494809663498",
 		category = "Space",
+		packId = "space",
 		defaultUnlocked = false,
 		unlockLevel = 5,
 	},
@@ -57,6 +63,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Tropical Beach",
 		thumbnailId = "rbxassetid://135021200052498",
 		category = "Nature",
+		packId = "landscapes",
 		defaultUnlocked = false,
 		unlockLevel = 8,
 	},
@@ -66,6 +73,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Northern Lights",
 		thumbnailId = "rbxassetid://106848498378498",
 		category = "Nature",
+		packId = "landscapes",
 		defaultUnlocked = false,
 		unlockLevel = 12,
 	},
@@ -75,6 +83,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Abstract Art",
 		thumbnailId = "rbxassetid://139907825498498",
 		category = "Art",
+		packId = "brain",
 		defaultUnlocked = false,
 		unlockLevel = 18,
 	},
@@ -85,6 +94,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Coral Reef",
 		thumbnailId = "",
 		category = "Nature",
+		packId = "landscapes",
 		defaultUnlocked = true,
 	},
 	{
@@ -93,6 +103,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Golden Retriever",
 		thumbnailId = "",
 		category = "Animals",
+		packId = "animals",
 		defaultUnlocked = true,
 	},
 	{
@@ -101,6 +112,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Sushi Platter",
 		thumbnailId = "",
 		category = "Food",
+		packId = "food",
 		defaultUnlocked = true,
 	},
 	{
@@ -109,6 +121,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Autumn Leaves",
 		thumbnailId = "",
 		category = "Nature",
+		packId = "landscapes",
 		defaultUnlocked = false,
 		unlockLevel = 2,
 	},
@@ -118,6 +131,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Tokyo Street",
 		thumbnailId = "",
 		category = "Urban",
+		packId = "urban",
 		defaultUnlocked = false,
 		unlockLevel = 3,
 	},
@@ -127,6 +141,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Kitten Nap",
 		thumbnailId = "",
 		category = "Animals",
+		packId = "animals",
 		defaultUnlocked = false,
 		unlockLevel = 4,
 	},
@@ -136,6 +151,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Mars Surface",
 		thumbnailId = "",
 		category = "Space",
+		packId = "space",
 		defaultUnlocked = false,
 		unlockLevel = 5,
 	},
@@ -145,6 +161,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Watercolor Flowers",
 		thumbnailId = "",
 		category = "Art",
+		packId = "art",
 		defaultUnlocked = false,
 		unlockLevel = 6,
 	},
@@ -154,6 +171,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Pizza Slice",
 		thumbnailId = "",
 		category = "Food",
+		packId = "food",
 		defaultUnlocked = false,
 		unlockLevel = 7,
 	},
@@ -163,6 +181,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Rainy Window",
 		thumbnailId = "",
 		category = "Urban",
+		packId = "urban",
 		defaultUnlocked = false,
 		unlockLevel = 8,
 	},
@@ -172,6 +191,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Parrot Portrait",
 		thumbnailId = "",
 		category = "Animals",
+		packId = "animals",
 		defaultUnlocked = false,
 		unlockLevel = 9,
 	},
@@ -181,6 +201,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Galaxy Spiral",
 		thumbnailId = "",
 		category = "Space",
+		packId = "space",
 		defaultUnlocked = false,
 		unlockLevel = 10,
 	},
@@ -190,6 +211,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Cherry Blossom",
 		thumbnailId = "",
 		category = "Nature",
+		packId = "landscapes",
 		defaultUnlocked = false,
 		unlockLevel = 11,
 	},
@@ -199,6 +221,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Oil Painting",
 		thumbnailId = "",
 		category = "Art",
+		packId = "art",
 		defaultUnlocked = false,
 		unlockLevel = 12,
 	},
@@ -208,6 +231,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Ice Cream Sundae",
 		thumbnailId = "",
 		category = "Food",
+		packId = "food",
 		defaultUnlocked = false,
 		unlockLevel = 13,
 	},
@@ -217,6 +241,7 @@ local IMAGES: { ImageEntry } = {
 		name = "London Bridge",
 		thumbnailId = "",
 		category = "Urban",
+		packId = "urban",
 		defaultUnlocked = false,
 		unlockLevel = 14,
 	},
@@ -226,6 +251,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Wolf Howl",
 		thumbnailId = "",
 		category = "Animals",
+		packId = "animals",
 		defaultUnlocked = false,
 		unlockLevel = 15,
 	},
@@ -235,6 +261,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Saturn Rings",
 		thumbnailId = "",
 		category = "Space",
+		packId = "space",
 		defaultUnlocked = false,
 		unlockLevel = 16,
 	},
@@ -244,6 +271,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Snowy Cabin",
 		thumbnailId = "",
 		category = "Nature",
+		packId = "landscapes",
 		defaultUnlocked = false,
 		unlockLevel = 17,
 	},
@@ -253,6 +281,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Pixel Art",
 		thumbnailId = "",
 		category = "Art",
+		packId = "art",
 		defaultUnlocked = false,
 		unlockLevel = 19,
 	},
@@ -262,6 +291,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Pancake Stack",
 		thumbnailId = "",
 		category = "Food",
+		packId = "food",
 		defaultUnlocked = false,
 		unlockLevel = 20,
 	},
@@ -271,6 +301,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Neon Alley",
 		thumbnailId = "",
 		category = "Urban",
+		packId = "urban",
 		defaultUnlocked = false,
 		unlockLevel = 22,
 	},
@@ -280,6 +311,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Earth from Space",
 		thumbnailId = "",
 		category = "Space",
+		packId = "space",
 		defaultUnlocked = false,
 		unlockLevel = 25,
 	},
@@ -298,6 +330,16 @@ function ImageCatalog.getById(id: string): ImageEntry?
 		end
 	end
 	return nil
+end
+
+function ImageCatalog.getByPackId(packId: string): { ImageEntry }
+	local result = {}
+	for _, entry in IMAGES do
+		if entry.packId == packId then
+			table.insert(result, entry)
+		end
+	end
+	return result
 end
 
 function ImageCatalog.getDefaultUnlocked(): { ImageEntry }
