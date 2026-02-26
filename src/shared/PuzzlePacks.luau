@@ -63,6 +63,13 @@ local PACKS: { PuzzlePack } = {
 		iconAssetId = "",
 		sortOrder = 8,
 	},
+	{
+		id = "brainrots",
+		name = "Brainrots",
+		description = "Terminally online puzzle vibes",
+		iconAssetId = "",
+		sortOrder = 9,
+	},
 }
 
 local PuzzlePacks = {}
