@@ -145,6 +145,10 @@ local function StatsScreen(props: StatsScreenProps)
 			BackgroundColor3 = Theme.Colors.bgDeepest,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			AspectRatio = React.createElement("UIAspectRatioConstraint", {
+				AspectRatio = 0.85,
+				DominantAxis = Enum.DominantAxis.Height,
+			}),
 			SizeConstraint = React.createElement("UISizeConstraint", {
 				MinSize = Vector2.new(300, 380),
 			}),

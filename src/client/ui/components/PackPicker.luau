@@ -126,10 +126,16 @@ local function PackPicker(props: PackPickerProps)
 	end
 
 	return React.createElement("Frame", {
-		Size = UDim2.fromScale(1, 1),
+		Size = UDim2.fromScale(0.75, 1),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 	}, {
+		AspectRatio = React.createElement("UIAspectRatioConstraint", {
+			AspectRatio = 1.6,
+			DominantAxis = Enum.DominantAxis.Width,
+		}),
 		-- Header
 		Header = React.createElement("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0),

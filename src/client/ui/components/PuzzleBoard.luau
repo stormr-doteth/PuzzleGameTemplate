@@ -594,10 +594,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		})
 	end
 
-	-- Back to Menu and Give Up buttons (top-left, shown when not loading)
+	-- Back to Menu and Give Up buttons (top-right, shown when not loading)
 	if not isLoading then
 		children["BackButton"] = React.createElement("TextButton", {
-			Position = UDim2.new(0, 20, 0, topInset),
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -8, 0, 4),
 			Size = UDim2.fromOffset(130, 36),
 			BackgroundColor3 = Theme.Colors.bgInput,
 			Text = if props.isMultiplayer then "< Leave Room" else "< Back to Menu",
@@ -620,7 +621,8 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		})
 
 		children["GiveUpButton"] = React.createElement("TextButton", {
-			Position = UDim2.new(0, 160, 0, topInset),
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -146, 0, 4),
 			Size = UDim2.fromOffset(80, 36),
 			BackgroundColor3 = Theme.Colors.dangerDark,
 			Text = "Give Up",
@@ -640,7 +642,8 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		-- Hint button (disabled in multiplayer)
 		if not props.isMultiplayer and localHints > 0 and puzzleDef and pieceImages then
 			children["HintButton"] = React.createElement("TextButton", {
-				Position = UDim2.new(0, 360, 0, topInset),
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -8, 0.5, 0),
 				Size = UDim2.fromOffset(110, 36),
 				BackgroundColor3 = Theme.Colors.orange,
 				Text = "Hint (" .. localHints .. ")",
@@ -675,9 +678,10 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 
 		-- Robux hint purchase button (disabled in multiplayer, always visible when puzzle is loaded)
 		if not props.isMultiplayer and puzzleDef and pieceImages and not state.isComplete then
-			local robuxBtnX = if localHints > 0 then 480 else 360
+			local robuxOffsetY = if localHints > 0 then 24 else 0
 			children["RobuxHintButton"] = React.createElement("TextButton", {
-				Position = UDim2.new(0, robuxBtnX, 0, topInset),
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -8, 0.5, robuxOffsetY),
 				Size = UDim2.fromOffset(130, 36),
 				BackgroundColor3 = Color3.fromRGB(0, 176, 111),
 				Text = "\xF0\x9F\x92\x8E Hint (R$" .. MonetizationConfig.DEV_PRODUCTS.HINT_1.robuxPrice .. ")",

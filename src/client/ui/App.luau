@@ -53,6 +53,7 @@ local function App()
 
 	-- NPC overlay state
 	local npcShopOpen, setNpcShopOpen = React.useState(false)
+	local npcRobuxShopOpen, setNpcRobuxShopOpen = React.useState(false)
 	local npcLeaderboardOpen, setNpcLeaderboardOpen = React.useState(false)
 	local npcStatsOpen, setNpcStatsOpen = React.useState(false)
 
@@ -247,6 +248,7 @@ local function App()
 	React.useEffect(function()
 		if gameState ~= "walking" then
 			setNpcShopOpen(false)
+			setNpcRobuxShopOpen(false)
 			setNpcLeaderboardOpen(false)
 			setNpcStatsOpen(false)
 		end
@@ -735,7 +737,7 @@ local function App()
 		safeChildren["HUDButtons"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -16, 0.5, 0),
-			Size = UDim2.fromOffset(48, 164),
+			Size = UDim2.fromOffset(48, 216),
 			BackgroundColor3 = Theme.Colors.bgHud,
 			BackgroundTransparency = Theme.Transparency.hudButton,
 			ZIndex = 10,
@@ -753,12 +755,12 @@ local function App()
 				Padding = UDim.new(0, 6),
 				HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			}),
-			ShopBtn = React.createElement("TextButton", {
+			CashShopBtn = React.createElement("TextButton", {
 				LayoutOrder = 1,
-				Size = UDim2.fromOffset(40, 46),
+				Size = UDim2.fromOffset(40, 40),
 				BackgroundColor3 = Theme.Colors.bgInput,
-				Text = "Shop",
-				TextColor3 = Theme.Colors.textSecondary,
+				Text = "Cash",
+				TextColor3 = Theme.Colors.cashGreen,
 				TextSize = Theme.TextSize.tiny,
 				Font = Theme.Font.medium,
 				ZIndex = 10,
@@ -768,9 +770,24 @@ local function App()
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 			}),
-			LeaderBtn = React.createElement("TextButton", {
+			RobuxShopBtn = React.createElement("TextButton", {
 				LayoutOrder = 2,
-				Size = UDim2.fromOffset(40, 46),
+				Size = UDim2.fromOffset(40, 40),
+				BackgroundColor3 = Theme.Colors.bgInput,
+				Text = "R$",
+				TextColor3 = Theme.Colors.accentBlue,
+				TextSize = Theme.TextSize.tiny,
+				Font = Theme.Font.medium,
+				ZIndex = 10,
+				[React.Event.Activated] = function()
+					setNpcRobuxShopOpen(true)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			}),
+			LeaderBtn = React.createElement("TextButton", {
+				LayoutOrder = 3,
+				Size = UDim2.fromOffset(40, 40),
 				BackgroundColor3 = Theme.Colors.bgInput,
 				Text = "Top",
 				TextColor3 = Theme.Colors.textSecondary,
@@ -784,8 +801,8 @@ local function App()
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 			}),
 			StatsBtn = React.createElement("TextButton", {
-				LayoutOrder = 3,
-				Size = UDim2.fromOffset(40, 46),
+				LayoutOrder = 4,
+				Size = UDim2.fromOffset(40, 40),
 				BackgroundColor3 = Theme.Colors.bgInput,
 				Text = "Stats",
 				TextColor3 = Theme.Colors.textSecondary,
@@ -816,6 +833,24 @@ local function App()
 				})
 			else
 				setNpcShopOpen(false)
+			end
+		end
+
+		-- NPC Robux Shop overlay
+		if npcRobuxShopOpen then
+			local RobuxShopScreen = nil
+			local ok = pcall(function()
+				RobuxShopScreen = require(script.Parent.components.RobuxShopScreen)
+			end)
+			if ok and RobuxShopScreen then
+				safeChildren["NpcRobuxShopOverlay"] = React.createElement(RobuxShopScreen, {
+					onClose = function()
+						setNpcRobuxShopOpen(false)
+					end,
+					playerData = playerData,
+				})
+			else
+				setNpcRobuxShopOpen(false)
 			end
 		end
 
@@ -876,22 +911,8 @@ local function App()
 		end)
 	end
 
-	local function onUnlockImageRobux(unlockImageId: string)
-		task.spawn(function()
-			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
-			if not remotes then return end
-			local setPending = remotes:FindFirstChild("SetPendingUnlock")
-			if setPending and setPending:IsA("RemoteEvent") then
-				setPending:FireServer(unlockImageId)
-			end
-			local localPlayer = Players.LocalPlayer
-			if localPlayer then
-				local MarketplaceService = game:GetService("MarketplaceService")
-				pcall(function()
-					MarketplaceService:PromptProductPurchase(localPlayer, MonetizationConfig.DEV_PRODUCTS.UNLOCK_IMAGE.id)
-				end)
-			end
-		end)
+	local function onUnlockImageRobux(_unlockImageId: string)
+		-- Robux single-image unlock removed; unlock via All Images game pass instead
 	end
 
 	local function onPromptExpertPass()
@@ -925,8 +946,8 @@ local function App()
 
 		-- Leave Table button
 		safeChildren["LeaveTableBtn"] = React.createElement("TextButton", {
-			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, 20, 1, -20),
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, 0),
 			Size = UDim2.new(0, 140, 0, 40),
 			BackgroundColor3 = Theme.Colors.dangerDark,
 			Text = "Leave Table",

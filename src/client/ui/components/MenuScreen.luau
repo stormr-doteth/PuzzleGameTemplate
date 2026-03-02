@@ -1,3 +1,4 @@
+local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -59,6 +60,7 @@ local function MenuScreen(props: MenuScreenProps)
 	local selectedPackId, setSelectedPackId = React.useState(nil :: string?)
 	local showLeaderboards, setShowLeaderboards = React.useState(false)
 	local showShop, setShowShop = React.useState(false)
+	local showRobuxShop, setShowRobuxShop = React.useState(false)
 	local showStats, setShowStats = React.useState(false)
 	local showSavedPuzzles, setShowSavedPuzzles = React.useState(false)
 	local warningText, setWarningText = React.useState("")
@@ -475,6 +477,31 @@ local function MenuScreen(props: MenuScreenProps)
 	local menuChildren: { [string]: any } = {}
 	menuChildren["ContentArea"] = contentArea
 
+	-- Saved Puzzles button (top-center, shown on pack selection screen when saves exist)
+	local topInset = GuiService:GetGuiInset().Y
+	if not selectedPackId and hasSaves then
+		menuChildren["SavedPuzzlesBtn"] = React.createElement("TextButton", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, -topInset + 4),
+			Size = UDim2.fromOffset(160, 36),
+			BackgroundColor3 = Theme.Colors.accentBlue,
+			Text = "Saved Puzzles",
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.label,
+			Font = Theme.Font.bold,
+			ZIndex = 10,
+			[React.Event.Activated] = function()
+				setShowSavedPuzzles(true)
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", {
+				Color = Theme.Colors.border,
+				Thickness = 1.5,
+			}),
+		})
+	end
+
 	menuChildren["Background"] = React.createElement("Frame", {
 		Size = UDim2.fromScale(2, 2),
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -522,6 +549,24 @@ local function MenuScreen(props: MenuScreenProps)
 			})
 		else
 			setShowShop(false)
+		end
+	end
+
+	-- Robux Shop overlay
+	if showRobuxShop then
+		local RobuxShopScreen = nil
+		local ok = pcall(function()
+			RobuxShopScreen = require(script.Parent.RobuxShopScreen)
+		end)
+		if ok and RobuxShopScreen then
+			rootChildren["RobuxShopOverlay"] = React.createElement(RobuxShopScreen, {
+				onClose = function()
+					setShowRobuxShop(false)
+				end,
+				playerData = props.playerData,
+			})
+		else
+			setShowRobuxShop(false)
 		end
 	end
 

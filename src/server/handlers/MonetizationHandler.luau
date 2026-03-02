@@ -6,7 +6,6 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local MonetizationConfig = require(Shared.MonetizationConfig)
 local ShopItems = require(Shared.ShopItems)
 local Remotes = require(Shared.Remotes)
-local ImageCatalog = require(Shared.ImageCatalog)
 
 local ProfileService = require(script.Parent.Parent.data.ProfileService)
 
@@ -15,9 +14,6 @@ local MonetizationHandler = {}
 -- Rate limiting for shop purchases (3s cooldown per player)
 local SHOP_COOLDOWN = 3
 local lastShopPurchaseTime: { [number]: number } = {}
-
--- Pending image unlock for Robux purchases (userId → imageId)
-local pendingImageUnlock: { [number]: string } = {}
 
 local function getPlayerByUserId(userId: number): Player?
 	for _, player in Players:GetPlayers() do
@@ -29,17 +25,8 @@ local function getPlayerByUserId(userId: number): Player?
 end
 
 function MonetizationHandler.Init()
-	-- Listen for SetPendingUnlock from client (stores imageId before Robux purchase)
-	local setPendingUnlock = Remotes.GetEvent("SetPendingUnlock")
-	setPendingUnlock.OnServerEvent:Connect(function(player, imageId)
-		if type(imageId) == "string" and imageId ~= "" then
-			pendingImageUnlock[player.UserId] = imageId
-		end
-	end)
-
-	-- Clean up pending on PlayerRemoving
+	-- Clean up on PlayerRemoving
 	Players.PlayerRemoving:Connect(function(player)
-		pendingImageUnlock[player.UserId] = nil
 		lastShopPurchaseTime[player.UserId] = nil
 	end)
 
@@ -77,38 +64,8 @@ function MonetizationHandler.Init()
 		local granted = false
 
 		if product.cashAmount then
-			-- Cash products
+			-- Cash products (CASH_100, CASH_500, CASH_1500, CASH_5000)
 			profileData.Cash = profileData.Cash + product.cashAmount
-			granted = true
-		end
-
-		if product.hintCount then
-			-- Hint products
-			profileData.HintsRemaining = (profileData.HintsRemaining or 0) + product.hintCount
-			granted = true
-		end
-
-			if product == MonetizationConfig.DEV_PRODUCTS.UNLOCK_IMAGE then
-			-- Unlock a single puzzle image via Robux
-			local userId = receiptInfo.PlayerId
-			local pendingImageId = pendingImageUnlock[userId]
-			if pendingImageId then
-				local imgEntry = ImageCatalog.getById(pendingImageId)
-				if imgEntry then
-					if not profileData.UnlockedImages then
-						profileData.UnlockedImages = {}
-					end
-					profileData.UnlockedImages[pendingImageId] = true
-					pendingImageUnlock[userId] = nil
-
-					-- Notify client so it refreshes
-					local xpAwarded = Remotes.GetEvent("XPAwarded")
-					xpAwarded:FireClient(player, {
-						cashGained = 0,
-						imageUnlocked = pendingImageId,
-					})
-				end
-			end
 			granted = true
 		end
 
@@ -132,17 +89,10 @@ function MonetizationHandler.Init()
 			end
 
 			-- Notify client of updated data
-			if product.hintCount then
-				local hintPurchased = Remotes.GetEvent("HintPurchased")
-				hintPurchased:FireClient(player, {
-					hintsRemaining = profileData.HintsRemaining,
-				})
-			else
-				local xpAwarded = Remotes.GetEvent("XPAwarded")
-				xpAwarded:FireClient(player, {
-					cashGained = product.cashAmount or 0,
-				})
-			end
+			local xpAwarded = Remotes.GetEvent("XPAwarded")
+			xpAwarded:FireClient(player, {
+				cashGained = product.cashAmount or 0,
+			})
 
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end

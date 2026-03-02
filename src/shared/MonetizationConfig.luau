@@ -10,49 +10,72 @@ MonetizationConfig.GAME_PASSES = {
 		name = "VIP Pass",
 		description = "2x Cash permanently + gold name on leaderboard",
 		robuxPrice = 199,
+		iconColor = Color3.fromRGB(255, 215, 0),
+		iconText = "\u{1F451}",
 	},
 	ALL_IMAGES = {
 		id = 0, -- Replace with actual GamePass ID
 		name = "All Images Pack",
 		description = "Unlock every puzzle image immediately",
 		robuxPrice = 149,
+		iconColor = Color3.fromRGB(80, 200, 255),
+		iconText = "\u{1F5BC}",
 	},
 	EXPERT = {
 		id = 0, -- Replace with actual GamePass ID
 		name = "Expert Mode",
 		description = "Unlock Expert (25x25) difficulty",
 		robuxPrice = 199,
+		iconColor = Color3.fromRGB(200, 80, 255),
+		iconText = "\u{1F9E9}",
 	},
 }
 
 -- DevProduct IDs (replace with actual IDs from Roblox after creating them)
 MonetizationConfig.DEV_PRODUCTS = {
-	CASH_50 = {
-		id = 0, -- Replace with actual DevProduct ID
-		name = "50 Cash",
-		description = "Add 50 Cash to your balance",
-		cashAmount = 50,
-		robuxPrice = 49,
-	},
 	CASH_100 = {
 		id = 0, -- Replace with actual DevProduct ID
 		name = "100 Cash",
-		description = "Add 100 Cash to your balance",
+		description = "A small stack of coins to get started",
 		cashAmount = 100,
-		robuxPrice = 79,
+		robuxPrice = 49,
+		iconColor = Color3.fromRGB(80, 200, 120),
+		iconText = "\u{1FA99}",
+	},
+	CASH_500 = {
+		id = 0, -- Replace with actual DevProduct ID
+		name = "500 Cash",
+		description = "A solid pile of coins for unlocks",
+		cashAmount = 500,
+		robuxPrice = 199,
+		iconColor = Color3.fromRGB(80, 255, 80),
+		iconText = "\u{1F4B0}",
+	},
+	CASH_1500 = {
+		id = 0, -- Replace with actual DevProduct ID
+		name = "1,500 Cash",
+		description = "A big bag of coins — great value!",
+		cashAmount = 1500,
+		robuxPrice = 499,
+		iconColor = Color3.fromRGB(255, 220, 80),
+		iconText = "\u{1F4B5}",
+	},
+	CASH_5000 = {
+		id = 0, -- Replace with actual DevProduct ID
+		name = "5,000 Cash",
+		description = "The mega bundle — best deal!",
+		cashAmount = 5000,
+		robuxPrice = 999,
+		iconColor = Color3.fromRGB(255, 180, 50),
+		iconText = "\u{1F48E}",
 	},
 	HINT_1 = {
 		id = 0, -- Replace with actual DevProduct ID
-		name = "Instant Hint",
-		description = "Instantly place one puzzle piece",
-		hintCount = 1,
-		robuxPrice = 5,
-	},
-	UNLOCK_IMAGE = {
-		id = 0, -- Replace with actual DevProduct ID
-		name = "Unlock Puzzle",
-		description = "Unlock a single puzzle image",
+		name = "Hint",
+		description = "Reveals one puzzle piece placement",
 		robuxPrice = 25,
+		iconColor = Color3.fromRGB(255, 200, 80),
+		iconText = "\u{1F4A1}",
 	},
 }
 
