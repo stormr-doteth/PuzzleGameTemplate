@@ -3,6 +3,8 @@ local TweenService = game:GetService("TweenService")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local React = require(Packages.React)
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared.Theme)
 
 type EffectConfig = {
 	particleCount: number,
@@ -217,7 +219,7 @@ local function SnapFlash(props: { centerX: number, centerY: number })
 		ref = ref,
 		Size = UDim2.fromOffset(startSize, startSize),
 		Position = UDim2.fromOffset(props.centerX - startSize / 2, props.centerY - startSize / 2),
-		BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundColor3 = Theme.Colors.textPrimary,
 		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 		ZIndex = 91,

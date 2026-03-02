@@ -4,7 +4,6 @@ local Players = game:GetService("Players")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local MonetizationConfig = require(Shared.MonetizationConfig)
-local ProgressionConfig = require(Shared.ProgressionConfig)
 local ShopItems = require(Shared.ShopItems)
 local Remotes = require(Shared.Remotes)
 local ImageCatalog = require(Shared.ImageCatalog)
@@ -17,6 +16,9 @@ local MonetizationHandler = {}
 local SHOP_COOLDOWN = 3
 local lastShopPurchaseTime: { [number]: number } = {}
 
+-- Pending image unlock for Robux purchases (userId → imageId)
+local pendingImageUnlock: { [number]: string } = {}
+
 local function getPlayerByUserId(userId: number): Player?
 	for _, player in Players:GetPlayers() do
 		if player.UserId == userId then
@@ -27,6 +29,20 @@ local function getPlayerByUserId(userId: number): Player?
 end
 
 function MonetizationHandler.Init()
+	-- Listen for SetPendingUnlock from client (stores imageId before Robux purchase)
+	local setPendingUnlock = Remotes.GetEvent("SetPendingUnlock")
+	setPendingUnlock.OnServerEvent:Connect(function(player, imageId)
+		if type(imageId) == "string" and imageId ~= "" then
+			pendingImageUnlock[player.UserId] = imageId
+		end
+	end)
+
+	-- Clean up pending on PlayerRemoving
+	Players.PlayerRemoving:Connect(function(player)
+		pendingImageUnlock[player.UserId] = nil
+		lastShopPurchaseTime[player.UserId] = nil
+	end)
+
 	-- Process DevProduct receipts
 	MarketplaceService.ProcessReceipt = function(receiptInfo)
 		local player = getPlayerByUserId(receiptInfo.PlayerId)
@@ -66,22 +82,31 @@ function MonetizationHandler.Init()
 			granted = true
 		end
 
-		if product == MonetizationConfig.DEV_PRODUCTS.SKIP_LEVEL then
-			-- Skip level: grant XP to reach next level
-			local currentLevel = profileData.Level
-			local nextLevelXP = ProgressionConfig.getXPForLevel(currentLevel + 1)
-			local xpNeeded = nextLevelXP - profileData.XP
-			if xpNeeded > 0 then
-				profileData.XP = profileData.XP + xpNeeded
-				profileData.Level = currentLevel + 1
+		if product.hintCount then
+			-- Hint products
+			profileData.HintsRemaining = (profileData.HintsRemaining or 0) + product.hintCount
+			granted = true
+		end
 
-				-- Check for new image unlocks
-				local unlocked = ProgressionConfig.getUnlockedImagesAtLevel(currentLevel + 1)
-				if not profileData.UnlockedImages then
-					profileData.UnlockedImages = {}
-				end
-				for _, imgId in unlocked do
-					profileData.UnlockedImages[imgId] = true
+			if product == MonetizationConfig.DEV_PRODUCTS.UNLOCK_IMAGE then
+			-- Unlock a single puzzle image via Robux
+			local userId = receiptInfo.PlayerId
+			local pendingImageId = pendingImageUnlock[userId]
+			if pendingImageId then
+				local imgEntry = ImageCatalog.getById(pendingImageId)
+				if imgEntry then
+					if not profileData.UnlockedImages then
+						profileData.UnlockedImages = {}
+					end
+					profileData.UnlockedImages[pendingImageId] = true
+					pendingImageUnlock[userId] = nil
+
+					-- Notify client so it refreshes
+					local xpAwarded = Remotes.GetEvent("XPAwarded")
+					xpAwarded:FireClient(player, {
+						cashGained = 0,
+						imageUnlocked = pendingImageId,
+					})
 				end
 			end
 			granted = true
@@ -107,12 +132,17 @@ function MonetizationHandler.Init()
 			end
 
 			-- Notify client of updated data
-			local xpAwarded = Remotes.GetEvent("XPAwarded")
-			xpAwarded:FireClient(player, {
-				xpGained = 0,
-				cashGained = product.cashAmount or 0,
-				newLevel = if product == MonetizationConfig.DEV_PRODUCTS.SKIP_LEVEL then profileData.Level else nil,
-			})
+			if product.hintCount then
+				local hintPurchased = Remotes.GetEvent("HintPurchased")
+				hintPurchased:FireClient(player, {
+					hintsRemaining = profileData.HintsRemaining,
+				})
+			else
+				local xpAwarded = Remotes.GetEvent("XPAwarded")
+				xpAwarded:FireClient(player, {
+					cashGained = product.cashAmount or 0,
+				})
+			end
 
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
@@ -168,10 +198,6 @@ function MonetizationHandler.Init()
 			if profileData.OwnedConfettiStyles and profileData.OwnedConfettiStyles[itemId] then
 				return { success = false, message = "Already owned" }
 			end
-		elseif item.category == "badges" then
-			if profileData.OwnedBadges and profileData.OwnedBadges[itemId] then
-				return { success = false, message = "Already owned" }
-			end
 		elseif item.category == "snap_effects" then
 			if profileData.OwnedSnapEffects and profileData.OwnedSnapEffects[itemId] then
 				return { success = false, message = "Already owned" }
@@ -193,9 +219,6 @@ function MonetizationHandler.Init()
 		elseif item.category == "confetti_styles" then
 			if not profileData.OwnedConfettiStyles then profileData.OwnedConfettiStyles = {} end
 			profileData.OwnedConfettiStyles[itemId] = true
-		elseif item.category == "badges" then
-			if not profileData.OwnedBadges then profileData.OwnedBadges = {} end
-			profileData.OwnedBadges[itemId] = true
 		elseif item.category == "snap_effects" then
 			if not profileData.OwnedSnapEffects then profileData.OwnedSnapEffects = {} end
 			profileData.OwnedSnapEffects[itemId] = true
@@ -235,11 +258,6 @@ function MonetizationHandler.Init()
 				return { success = false, message = "Not owned" }
 			end
 			profileData.EquippedConfettiStyle = itemId
-		elseif category == "badges" then
-			if not profileData.OwnedBadges or not profileData.OwnedBadges[itemId] then
-				return { success = false, message = "Not owned" }
-			end
-			profileData.EquippedBadge = itemId
 		elseif category == "snap_effects" then
 			if not profileData.OwnedSnapEffects or not profileData.OwnedSnapEffects[itemId] then
 				return { success = false, message = "Not owned" }

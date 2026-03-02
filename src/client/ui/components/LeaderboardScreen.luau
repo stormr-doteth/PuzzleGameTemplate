@@ -3,6 +3,8 @@ local Players = game:GetService("Players")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local React = require(Packages.React)
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared.Theme)
 
 export type LeaderboardScreenProps = {
 	onClose: () -> (),
@@ -14,13 +16,6 @@ local DIFFICULTIES = {
 	{ label = "9x9", id = "9x9" },
 	{ label = "15x15", id = "15x15" },
 	{ label = "25x25", id = "25x25" },
-}
-
-local BADGE_LABELS = {
-	badge_puzzle_master = "PM",
-	badge_speedrunner = "SR",
-	badge_collector = "CO",
-	badge_champion = "CH",
 }
 
 local function formatTime(seconds: number): string
@@ -80,12 +75,12 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 			LayoutOrder = i,
 			Size = UDim2.new(0, 56, 0, 32),
 			BackgroundColor3 = if isSelected
-				then Color3.fromRGB(80, 140, 230)
-				else Color3.fromRGB(50, 50, 60),
+				then Theme.Colors.accentBlue
+				else Theme.Colors.bgInput,
 			Text = diff.label,
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextSize = 14,
-			Font = Enum.Font.GothamMedium,
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.label,
+			Font = Theme.Font.medium,
 			[React.Event.Activated] = function()
 				setSelectedTab(i)
 			end,
@@ -113,9 +108,9 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 			Size = UDim2.new(1, 0, 0, 40),
 			BackgroundTransparency = 1,
 			Text = "Loading...",
-			TextColor3 = Color3.fromRGB(180, 180, 200),
-			TextSize = 18,
-			Font = Enum.Font.Gotham,
+			TextColor3 = Theme.Colors.textMuted,
+			TextSize = Theme.TextSize.button,
+			Font = Theme.Font.regular,
 		})
 	elseif #leaderboardData == 0 then
 		listChildren["Empty"] = React.createElement("TextLabel", {
@@ -123,9 +118,9 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 			Size = UDim2.new(1, 0, 0, 40),
 			BackgroundTransparency = 1,
 			Text = "No times recorded yet!",
-			TextColor3 = Color3.fromRGB(150, 150, 170),
-			TextSize = 18,
-			Font = Enum.Font.Gotham,
+			TextColor3 = Theme.Colors.textMuted,
+			TextSize = Theme.TextSize.button,
+			Font = Theme.Font.regular,
 		})
 	else
 		local playerRank = nil
@@ -136,17 +131,16 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 			end
 
 			local bgColor = if isLocalPlayer
-				then Color3.fromRGB(60, 80, 120)
-				else Color3.fromRGB(35, 35, 45)
+				then Theme.Colors.accentBlue
+				else Theme.Colors.bgCard
 
-			local rankColor = Color3.fromRGB(180, 180, 200)
-			if rank == 1 then rankColor = Color3.fromRGB(255, 215, 0) end
-			if rank == 2 then rankColor = Color3.fromRGB(200, 200, 210) end
-			if rank == 3 then rankColor = Color3.fromRGB(205, 127, 50) end
+			local rankColor = Theme.Colors.textMuted
+			if rank == 1 then rankColor = Theme.Colors.rank1 end
+			if rank == 2 then rankColor = Theme.Colors.rank2 end
+			if rank == 3 then rankColor = Theme.Colors.rank3 end
 
-			local badgeLabel = if entry.badge and entry.badge ~= "" then BADGE_LABELS[entry.badge] or "" else ""
-			local hasBadge = badgeLabel ~= ""
-			local nameXOffset = if hasBadge then 76 else 44
+			local hasTitle = entry.title and entry.title ~= ""
+			local nameXOffset = if hasTitle then 76 else 44
 
 			local rowChildren: { [string]: any } = {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
@@ -156,8 +150,8 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 					BackgroundTransparency = 1,
 					Text = "#" .. rank,
 					TextColor3 = rankColor,
-					TextSize = 14,
-					Font = Enum.Font.GothamBold,
+					TextSize = Theme.TextSize.label,
+					Font = Theme.Font.bold,
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}),
 				Name = React.createElement("TextLabel", {
@@ -165,9 +159,9 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 					Size = UDim2.new(1, -(nameXOffset + 86), 1, 0),
 					BackgroundTransparency = 1,
 					Text = entry.displayName,
-					TextColor3 = Color3.fromRGB(220, 220, 230),
-					TextSize = 14,
-					Font = Enum.Font.Gotham,
+					TextColor3 = Theme.Colors.textSecondary,
+					TextSize = Theme.TextSize.label,
+					Font = Theme.Font.regular,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					TextTruncate = Enum.TextTruncate.AtEnd,
 				}),
@@ -177,24 +171,29 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 					Size = UDim2.new(0, 80, 1, 0),
 					BackgroundTransparency = 1,
 					Text = formatTime(entry.time),
-					TextColor3 = Color3.fromRGB(80, 200, 255),
-					TextSize = 14,
-					Font = Enum.Font.GothamMedium,
+					TextColor3 = Theme.Colors.accentCyan,
+					TextSize = Theme.TextSize.label,
+					Font = Theme.Font.medium,
 					TextXAlignment = Enum.TextXAlignment.Right,
 				}),
 			}
 
-			if hasBadge then
-				rowChildren["Badge"] = React.createElement("TextLabel", {
+			if hasTitle then
+				rowChildren["Title"] = React.createElement("TextLabel", {
 					Position = UDim2.new(0, 42, 0, 4),
-					Size = UDim2.fromOffset(28, 24),
-					BackgroundColor3 = Color3.fromRGB(255, 180, 50),
-					Text = badgeLabel,
+					AutomaticSize = Enum.AutomaticSize.X,
+					Size = UDim2.fromOffset(0, 24),
+					BackgroundColor3 = Theme.Colors.headerGold,
+					Text = entry.title,
 					TextColor3 = Color3.fromRGB(40, 20, 0),
-					TextSize = 11,
-					Font = Enum.Font.GothamBold,
+					TextSize = Theme.TextSize.tiny,
+					Font = Theme.Font.bold,
 				}, {
 					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
+					Pad = React.createElement("UIPadding", {
+						PaddingLeft = UDim.new(0, 4),
+						PaddingRight = UDim.new(0, 4),
+					}),
 				})
 			end
 
@@ -202,7 +201,7 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 				LayoutOrder = rank,
 				Size = UDim2.new(1, 0, 0, 32),
 				BackgroundColor3 = bgColor,
-				BackgroundTransparency = 0.3,
+				BackgroundTransparency = Theme.Transparency.hudButton,
 			}, rowChildren)
 		end
 
@@ -213,24 +212,24 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 				Size = UDim2.new(1, 0, 0, 28),
 				BackgroundTransparency = 1,
 				Text = "Your rank: #" .. playerRank,
-				TextColor3 = Color3.fromRGB(255, 220, 80),
-				TextSize = 16,
-				Font = Enum.Font.GothamBold,
+				TextColor3 = Theme.Colors.warning,
+				TextSize = Theme.TextSize.body,
+				Font = Theme.Font.bold,
 			})
 		end
 	end
 
 	return React.createElement("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.4,
+		BackgroundColor3 = Theme.Colors.black,
+		BackgroundTransparency = Theme.Transparency.overlay,
 		ZIndex = 150,
 	}, {
 		Modal = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 			Size = UDim2.fromScale(0.5, 0.6),
-			BackgroundColor3 = Color3.fromRGB(15, 15, 25),
+			BackgroundColor3 = Theme.Colors.bgDeepest,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
 			SizeConstraint = React.createElement("UISizeConstraint", {
@@ -248,19 +247,19 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 				Size = UDim2.new(0, 300, 0, 40),
 				BackgroundTransparency = 1,
 				Text = "Leaderboards",
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 32,
-				Font = Enum.Font.GothamBold,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.title,
+				Font = Theme.Font.bold,
 			}),
 			CloseButton = React.createElement("TextButton", {
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.new(1, -16, 0.5, 0),
 				Size = UDim2.fromOffset(36, 36),
-				BackgroundColor3 = Color3.fromRGB(200, 60, 60),
+				BackgroundColor3 = Theme.Colors.dangerDark,
 				Text = "X",
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 20,
-				Font = Enum.Font.GothamBold,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
 				[React.Event.Activated] = function()
 					props.onClose()
 				end,
@@ -282,8 +281,8 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 			Size = UDim2.new(1, -32, 1, -112),
 			CanvasSize = UDim2.new(0, 0, 0, math.max(#leaderboardData * 34 + 40, 50)),
 			ScrollBarThickness = 4,
-			ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120),
-			BackgroundColor3 = Color3.fromRGB(25, 25, 35),
+			ScrollBarImageColor3 = Theme.Colors.scrollbar,
+			BackgroundColor3 = Theme.Colors.bgDark,
 			BackgroundTransparency = 0.5,
 			BorderSizePixel = 0,
 		}, listChildren),

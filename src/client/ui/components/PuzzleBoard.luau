@@ -1,3 +1,5 @@
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GuiService = game:GetService("GuiService")
 
@@ -10,8 +12,11 @@ local ImageService = require(script.Parent.Parent.Parent.services.ImageService)
 local PieceMasker = require(script.Parent.Parent.Parent.services.PieceMasker)
 local SoundService = require(script.Parent.Parent.Parent.services.SoundService)
 
+local MonetizationConfig = require(Shared.MonetizationConfig)
+local Remotes = require(Shared.Remotes)
 local RoomTypes = require(Shared.RoomTypes)
 local ShopItems = require(Shared.ShopItems)
+local Theme = require(Shared.Theme)
 
 local PuzzlePiece = require(script.Parent.PuzzlePiece)
 local SnapEffect = require(script.Parent.SnapEffect)
@@ -39,7 +44,19 @@ export type PuzzleBoardProps = {
 	roomInitialPieces: any?,
 }
 
-local BOARD_MAX_SIZE = 600
+local BOARD_MAX_SIZE_CAP = 600
+
+local function getBoardMaxSize(topInsetValue: number): number
+	local camera = workspace.CurrentCamera
+	local viewportW = if camera then camera.ViewportSize.X else 1200
+	local viewportH = if camera then camera.ViewportSize.Y else 800
+
+	local usableH = viewportH - topInsetValue
+	local maxFromW = viewportW * 0.6
+	local maxFromH = usableH * 0.7
+
+	return math.min(maxFromW, maxFromH, BOARD_MAX_SIZE_CAP)
+end
 
 local function formatTime(seconds: number): string
 	local mins = math.floor(seconds / 60)
@@ -48,10 +65,10 @@ local function formatTime(seconds: number): string
 end
 
 local PLAYER_COLORS = {
-	Color3.fromRGB(80, 180, 230),
-	Color3.fromRGB(230, 140, 80),
-	Color3.fromRGB(80, 230, 140),
-	Color3.fromRGB(230, 80, 180),
+	Theme.Colors.player1,
+	Theme.Colors.player2,
+	Theme.Colors.player3,
+	Theme.Colors.player4,
 }
 
 local function PuzzleBoard(props: PuzzleBoardProps)
@@ -63,10 +80,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local zoomState, zoomActions = useZoomPan()
 	local loadError, setLoadError = React.useState(false)
 	local localHints, setLocalHints = React.useState(props.hintsRemaining or 0)
-	local localUserId = game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.UserId or 0
+	local localUserId = Players.LocalPlayer and Players.LocalPlayer.UserId or 0
 	local snapEffects, setSnapEffects = React.useState({} :: { { positionX: number, positionY: number, key: string, effectId: string } })
 	local snapEffectCounter = React.useRef(0)
 	local showSavePrompt, setShowSavePrompt = React.useState(false)
+	local hintHighlightId, setHintHighlightId = React.useState(nil :: number?)
 
 	-- Dynamic top inset to clear Roblox top bar in full-screen ScreenGui
 	local topInset = React.useMemo(function()
@@ -119,9 +137,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			local sourceCellW = math.floor(sourceWidth / props.cols)
 			local sourceCellH = math.floor(sourceHeight / props.rows)
 
+			local boardMaxSize = getBoardMaxSize(topInset)
+
 			local scale = math.min(
-				BOARD_MAX_SIZE / sourceWidth,
-				BOARD_MAX_SIZE / sourceHeight,
+				boardMaxSize / sourceWidth,
+				boardMaxSize / sourceHeight,
 				1
 			)
 			setPixelScale(scale)
@@ -369,7 +389,81 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		if props.isMultiplayer then
 			local vx, vy = screenToVirtual(x, y, scaledOffsetX, scaledOffsetY)
 			actions.trySnap(pieceId, vx, vy, 0, 0)
-			-- Hook always returns false; server handles snap sound via events
+
+			-- Client-side snap prediction: check if the piece will snap (grid or neighbor)
+			local MP_SNAP_THRESHOLD = 25 -- must match server SNAP_THRESHOLD
+			local vw = RoomTypes.VIRTUAL_CANVAS_WIDTH
+			local vh = RoomTypes.VIRTUAL_CANVAS_HEIGHT
+			local cellVW = vw / props.cols
+			local cellVH = vh / props.rows
+			local correctVX = (pieceDef.col - 1) * cellVW
+			local correctVY = (pieceDef.row - 1) * cellVH
+
+			-- Check grid snap
+			local gdx = vx - correctVX
+			local gdy = vy - correctVY
+			local gdist = math.sqrt(gdx * gdx + gdy * gdy)
+			local willSnap = gdist <= MP_SNAP_THRESHOLD
+
+			-- Check neighbor snap if grid snap didn't match
+			if not willSnap then
+				for _, otherDef in puzzleDef.pieces do
+					if otherDef.id == pieceId then continue end
+					local otherState = state.pieces[otherDef.id]
+					if not otherState or otherState.locked then continue end
+					-- Skip pieces in the same group
+					local pieceState = state.pieces[pieceId]
+					if pieceState and pieceState.groupId and otherState.groupId == pieceState.groupId then continue end
+
+					-- Check if this piece is a grid neighbor
+					local rowDiff = math.abs(otherDef.row - pieceDef.row)
+					local colDiff = math.abs(otherDef.col - pieceDef.col)
+					if not (rowDiff + colDiff == 1) then continue end
+
+					-- Expected relative position in virtual coords
+					local expectedDx = (otherDef.col - pieceDef.col) * cellVW
+					local expectedDy = (otherDef.row - pieceDef.row) * cellVH
+					local actualDx = otherState.x - vx
+					local actualDy = otherState.y - vy
+					local snapDx = actualDx - expectedDx
+					local snapDy = actualDy - expectedDy
+					local snapDist = math.sqrt(snapDx * snapDx + snapDy * snapDy)
+
+					if snapDist <= MP_SNAP_THRESHOLD then
+						willSnap = true
+						break
+					end
+				end
+			end
+
+			-- Only trigger local effect if snap is predicted
+			if willSnap then
+				if actions.markLocalSnap then
+					actions.markLocalSnap(pieceId)
+				end
+				SoundService.playSnap()
+				local effectX = x + cellSize.X / 2
+				local effectY = y + cellSize.Y / 2
+				snapEffectCounter.current += 1
+				local effectKey = "snap_" .. snapEffectCounter.current
+				local effectId = props.equippedSnapEffect or ""
+				setSnapEffects(function(prev)
+					local updated = table.clone(prev)
+					table.insert(updated, { positionX = effectX, positionY = effectY, key = effectKey, effectId = effectId })
+					return updated
+				end)
+				task.delay(0.7, function()
+					setSnapEffects(function(prev)
+						local updated = {}
+						for _, e in prev do
+							if e.key ~= effectKey then
+								table.insert(updated, e)
+							end
+						end
+						return updated
+					end)
+				end)
+			end
 		else
 			local snapped = actions.trySnap(
 				pieceId, x, y, correctX, correctY,
@@ -378,9 +472,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			)
 			if snapped then
 				SoundService.playSnap()
-				-- Trigger snap effect at the correct position (center of cell)
-				local effectX = correctX + scaledOffsetX + cellSize.X / 2
-				local effectY = correctY + scaledOffsetY + cellSize.Y / 2
+				-- Trigger snap effect at the drop/cursor position (center of piece)
+				local effectX = x + cellSize.X / 2
+				local effectY = y + cellSize.Y / 2
 				snapEffectCounter.current += 1
 				local effectKey = "snap_" .. snapEffectCounter.current
 				local effectId = props.equippedSnapEffect or ""
@@ -404,9 +498,69 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		end
 	end
 
+	-- Helper: snap a random unlocked piece to its correct position and highlight it
+	local function executeHint(): number?
+		if not puzzleDef or not pieceImages then return nil end
+
+		local unlockedIds = {}
+		for _, pDef in puzzleDef.pieces do
+			local ps = state.pieces[pDef.id]
+			if ps and not ps.locked then
+				table.insert(unlockedIds, pDef.id)
+			end
+		end
+		if #unlockedIds == 0 then return nil end
+
+		local targetId = unlockedIds[math.random(1, #unlockedIds)]
+		local targetDef = nil
+		for _, p in puzzleDef.pieces do
+			if p.id == targetId then
+				targetDef = p
+				break
+			end
+		end
+		if not targetDef then return nil end
+
+		local imageData = pieceImages[targetId]
+		local scaledOffsetX = math.floor(imageData.offsetX * pixelScale)
+		local scaledOffsetY = math.floor(imageData.offsetY * pixelScale)
+		local correctX = boardOffsetX + (targetDef.col - 1) * cellSize.X - scaledOffsetX
+		local correctY = boardOffsetY + (targetDef.row - 1) * cellSize.Y - scaledOffsetY
+
+		actions.snapPiece(targetId, correctX, correctY)
+		SoundService.playSnap()
+
+		-- Flash green highlight
+		setHintHighlightId(targetId)
+		task.delay(1.0, function()
+			setHintHighlightId(function(current)
+				if current == targetId then
+					return nil
+				end
+				return current
+			end)
+		end)
+
+		return targetId
+	end
+
+	-- Listen for Robux hint purchase confirmation from server
+	React.useEffect(function()
+		if props.isMultiplayer then return end
+
+		local hintPurchasedEvent = Remotes.GetEvent("HintPurchased")
+		local connection = hintPurchasedEvent.OnClientEvent:Connect(function(_data)
+			executeHint()
+		end)
+
+		return function()
+			connection:Disconnect()
+		end
+	end, { props.isMultiplayer, puzzleDef, pieceImages } :: { any })
+
 	-- Compute board colors from equipped skin
-	local boardBgColor = Color3.fromRGB(25, 25, 35)
-	local gridBgColor = Color3.fromRGB(40, 40, 50)
+	local boardBgColor = Theme.Colors.bgDark
+	local gridBgColor = Theme.Colors.bgElevated
 	if props.equippedBoardSkin and props.equippedBoardSkin ~= "" then
 		local skin = ShopItems.getById(props.equippedBoardSkin)
 		if skin and skin.previewColor then
@@ -424,12 +578,12 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.new(0.5, 0, 0, 4),
 			Size = UDim2.fromOffset(120, 40),
-			BackgroundColor3 = Color3.fromRGB(30, 30, 40),
-			BackgroundTransparency = 0.3,
+			BackgroundColor3 = Theme.Colors.bgMedium,
+			BackgroundTransparency = Theme.Transparency.hudButton,
 			Text = formatTime(timer.elapsedSeconds),
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextSize = 28,
-			Font = Enum.Font.GothamBold,
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.heading,
+			Font = Theme.Font.bold,
 			ZIndex = 50,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
@@ -445,11 +599,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		children["BackButton"] = React.createElement("TextButton", {
 			Position = UDim2.new(0, 20, 0, topInset),
 			Size = UDim2.fromOffset(130, 36),
-			BackgroundColor3 = Color3.fromRGB(50, 50, 70),
+			BackgroundColor3 = Theme.Colors.bgInput,
 			Text = if props.isMultiplayer then "< Leave Room" else "< Back to Menu",
-			TextColor3 = Color3.fromRGB(220, 220, 240),
-			TextSize = 14,
-			Font = Enum.Font.GothamMedium,
+			TextColor3 = Theme.Colors.textSecondary,
+			TextSize = Theme.TextSize.label,
+			Font = Theme.Font.medium,
 			ZIndex = 50,
 			[React.Event.Activated] = function()
 				if props.isMultiplayer then
@@ -468,11 +622,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		children["GiveUpButton"] = React.createElement("TextButton", {
 			Position = UDim2.new(0, 160, 0, topInset),
 			Size = UDim2.fromOffset(80, 36),
-			BackgroundColor3 = Color3.fromRGB(160, 50, 50),
+			BackgroundColor3 = Theme.Colors.dangerDark,
 			Text = "Give Up",
 			TextColor3 = Color3.fromRGB(255, 220, 220),
-			TextSize = 14,
-			Font = Enum.Font.GothamMedium,
+			TextSize = Theme.TextSize.label,
+			Font = Theme.Font.medium,
 			ZIndex = 50,
 			[React.Event.Activated] = function()
 				if props.onGiveUp then
@@ -483,65 +637,21 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 		})
 
-		children["EdgesOnlyButton"] = React.createElement("TextButton", {
-			Position = UDim2.new(0, 250, 0, topInset),
-			Size = UDim2.fromOffset(100, 36),
-			BackgroundColor3 = if showEdgesOnly then Color3.fromRGB(50, 120, 80) else Color3.fromRGB(50, 50, 70),
-			Text = if showEdgesOnly then "Show All" else "Edges Only",
-			TextColor3 = Color3.fromRGB(220, 220, 240),
-			TextSize = 14,
-			Font = Enum.Font.GothamMedium,
-			ZIndex = 50,
-			[React.Event.Activated] = function()
-				setShowEdgesOnly(function(prev) return not prev end)
-			end,
-		}, {
-			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-		})
-
 		-- Hint button (disabled in multiplayer)
 		if not props.isMultiplayer and localHints > 0 and puzzleDef and pieceImages then
 			children["HintButton"] = React.createElement("TextButton", {
 				Position = UDim2.new(0, 360, 0, topInset),
 				Size = UDim2.fromOffset(110, 36),
-				BackgroundColor3 = Color3.fromRGB(200, 160, 50),
+				BackgroundColor3 = Theme.Colors.orange,
 				Text = "Hint (" .. localHints .. ")",
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 14,
-				Font = Enum.Font.GothamMedium,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.medium,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
 					if localHints <= 0 or not puzzleDef or not pieceImages then return end
 
-					-- Find a random unlocked piece
-					local unlockedIds = {}
-					for _, pieceDef in puzzleDef.pieces do
-						local ps = state.pieces[pieceDef.id]
-						if ps and not ps.locked then
-							table.insert(unlockedIds, pieceDef.id)
-						end
-					end
-					if #unlockedIds == 0 then return end
-
-					local targetId = unlockedIds[math.random(1, #unlockedIds)]
-					local targetDef = nil
-					for _, p in puzzleDef.pieces do
-						if p.id == targetId then
-							targetDef = p
-							break
-						end
-					end
-					if not targetDef then return end
-
-					-- Compute correct position
-					local imageData = pieceImages[targetId]
-					local scaledOffsetX = math.floor(imageData.offsetX * pixelScale)
-					local scaledOffsetY = math.floor(imageData.offsetY * pixelScale)
-					local correctX = boardOffsetX + (targetDef.col - 1) * cellSize.X - scaledOffsetX
-					local correctY = boardOffsetY + (targetDef.row - 1) * cellSize.Y - scaledOffsetY
-
-					actions.snapPiece(targetId, correctX, correctY)
-					SoundService.playSnap()
+					executeHint()
 
 					setLocalHints(function(prev) return math.max(0, prev - 1) end)
 					if props.onHintUsed then
@@ -563,18 +673,154 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			})
 		end
 
-		-- Shuffle button (solo only, hidden when complete)
-		if not props.isMultiplayer and not state.isComplete then
-			children["ShuffleButton"] = React.createElement("TextButton", {
-				Position = UDim2.new(0, 480, 0, topInset),
-				Size = UDim2.fromOffset(80, 36),
-				BackgroundColor3 = Color3.fromRGB(50, 50, 70),
-				Text = "Shuffle",
-				TextColor3 = Color3.fromRGB(220, 220, 240),
-				TextSize = 14,
-				Font = Enum.Font.GothamMedium,
+		-- Robux hint purchase button (disabled in multiplayer, always visible when puzzle is loaded)
+		if not props.isMultiplayer and puzzleDef and pieceImages and not state.isComplete then
+			local robuxBtnX = if localHints > 0 then 480 else 360
+			children["RobuxHintButton"] = React.createElement("TextButton", {
+				Position = UDim2.new(0, robuxBtnX, 0, topInset),
+				Size = UDim2.fromOffset(130, 36),
+				BackgroundColor3 = Color3.fromRGB(0, 176, 111),
+				Text = "\xF0\x9F\x92\x8E Hint (R$" .. MonetizationConfig.DEV_PRODUCTS.HINT_1.robuxPrice .. ")",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.medium,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
+					local localPlayer = Players.LocalPlayer
+					if localPlayer then
+						MarketplaceService:PromptProductPurchase(localPlayer, MonetizationConfig.DEV_PRODUCTS.HINT_1.id)
+					end
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			})
+		end
+
+	end
+
+	if loadError then
+		children["ErrorMessage"] = React.createElement("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, -30),
+			Size = UDim2.fromOffset(400, 50),
+			BackgroundTransparency = 1,
+			Text = "Failed to load puzzle image.",
+			TextColor3 = Theme.Colors.danger,
+			TextSize = Theme.TextSize.heading,
+			Font = Theme.Font.bold,
+		})
+		children["ErrorBackButton"] = React.createElement("TextButton", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 30),
+			Size = UDim2.fromOffset(200, 44),
+			BackgroundColor3 = Theme.Colors.scrollbar,
+			Text = "Return to Menu",
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.button,
+			Font = Theme.Font.medium,
+			[React.Event.Activated] = function()
+				if props.onGiveUp then
+					props.onGiveUp()
+				end
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		})
+	elseif isLoading then
+		children["Loading"] = React.createElement("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(300, 50),
+			BackgroundTransparency = 1,
+			Text = "Loading puzzle...",
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.heading,
+			Font = Theme.Font.medium,
+		})
+	else
+		-- Grid outline showing target positions
+		local gridScreenX, gridScreenY = zoomActions.worldToScreen(boardOffsetX, boardOffsetY)
+		local gridCells: { [string]: any } = {
+			Border = React.createElement("UIStroke", {
+				Color = Theme.Colors.scrollbar,
+				Thickness = 2,
+			}),
+			Grid = React.createElement("UIGridLayout", {
+				CellSize = UDim2.fromOffset(cellSize.X * zoomState.zoom, cellSize.Y * zoomState.zoom),
+				CellPadding = UDim2.fromOffset(0, 0),
+				SortOrder = Enum.SortOrder.LayoutOrder,
+			}),
+		}
+		for i = 1, props.rows * props.cols do
+			gridCells["Cell_" .. i] = React.createElement("Frame", {
+				LayoutOrder = i,
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+			}, {
+				Stroke = React.createElement("UIStroke", {
+					Color = Theme.Colors.border,
+					Thickness = 1,
+					Transparency = 0.5,
+				}),
+			})
+		end
+
+		children["GridOutline"] = React.createElement("Frame", {
+			Position = UDim2.fromOffset(gridScreenX, gridScreenY),
+			Size = UDim2.fromOffset(boardSize.X * zoomState.zoom, boardSize.Y * zoomState.zoom),
+			BackgroundColor3 = gridBgColor,
+			BackgroundTransparency = Theme.Transparency.disabled,
+			BorderSizePixel = 0,
+			ZIndex = 0,
+		}, gridCells)
+
+		-- Bottom controls (EdgesOnly, Shuffle, Zoom) pinned to bottom-center of screen
+		local bottomControlChildren: { [string]: any } = {
+			Layout = React.createElement("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				Padding = UDim.new(0, 8),
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+			}),
+			EdgesOnlyButton = React.createElement("TextButton", {
+				LayoutOrder = 1,
+				Size = UDim2.fromOffset(100, 36),
+				BackgroundColor3 = if showEdgesOnly then Color3.fromRGB(50, 120, 80) else Theme.Colors.bgInput,
+				Text = if showEdgesOnly then "Show All" else "Edges Only",
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.medium,
+				ZIndex = 50,
+				[React.Event.Activated] = function()
+					setShowEdgesOnly(function(prev) return not prev end)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			}),
+		}
+
+		-- Shuffle button (solo only, hidden when complete)
+		if not props.isMultiplayer and not state.isComplete then
+			bottomControlChildren["ShuffleButton"] = React.createElement("TextButton", {
+				LayoutOrder = 2,
+				Size = UDim2.fromOffset(80, 36),
+				BackgroundColor3 = Theme.Colors.bgInput,
+				Text = "Shuffle",
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.medium,
+				ZIndex = 50,
+				[React.Event.Activated] = function()
+					-- Collect unlocked piece IDs to shuffle
+					local unlockedIds = {}
+					for id, ps in state.pieces do
+						if not ps.locked then
+							table.insert(unlockedIds, id)
+						end
+					end
+					if #unlockedIds == 0 then return end
+
 					local camera = workspace.CurrentCamera
 					local viewportW = if camera then camera.ViewportSize.X else 1200
 					local viewportH = if camera then camera.ViewportSize.Y else 800
@@ -583,7 +829,8 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 					local bOffY = math.floor((viewportH - boardSize.Y) / 2)
 
 					local piecePad = math.max(cellSize.X, cellSize.Y) * 1.3
-					actions.shufflePieces(
+					actions.scramblePieces(
+						unlockedIds,
 						viewportW,
 						viewportH,
 						bOffX,
@@ -600,10 +847,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			})
 		end
 
-		-- Zoom controls (top-right, fixed screen position)
-		children["ZoomControls"] = React.createElement("Frame", {
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -20, 0, topInset),
+		-- Zoom controls
+		bottomControlChildren["ZoomControls"] = React.createElement("Frame", {
+			LayoutOrder = 3,
 			Size = UDim2.fromOffset(140, 36),
 			BackgroundTransparency = 1,
 			ZIndex = 50,
@@ -612,16 +858,15 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				FillDirection = Enum.FillDirection.Horizontal,
 				SortOrder = Enum.SortOrder.LayoutOrder,
 				Padding = UDim.new(0, 4),
-				HorizontalAlignment = Enum.HorizontalAlignment.Right,
 			}),
 			ZoomOut = React.createElement("TextButton", {
 				LayoutOrder = 1,
 				Size = UDim2.fromOffset(32, 36),
-				BackgroundColor3 = Color3.fromRGB(50, 50, 70),
+				BackgroundColor3 = Theme.Colors.bgInput,
 				Text = "-",
-				TextColor3 = Color3.fromRGB(220, 220, 240),
-				TextSize = 20,
-				Font = Enum.Font.GothamBold,
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
 					local camera = workspace.CurrentCamera
@@ -635,11 +880,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			ZoomLabel = React.createElement("TextLabel", {
 				LayoutOrder = 2,
 				Size = UDim2.fromOffset(48, 36),
-				BackgroundColor3 = Color3.fromRGB(40, 40, 55),
+				BackgroundColor3 = Theme.Colors.bgElevated,
 				Text = math.floor(zoomState.zoom * 100 + 0.5) .. "%",
-				TextColor3 = Color3.fromRGB(200, 200, 220),
-				TextSize = 13,
-				Font = Enum.Font.GothamMedium,
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.small,
+				Font = Theme.Font.medium,
 				ZIndex = 50,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
@@ -647,11 +892,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			ZoomIn = React.createElement("TextButton", {
 				LayoutOrder = 3,
 				Size = UDim2.fromOffset(32, 36),
-				BackgroundColor3 = Color3.fromRGB(50, 50, 70),
+				BackgroundColor3 = Theme.Colors.bgInput,
 				Text = "+",
-				TextColor3 = Color3.fromRGB(220, 220, 240),
-				TextSize = 20,
-				Font = Enum.Font.GothamBold,
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
 					local camera = workspace.CurrentCamera
@@ -665,11 +910,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			ResetBtn = React.createElement("TextButton", {
 				LayoutOrder = 4,
 				Size = UDim2.fromOffset(20, 36),
-				BackgroundColor3 = Color3.fromRGB(50, 50, 70),
+				BackgroundColor3 = Theme.Colors.bgInput,
 				Text = "0",
-				TextColor3 = Color3.fromRGB(180, 180, 200),
-				TextSize = 11,
-				Font = Enum.Font.GothamMedium,
+				TextColor3 = Theme.Colors.textMuted,
+				TextSize = Theme.TextSize.tiny,
+				Font = Theme.Font.medium,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
 					zoomActions.resetView()
@@ -678,83 +923,14 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
 			}),
 		})
-	end
 
-	if loadError then
-		children["ErrorMessage"] = React.createElement("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 0, 0.5, -30),
-			Size = UDim2.fromOffset(400, 50),
+		children["BottomControls"] = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -12),
+			AutomaticSize = Enum.AutomaticSize.XY,
 			BackgroundTransparency = 1,
-			Text = "Failed to load puzzle image.",
-			TextColor3 = Color3.fromRGB(255, 100, 100),
-			TextSize = 24,
-			Font = Enum.Font.GothamBold,
-		})
-		children["ErrorBackButton"] = React.createElement("TextButton", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.new(0.5, 0, 0.5, 30),
-			Size = UDim2.fromOffset(200, 44),
-			BackgroundColor3 = Color3.fromRGB(80, 80, 100),
-			Text = "Return to Menu",
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextSize = 18,
-			Font = Enum.Font.GothamMedium,
-			[React.Event.Activated] = function()
-				if props.onGiveUp then
-					props.onGiveUp()
-				end
-			end,
-		}, {
-			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-		})
-	elseif isLoading then
-		children["Loading"] = React.createElement("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(300, 50),
-			BackgroundTransparency = 1,
-			Text = "Loading puzzle...",
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextSize = 28,
-			Font = Enum.Font.GothamMedium,
-		})
-	else
-		-- Grid outline showing target positions
-		local gridScreenX, gridScreenY = zoomActions.worldToScreen(boardOffsetX, boardOffsetY)
-		local gridCells: { [string]: any } = {
-			Border = React.createElement("UIStroke", {
-				Color = Color3.fromRGB(80, 80, 100),
-				Thickness = 2,
-			}),
-			Grid = React.createElement("UIGridLayout", {
-				CellSize = UDim2.fromOffset(cellSize.X * zoomState.zoom, cellSize.Y * zoomState.zoom),
-				CellPadding = UDim2.fromOffset(0, 0),
-				SortOrder = Enum.SortOrder.LayoutOrder,
-			}),
-		}
-		for i = 1, props.rows * props.cols do
-			gridCells["Cell_" .. i] = React.createElement("Frame", {
-				LayoutOrder = i,
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-			}, {
-				Stroke = React.createElement("UIStroke", {
-					Color = Color3.fromRGB(60, 60, 75),
-					Thickness = 1,
-					Transparency = 0.5,
-				}),
-			})
-		end
-
-		children["GridOutline"] = React.createElement("Frame", {
-			Position = UDim2.fromOffset(gridScreenX, gridScreenY),
-			Size = UDim2.fromOffset(boardSize.X * zoomState.zoom, boardSize.Y * zoomState.zoom),
-			BackgroundColor3 = gridBgColor,
-			BackgroundTransparency = 0.5,
-			BorderSizePixel = 0,
-			ZIndex = 0,
-		}, gridCells)
+			ZIndex = 50,
+		}, bottomControlChildren)
 
 		-- Compute topmost hovered piece
 		local topmostHoveredId = nil
@@ -817,6 +993,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 						zIndex = pieceState.zIndex,
 						isLocked = pieceState.locked,
 						isHovered = (pieceId == topmostHoveredId),
+						isHintHighlighted = (pieceId == hintHighlightId),
 						onDragStart = onDragStart,
 						onDragMove = onDragMove,
 						onDragEnd = onDragEnd,
@@ -864,8 +1041,8 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	if showSavePrompt then
 		children["SavePromptBackdrop"] = React.createElement("TextButton", {
 			Size = UDim2.fromScale(1, 1),
-			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-			BackgroundTransparency = 0.4,
+			BackgroundColor3 = Theme.Colors.black,
+			BackgroundTransparency = Theme.Transparency.overlay,
 			Text = "",
 			ZIndex = 100,
 			[React.Event.Activated] = function() end,
@@ -874,7 +1051,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 			Size = UDim2.fromOffset(300, 160),
-			BackgroundColor3 = Color3.fromRGB(35, 35, 50),
+			BackgroundColor3 = Theme.Colors.bgCard,
 			ZIndex = 101,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
@@ -884,9 +1061,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				Size = UDim2.new(1, -30, 0, 50),
 				BackgroundTransparency = 1,
 				Text = "Would you like to save\nyour progress?",
-				TextColor3 = Color3.fromRGB(220, 220, 240),
-				TextSize = 16,
-				Font = Enum.Font.GothamMedium,
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.body,
+				Font = Theme.Font.medium,
 				TextWrapped = true,
 				ZIndex = 101,
 			}),
@@ -894,11 +1071,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				AnchorPoint = Vector2.new(0.5, 0),
 				Position = UDim2.new(0.3, 0, 0, 90),
 				Size = UDim2.fromOffset(120, 40),
-				BackgroundColor3 = Color3.fromRGB(50, 180, 80),
+				BackgroundColor3 = Theme.Colors.success,
 				Text = "Save & Exit",
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 15,
-				Font = Enum.Font.GothamMedium,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.body,
+				Font = Theme.Font.medium,
 				ZIndex = 101,
 				[React.Event.Activated] = function()
 					if props.onBackToMenu and puzzleDef then
@@ -935,11 +1112,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				AnchorPoint = Vector2.new(0.5, 0),
 				Position = UDim2.new(0.7, 0, 0, 90),
 				Size = UDim2.fromOffset(120, 40),
-				BackgroundColor3 = Color3.fromRGB(100, 60, 60),
+				BackgroundColor3 = Theme.Colors.dangerDark,
 				Text = "Exit Without Saving",
 				TextColor3 = Color3.fromRGB(255, 220, 220),
-				TextSize = 13,
-				Font = Enum.Font.GothamMedium,
+				TextSize = Theme.TextSize.small,
+				Font = Theme.Font.medium,
 				ZIndex = 101,
 				[React.Event.Activated] = function()
 					if props.onGiveUp then

@@ -6,7 +6,6 @@ export type ImageEntry = {
 	category: string,
 	packId: string,
 	defaultUnlocked: boolean,
-	unlockLevel: number?,
 }
 
 local IMAGES: { ImageEntry } = {
@@ -45,7 +44,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Urban",
 		packId = "urban",
 		defaultUnlocked = false,
-		unlockLevel = 3,
 	},
 	{
 		id = "space_nebula",
@@ -55,7 +53,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Space",
 		packId = "space",
 		defaultUnlocked = false,
-		unlockLevel = 5,
 	},
 	{
 		id = "tropical_beach",
@@ -65,7 +62,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Nature",
 		packId = "landscapes",
 		defaultUnlocked = false,
-		unlockLevel = 8,
 	},
 	{
 		id = "northern_lights",
@@ -75,7 +71,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Nature",
 		packId = "landscapes",
 		defaultUnlocked = false,
-		unlockLevel = 12,
 	},
 	{
 		id = "abstract_art",
@@ -85,7 +80,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Art",
 		packId = "brain",
 		defaultUnlocked = false,
-		unlockLevel = 18,
 	},
 	-- Placeholder entries (fill in real asset IDs later)
 	{
@@ -103,7 +97,7 @@ local IMAGES: { ImageEntry } = {
 		name = "Seal Beach",
 		thumbnailId = "rbxassetid://80051853985966",
 		category = "Animals",
-		packId = "animals",
+		packId = "seals",
 		defaultUnlocked = true,
 	},
 	{
@@ -123,7 +117,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Nature",
 		packId = "landscapes",
 		defaultUnlocked = false,
-		unlockLevel = 2,
 	},
 	{
 		id = "tokyo_street",
@@ -133,7 +126,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Urban",
 		packId = "urban",
 		defaultUnlocked = false,
-		unlockLevel = 3,
 	},
 	{
 		id = "seal_portrait",
@@ -141,9 +133,8 @@ local IMAGES: { ImageEntry } = {
 		name = "Seal Portrait",
 		thumbnailId = "rbxassetid://111469769800178",
 		category = "Animals",
-		packId = "animals",
+		packId = "seals",
 		defaultUnlocked = false,
-		unlockLevel = 4,
 	},
 	{
 		id = "mars_surface",
@@ -153,7 +144,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Space",
 		packId = "space",
 		defaultUnlocked = false,
-		unlockLevel = 5,
 	},
 	{
 		id = "watercolor_flowers",
@@ -163,7 +153,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Art",
 		packId = "art",
 		defaultUnlocked = false,
-		unlockLevel = 6,
 	},
 	{
 		id = "pizza_slice",
@@ -173,7 +162,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Food",
 		packId = "food",
 		defaultUnlocked = false,
-		unlockLevel = 7,
 	},
 	{
 		id = "rainy_window",
@@ -183,7 +171,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Urban",
 		packId = "urban",
 		defaultUnlocked = false,
-		unlockLevel = 8,
 	},
 	{
 		id = "seal_rocks",
@@ -191,9 +178,8 @@ local IMAGES: { ImageEntry } = {
 		name = "Seal Rocks",
 		thumbnailId = "rbxassetid://123106766909130",
 		category = "Animals",
-		packId = "animals",
+		packId = "seals",
 		defaultUnlocked = false,
-		unlockLevel = 9,
 	},
 	{
 		id = "galaxy_spiral",
@@ -203,7 +189,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Space",
 		packId = "space",
 		defaultUnlocked = false,
-		unlockLevel = 10,
 	},
 	{
 		id = "cherry_blossom",
@@ -213,7 +198,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Nature",
 		packId = "landscapes",
 		defaultUnlocked = false,
-		unlockLevel = 11,
 	},
 	{
 		id = "oil_painting",
@@ -223,7 +207,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Art",
 		packId = "art",
 		defaultUnlocked = false,
-		unlockLevel = 12,
 	},
 	{
 		id = "ice_cream_sundae",
@@ -233,7 +216,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Food",
 		packId = "food",
 		defaultUnlocked = false,
-		unlockLevel = 13,
 	},
 	{
 		id = "london_bridge",
@@ -243,7 +225,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Urban",
 		packId = "urban",
 		defaultUnlocked = false,
-		unlockLevel = 14,
 	},
 	{
 		id = "seal_closeup",
@@ -251,9 +232,8 @@ local IMAGES: { ImageEntry } = {
 		name = "Seal Closeup",
 		thumbnailId = "rbxassetid://116484971166421",
 		category = "Animals",
-		packId = "animals",
+		packId = "seals",
 		defaultUnlocked = false,
-		unlockLevel = 15,
 	},
 	{
 		id = "saturn_rings",
@@ -263,7 +243,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Space",
 		packId = "space",
 		defaultUnlocked = false,
-		unlockLevel = 16,
 	},
 	{
 		id = "snowy_cabin",
@@ -273,7 +252,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Nature",
 		packId = "landscapes",
 		defaultUnlocked = false,
-		unlockLevel = 17,
 	},
 	{
 		id = "pixel_art",
@@ -283,7 +261,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Art",
 		packId = "art",
 		defaultUnlocked = false,
-		unlockLevel = 19,
 	},
 	{
 		id = "pancake_stack",
@@ -293,7 +270,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Food",
 		packId = "food",
 		defaultUnlocked = false,
-		unlockLevel = 20,
 	},
 	{
 		id = "neon_alley",
@@ -303,7 +279,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Urban",
 		packId = "urban",
 		defaultUnlocked = false,
-		unlockLevel = 22,
 	},
 	{
 		id = "earth_from_space",
@@ -313,7 +288,6 @@ local IMAGES: { ImageEntry } = {
 		category = "Space",
 		packId = "space",
 		defaultUnlocked = false,
-		unlockLevel = 25,
 	},
 	-- Animals pack
 	{
@@ -368,7 +342,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://140501783343799",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_7",
@@ -377,7 +351,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://92997878407723",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_8",
@@ -386,7 +360,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://77142293121697",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_9",
@@ -395,7 +369,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://76635061159135",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_10",
@@ -404,7 +378,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://128805616573201",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_11",
@@ -413,7 +387,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://130719640967651",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_12",
@@ -422,7 +396,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://90012945648193",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_13",
@@ -431,7 +405,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://133438494534513",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_14",
@@ -440,7 +414,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://71975467933275",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_15",
@@ -449,7 +423,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://80122601407125",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_16",
@@ -458,7 +432,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://117906952555000",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_17",
@@ -467,7 +441,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://138928055258789",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_18",
@@ -476,7 +450,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://93754926804642",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_19",
@@ -485,7 +459,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://137430575844464",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_20",
@@ -494,7 +468,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://128797585634207",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_21",
@@ -503,7 +477,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://97198032106272",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_22",
@@ -512,7 +486,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://77510841794728",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_23",
@@ -521,7 +495,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://95986053621048",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_24",
@@ -530,7 +504,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://110889795855038",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_25",
@@ -539,7 +513,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://123014916266883",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_26",
@@ -548,7 +522,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://90165745200176",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_27",
@@ -557,7 +531,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://133172159092974",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_28",
@@ -566,7 +540,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://88091630998974",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_29",
@@ -575,7 +549,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://86124198139051",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_30",
@@ -584,7 +558,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://123985532750170",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_31",
@@ -593,7 +567,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://122373784566619",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_32",
@@ -602,7 +576,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://88574503559157",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_33",
@@ -611,7 +585,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://127628051937116",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_34",
@@ -620,7 +594,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://106415720277208",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "animals_35",
@@ -629,7 +603,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://121366753602573",
 		category = "Animals",
 		packId = "animals",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	-- Brainrots pack
 	{
@@ -684,7 +658,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://110027847402788",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_7",
@@ -693,7 +667,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://135199903001404",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_8",
@@ -702,7 +676,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://98438189648779",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_9",
@@ -711,7 +685,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://120211358310330",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_10",
@@ -720,7 +694,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://98460307302840",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_11",
@@ -729,7 +703,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://130844003147485",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_12",
@@ -738,7 +712,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://102416844317530",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_13",
@@ -747,7 +721,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://82230205515908",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_14",
@@ -756,7 +730,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://118414581182264",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_15",
@@ -765,7 +739,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://121219696309297",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_16",
@@ -774,7 +748,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://99371082995926",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_17",
@@ -783,7 +757,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://117082741990201",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_18",
@@ -792,7 +766,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://109698504294521",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_19",
@@ -801,7 +775,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://97585714647900",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_20",
@@ -810,7 +784,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://129072947626226",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_21",
@@ -819,7 +793,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://102187332245607",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_22",
@@ -828,7 +802,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://80491825016999",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_23",
@@ -837,7 +811,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://131587649220691",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_24",
@@ -846,7 +820,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://107622315373003",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 	{
 		id = "brainrot_25",
@@ -855,7 +829,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://82101432312198",
 		category = "Brainrot",
 		packId = "brainrots",
-		defaultUnlocked = true,
+		defaultUnlocked = false,
 	},
 }
 

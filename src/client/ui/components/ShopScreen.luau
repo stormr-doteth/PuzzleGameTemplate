@@ -8,6 +8,7 @@ local React = require(Packages.React)
 
 local ShopItems = require(Shared.ShopItems)
 local MonetizationConfig = require(Shared.MonetizationConfig)
+local Theme = require(Shared.Theme)
 
 export type ShopScreenProps = {
 	onClose: () -> (),
@@ -16,12 +17,42 @@ export type ShopScreenProps = {
 }
 
 local CATEGORIES = {
-	{ key = "board_skins", label = "Board Skins", items = ShopItems.BOARD_SKINS },
-	{ key = "confetti_styles", label = "Confetti", items = ShopItems.CONFETTI_STYLES },
-	{ key = "snap_effects", label = "Snap Effects", items = ShopItems.SNAP_EFFECTS },
-	{ key = "badges", label = "Badges", items = ShopItems.BADGES },
-	{ key = "hints", label = "Hints", items = ShopItems.HINTS },
+	{ key = "cash_shop", label = "Cash Shop", items = {} },
 	{ key = "robux", label = "Robux Shop", items = {} },
+}
+
+-- Build combined cash shop items with category labels
+local CASH_SHOP_SECTIONS = {
+	{ label = "Board Skins", items = ShopItems.BOARD_SKINS, pillColor = Color3.fromRGB(60, 100, 200) },
+	{ label = "Confetti", items = ShopItems.CONFETTI_STYLES, pillColor = Color3.fromRGB(180, 70, 200) },
+	{ label = "Snap Effects", items = ShopItems.SNAP_EFFECTS, pillColor = Color3.fromRGB(220, 150, 30) },
+	{ label = "Hints", items = ShopItems.HINTS, pillColor = Color3.fromRGB(60, 180, 100) },
+}
+
+-- Design constants
+local COLORS = {
+	headerBg = Theme.Colors.headerGold,
+	bodyBg = Theme.Colors.bgCard,
+	border = Theme.Colors.borderDark,
+	itemRowBg = Theme.Colors.bgElevated,
+	rowBorder = Theme.Colors.border,
+	bottomBarBg = Theme.Colors.bgDark,
+	cashText = Theme.Colors.cashGreen,
+	closeBtn = Theme.Colors.closeRed,
+	tabSelected = Theme.Colors.accentBlue,
+	tabDefault = Theme.Colors.bgButton,
+	btnEquipped = Theme.Colors.bgMuted,
+	btnEquip = Theme.Colors.accentBlue,
+	btnBuy = Theme.Colors.success,
+	btnCantAfford = Theme.Colors.dangerDark,
+	descText = Theme.Colors.textMuted,
+}
+
+local CATEGORY_SWATCH_DEFAULTS = {
+	board_skins = Color3.fromRGB(80, 100, 180),
+	confetti_styles = Color3.fromRGB(200, 100, 220),
+	snap_effects = Color3.fromRGB(255, 180, 60),
+	hints = Color3.fromRGB(100, 220, 130),
 }
 
 local function ShopScreen(props: ShopScreenProps)
@@ -33,13 +64,11 @@ local function ShopScreen(props: ShopScreenProps)
 	-- Equipped state (local mirrors of server state)
 	local equippedSkin, setEquippedSkin = React.useState(if props.playerData then props.playerData.equippedBoardSkin or "" else "")
 	local equippedConfetti, setEquippedConfetti = React.useState(if props.playerData then props.playerData.equippedConfettiStyle or "" else "")
-	local equippedBadge, setEquippedBadge = React.useState(if props.playerData then props.playerData.equippedBadge or "" else "")
 	local equippedSnapEffect, setEquippedSnapEffect = React.useState(if props.playerData then props.playerData.equippedSnapEffect or "" else "")
 
 	-- Owned state (local mirrors)
 	local ownedBoardSkins, setOwnedBoardSkins = React.useState(if props.playerData then props.playerData.ownedBoardSkins or {} else {})
 	local ownedConfettiStyles, setOwnedConfettiStyles = React.useState(if props.playerData then props.playerData.ownedConfettiStyles or {} else {})
-	local ownedBadges, setOwnedBadges = React.useState(if props.playerData then props.playerData.ownedBadges or {} else {})
 	local ownedSnapEffects, setOwnedSnapEffects = React.useState(if props.playerData then props.playerData.ownedSnapEffects or {} else {})
 
 	-- Always fetch fresh player data on mount so owned/equipped state is up to date
@@ -57,11 +86,9 @@ local function ShopScreen(props: ShopScreenProps)
 				setPlayerCash(data.cash or 0)
 				setEquippedSkin(data.equippedBoardSkin or "")
 				setEquippedConfetti(data.equippedConfettiStyle or "")
-				setEquippedBadge(data.equippedBadge or "")
 				setEquippedSnapEffect(data.equippedSnapEffect or "")
 				setOwnedBoardSkins(data.ownedBoardSkins or {})
 				setOwnedConfettiStyles(data.ownedConfettiStyles or {})
-				setOwnedBadges(data.ownedBadges or {})
 				setOwnedSnapEffects(data.ownedSnapEffects or {})
 			end
 		end)
@@ -83,8 +110,6 @@ local function ShopScreen(props: ShopScreenProps)
 					setEquippedSkin(itemId)
 				elseif category == "confetti_styles" then
 					setEquippedConfetti(itemId)
-				elseif category == "badges" then
-					setEquippedBadge(itemId)
 				elseif category == "snap_effects" then
 					setEquippedSnapEffect(itemId)
 				end
@@ -133,13 +158,6 @@ local function ShopScreen(props: ShopScreenProps)
 							return updated
 						end)
 						equipItem(itemId, category)
-					elseif category == "badges" then
-						setOwnedBadges(function(prev)
-							local updated = table.clone(prev)
-							updated[itemId] = true
-							return updated
-						end)
-						equipItem(itemId, category)
 					elseif category == "snap_effects" then
 						setOwnedSnapEffects(function(prev)
 							local updated = table.clone(prev)
@@ -174,7 +192,11 @@ local function ShopScreen(props: ShopScreenProps)
 			FillDirection = Enum.FillDirection.Horizontal,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			SortOrder = Enum.SortOrder.LayoutOrder,
-			Padding = UDim.new(0, 4),
+			Padding = UDim.new(0, 6),
+		}),
+		LeftPad = React.createElement("UIPadding", {
+			PaddingLeft = UDim.new(0, 8),
+			PaddingRight = UDim.new(0, 8),
 		}),
 	}
 
@@ -182,32 +204,37 @@ local function ShopScreen(props: ShopScreenProps)
 		local isSelected = i == selectedCategory
 		tabChildren["Tab_" .. i] = React.createElement("TextButton", {
 			LayoutOrder = i,
-			Size = UDim2.new(0, 90, 0, 32),
-			BackgroundColor3 = if isSelected
-				then Color3.fromRGB(80, 140, 230)
-				else Color3.fromRGB(50, 50, 60),
+			Size = UDim2.new(0, 100, 0, 34),
+			BackgroundColor3 = if isSelected then COLORS.tabSelected else COLORS.tabDefault,
 			Text = cat.label,
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextSize = 13,
-			Font = Enum.Font.GothamMedium,
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.small,
+			Font = Theme.Font.bold,
 			[React.Event.Activated] = function()
 				setSelectedCategory(i)
 			end,
 		}, {
-			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", {
+				Thickness = 1,
+				Color = COLORS.rowBorder,
+			}),
 		})
 	end
 
 	-- Build item list
 	local listChildren: { [string]: any } = {
-		Layout = React.createElement("UIGridLayout", {
-			CellSize = UDim2.new(0, 180, 0, 120),
-			CellPadding = UDim2.fromOffset(8, 8),
-			SortOrder = Enum.SortOrder.LayoutOrder,
+		Layout = React.createElement("UIListLayout", {
+			FillDirection = Enum.FillDirection.Vertical,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 6),
 		}),
 		Padding = React.createElement("UIPadding", {
 			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 8),
+			PaddingLeft = UDim.new(0, 8),
+			PaddingRight = UDim.new(0, 8),
 		}),
 	}
 
@@ -219,46 +246,116 @@ local function ShopScreen(props: ShopScreenProps)
 
 		-- GamePasses
 		for key, pass in MonetizationConfig.GAME_PASSES do
+			local firstLetter = string.sub(pass.name, 1, 1)
 			listChildren["GP_" .. key] = React.createElement("Frame", {
 				LayoutOrder = order,
-				BackgroundColor3 = Color3.fromRGB(40, 40, 55),
+				Size = UDim2.new(1, 0, 0, 90),
+				BackgroundColor3 = COLORS.itemRowBg,
 			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+				Stroke = React.createElement("UIStroke", {
+					Thickness = 1.5,
+					Color = COLORS.rowBorder,
+				}),
+				-- Preview swatch
+				Swatch = React.createElement("Frame", {
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.new(0, 10, 0.5, 0),
+					Size = UDim2.fromOffset(64, 64),
+					BackgroundColor3 = Theme.Colors.warning,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+					Letter = React.createElement("TextLabel", {
+						Size = UDim2.fromScale(1, 1),
+						BackgroundTransparency = 1,
+						Text = "R",
+						TextColor3 = Theme.Colors.textPrimary,
+						TextSize = Theme.TextSize.heading,
+						Font = Theme.Font.heading,
+					}, {
+						LetterStroke = React.createElement("UIStroke", {
+							Thickness = 1,
+							Color = Theme.Colors.black,
+						}),
+					}),
+				}),
+				-- Category pill
+				Pill = React.createElement("TextLabel", {
+					Position = UDim2.new(0, 84, 0, 8),
+					AutomaticSize = Enum.AutomaticSize.X,
+					Size = UDim2.new(0, 0, 0, 18),
+					BackgroundColor3 = Color3.fromRGB(200, 170, 30),
+					Text = "Game Pass",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.tiny,
+					Font = Theme.Font.bold,
+				}, {
+					PillCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+					PillPad = React.createElement("UIPadding", {
+						PaddingTop = UDim.new(0, 2),
+						PaddingBottom = UDim.new(0, 2),
+						PaddingLeft = UDim.new(0, 8),
+						PaddingRight = UDim.new(0, 8),
+					}),
+				}),
+				-- Name
 				Name = React.createElement("TextLabel", {
-					Position = UDim2.new(0, 8, 0, 8),
-					Size = UDim2.new(1, -16, 0, 22),
+					Position = UDim2.new(0, 84, 0, 30),
+					Size = UDim2.new(1, -220, 0, 22),
 					BackgroundTransparency = 1,
 					Text = pass.name,
-					TextColor3 = Color3.fromRGB(255, 220, 80),
-					TextSize = 16,
-					Font = Enum.Font.GothamBold,
+					TextColor3 = Theme.Colors.warning,
+					TextSize = Theme.TextSize.button,
+					Font = Theme.Font.bold,
 					TextXAlignment = Enum.TextXAlignment.Left,
+				}, {
+					NameStroke = React.createElement("UIStroke", {
+						Thickness = 1.5,
+						Color = Theme.Colors.black,
+					}),
 				}),
+				-- Description
 				Desc = React.createElement("TextLabel", {
-					Position = UDim2.new(0, 8, 0, 32),
-					Size = UDim2.new(1, -16, 0, 36),
+					Position = UDim2.new(0, 84, 0, 52),
+					Size = UDim2.new(1, -220, 0, 16),
 					BackgroundTransparency = 1,
 					Text = pass.description,
-					TextColor3 = Color3.fromRGB(180, 180, 200),
-					TextSize = 12,
-					Font = Enum.Font.Gotham,
+					TextColor3 = COLORS.descText,
+					TextSize = Theme.TextSize.tiny,
+					Font = Theme.Font.regular,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					TextWrapped = true,
 				}),
-				BuyButton = React.createElement("TextButton", {
-					AnchorPoint = Vector2.new(0.5, 1),
-					Position = UDim2.new(0.5, 0, 1, -8),
-					Size = UDim2.new(0, 140, 0, 30),
-					BackgroundColor3 = Color3.fromRGB(50, 180, 80),
+				-- Price
+				Price = React.createElement("TextLabel", {
+					Position = UDim2.new(0, 84, 0, 68),
+					Size = UDim2.new(0, 100, 0, 16),
+					BackgroundTransparency = 1,
 					Text = "R$ " .. pass.robuxPrice,
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 14,
-					Font = Enum.Font.GothamBold,
+					TextColor3 = COLORS.cashText,
+					TextSize = Theme.TextSize.small,
+					Font = Theme.Font.bold,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				}),
+				-- Buy button
+				BuyButton = React.createElement("TextButton", {
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -10, 0.5, 0),
+					Size = UDim2.new(0, 120, 0, 38),
+					BackgroundColor3 = COLORS.btnBuy,
+					Text = "R$ " .. pass.robuxPrice,
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.label,
+					Font = Theme.Font.bold,
 					[React.Event.Activated] = function()
 						promptGamePass(pass.id)
 					end,
 				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+					BtnStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = COLORS.border,
+					}),
 				}),
 			})
 			order += 1
@@ -268,260 +365,446 @@ local function ShopScreen(props: ShopScreenProps)
 		for key, product in MonetizationConfig.DEV_PRODUCTS do
 			listChildren["DP_" .. key] = React.createElement("Frame", {
 				LayoutOrder = order,
-				BackgroundColor3 = Color3.fromRGB(40, 40, 55),
+				Size = UDim2.new(1, 0, 0, 90),
+				BackgroundColor3 = COLORS.itemRowBg,
 			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+				Stroke = React.createElement("UIStroke", {
+					Thickness = 1.5,
+					Color = COLORS.rowBorder,
+				}),
+				-- Preview swatch
+				Swatch = React.createElement("Frame", {
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.new(0, 10, 0.5, 0),
+					Size = UDim2.fromOffset(64, 64),
+					BackgroundColor3 = Theme.Colors.successLight,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+					Letter = React.createElement("TextLabel", {
+						Size = UDim2.fromScale(1, 1),
+						BackgroundTransparency = 1,
+						Text = "R",
+						TextColor3 = Theme.Colors.textPrimary,
+						TextSize = Theme.TextSize.heading,
+						Font = Theme.Font.heading,
+					}, {
+						LetterStroke = React.createElement("UIStroke", {
+							Thickness = 1,
+							Color = Theme.Colors.black,
+						}),
+					}),
+				}),
+				-- Category pill
+				Pill = React.createElement("TextLabel", {
+					Position = UDim2.new(0, 84, 0, 8),
+					AutomaticSize = Enum.AutomaticSize.X,
+					Size = UDim2.new(0, 0, 0, 18),
+					BackgroundColor3 = Color3.fromRGB(60, 180, 100),
+					Text = "Boost",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.tiny,
+					Font = Theme.Font.bold,
+				}, {
+					PillCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+					PillPad = React.createElement("UIPadding", {
+						PaddingTop = UDim.new(0, 2),
+						PaddingBottom = UDim.new(0, 2),
+						PaddingLeft = UDim.new(0, 8),
+						PaddingRight = UDim.new(0, 8),
+					}),
+				}),
+				-- Name
 				Name = React.createElement("TextLabel", {
-					Position = UDim2.new(0, 8, 0, 8),
-					Size = UDim2.new(1, -16, 0, 22),
+					Position = UDim2.new(0, 84, 0, 30),
+					Size = UDim2.new(1, -220, 0, 22),
 					BackgroundTransparency = 1,
 					Text = product.name,
-					TextColor3 = Color3.fromRGB(120, 255, 120),
-					TextSize = 16,
-					Font = Enum.Font.GothamBold,
+					TextColor3 = Theme.Colors.successLight,
+					TextSize = Theme.TextSize.button,
+					Font = Theme.Font.bold,
 					TextXAlignment = Enum.TextXAlignment.Left,
+				}, {
+					NameStroke = React.createElement("UIStroke", {
+						Thickness = 1.5,
+						Color = Theme.Colors.black,
+					}),
 				}),
+				-- Description
 				Desc = React.createElement("TextLabel", {
-					Position = UDim2.new(0, 8, 0, 32),
-					Size = UDim2.new(1, -16, 0, 36),
+					Position = UDim2.new(0, 84, 0, 52),
+					Size = UDim2.new(1, -220, 0, 16),
 					BackgroundTransparency = 1,
 					Text = product.description,
-					TextColor3 = Color3.fromRGB(180, 180, 200),
-					TextSize = 12,
-					Font = Enum.Font.Gotham,
+					TextColor3 = COLORS.descText,
+					TextSize = Theme.TextSize.tiny,
+					Font = Theme.Font.regular,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					TextWrapped = true,
 				}),
-				BuyButton = React.createElement("TextButton", {
-					AnchorPoint = Vector2.new(0.5, 1),
-					Position = UDim2.new(0.5, 0, 1, -8),
-					Size = UDim2.new(0, 140, 0, 30),
-					BackgroundColor3 = Color3.fromRGB(50, 180, 80),
+				-- Price
+				Price = React.createElement("TextLabel", {
+					Position = UDim2.new(0, 84, 0, 68),
+					Size = UDim2.new(0, 100, 0, 16),
+					BackgroundTransparency = 1,
 					Text = "R$ " .. product.robuxPrice,
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 14,
-					Font = Enum.Font.GothamBold,
+					TextColor3 = COLORS.cashText,
+					TextSize = Theme.TextSize.small,
+					Font = Theme.Font.bold,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				}),
+				-- Buy button
+				BuyButton = React.createElement("TextButton", {
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -10, 0.5, 0),
+					Size = UDim2.new(0, 120, 0, 38),
+					BackgroundColor3 = COLORS.btnBuy,
+					Text = "R$ " .. product.robuxPrice,
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.label,
+					Font = Theme.Font.bold,
 					[React.Event.Activated] = function()
 						promptDevProduct(product.id)
 					end,
 				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+					BtnStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = COLORS.border,
+					}),
 				}),
 			})
 			order += 1
 		end
 	else
-		-- Cash shop items
-		for i, item in category.items do
-			local itemChildren: { [string]: any } = {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-			}
+		-- Cash shop: all categories combined with section pill labels
+		local order = 1
 
-			itemChildren["Name"] = React.createElement("TextLabel", {
-				Position = UDim2.new(0, 8, 0, 8),
-				Size = UDim2.new(1, -16, 0, 22),
-				BackgroundTransparency = 1,
-				Text = item.name,
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 16,
-				Font = Enum.Font.GothamBold,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			})
+		for _, section in CASH_SHOP_SECTIONS do
+			local pillColor = section.pillColor
+			local swatchDefault = CATEGORY_SWATCH_DEFAULTS[section.items[1] and section.items[1].category or ""] or Color3.fromRGB(80, 80, 100)
 
-			itemChildren["Desc"] = React.createElement("TextLabel", {
-				Position = UDim2.new(0, 8, 0, 32),
-				Size = UDim2.new(1, -16, 0, 36),
-				BackgroundTransparency = 1,
-				Text = item.description,
-				TextColor3 = Color3.fromRGB(180, 180, 200),
-				TextSize = 12,
-				Font = Enum.Font.Gotham,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextWrapped = true,
-			})
+			for _, item in section.items do
+				local swatchColor = item.previewColor or swatchDefault
+				local firstLetter = string.sub(item.name, 1, 1)
 
-			-- Preview color for board skins
-			if item.previewColor then
-				itemChildren["Preview"] = React.createElement("Frame", {
-					AnchorPoint = Vector2.new(1, 0),
-					Position = UDim2.new(1, -8, 0, 8),
-					Size = UDim2.fromOffset(24, 24),
-					BackgroundColor3 = item.previewColor,
-				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
-				})
-			end
+				-- Determine owned/equipped state
+				local isOwned = false
+				local isEquipped = false
+				if item.category == "board_skins" then
+					isOwned = ownedBoardSkins[item.id] == true
+					isEquipped = equippedSkin == item.id
+				elseif item.category == "confetti_styles" then
+					isOwned = ownedConfettiStyles[item.id] == true
+					isEquipped = equippedConfetti == item.id
+				elseif item.category == "snap_effects" then
+					isOwned = ownedSnapEffects[item.id] == true
+					isEquipped = equippedSnapEffect == item.id
+				end
 
-			-- Determine owned/equipped state
-			local isOwned = false
-			local isEquipped = false
-			if item.category == "board_skins" then
-				isOwned = ownedBoardSkins[item.id] == true
-				isEquipped = equippedSkin == item.id
-			elseif item.category == "confetti_styles" then
-				isOwned = ownedConfettiStyles[item.id] == true
-				isEquipped = equippedConfetti == item.id
-			elseif item.category == "badges" then
-				isOwned = ownedBadges[item.id] == true
-				isEquipped = equippedBadge == item.id
-			elseif item.category == "snap_effects" then
-				isOwned = ownedSnapEffects[item.id] == true
-				isEquipped = equippedSnapEffect == item.id
-			end
+				local canAfford = playerCash >= item.cashPrice and not isPurchasing
 
-			local canAfford = playerCash >= item.cashPrice and not isPurchasing
-
-			if isEquipped then
-				-- Green "EQUIPPED" label
-				itemChildren["BuyButton"] = React.createElement("TextLabel", {
-					AnchorPoint = Vector2.new(0.5, 1),
-					Position = UDim2.new(0.5, 0, 1, -8),
-					Size = UDim2.new(0, 140, 0, 30),
-					BackgroundColor3 = Color3.fromRGB(40, 120, 60),
-					Text = "EQUIPPED",
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 14,
-					Font = Enum.Font.GothamBold,
-				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
-				})
-			elseif isOwned and item.category ~= "hints" then
-				-- Blue "EQUIP" button
-				itemChildren["BuyButton"] = React.createElement("TextButton", {
-					AnchorPoint = Vector2.new(0.5, 1),
-					Position = UDim2.new(0.5, 0, 1, -8),
-					Size = UDim2.new(0, 140, 0, 30),
-					BackgroundColor3 = Color3.fromRGB(80, 140, 230),
-					Text = "EQUIP",
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 14,
-					Font = Enum.Font.GothamBold,
-					[React.Event.Activated] = function()
-						equipItem(item.id, item.category)
-					end,
-				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
-				})
-			else
-				-- Buy button (always shown for hints since they're consumable)
-				itemChildren["BuyButton"] = React.createElement("TextButton", {
-					AnchorPoint = Vector2.new(0.5, 1),
-					Position = UDim2.new(0.5, 0, 1, -8),
-					Size = UDim2.new(0, 140, 0, 30),
-					BackgroundColor3 = if canAfford
-						then Color3.fromRGB(80, 140, 230)
-						else Color3.fromRGB(60, 60, 70),
-					Text = "$" .. item.cashPrice,
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 14,
-					Font = Enum.Font.GothamBold,
-					[React.Event.Activated] = function()
-						if canAfford then
+				-- Action button
+				local actionButton
+				if isEquipped then
+					actionButton = React.createElement("TextLabel", {
+						AnchorPoint = Vector2.new(1, 0.5),
+						Position = UDim2.new(1, -10, 0.5, 0),
+						Size = UDim2.new(0, 120, 0, 38),
+						BackgroundColor3 = COLORS.btnEquipped,
+						Text = "Equipped",
+						TextColor3 = Theme.Colors.textPrimary,
+						TextSize = Theme.TextSize.label,
+						Font = Theme.Font.bold,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+						BtnStroke = React.createElement("UIStroke", {
+							Thickness = 2,
+							Color = COLORS.border,
+						}),
+					})
+				elseif isOwned and item.category ~= "hints" then
+					actionButton = React.createElement("TextButton", {
+						AnchorPoint = Vector2.new(1, 0.5),
+						Position = UDim2.new(1, -10, 0.5, 0),
+						Size = UDim2.new(0, 120, 0, 38),
+						BackgroundColor3 = COLORS.btnEquip,
+						Text = "Equip",
+						TextColor3 = Theme.Colors.textPrimary,
+						TextSize = Theme.TextSize.label,
+						Font = Theme.Font.bold,
+						[React.Event.Activated] = function()
+							equipItem(item.id, item.category)
+						end,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+						BtnStroke = React.createElement("UIStroke", {
+							Thickness = 2,
+							Color = COLORS.border,
+						}),
+					})
+				elseif canAfford then
+					actionButton = React.createElement("TextButton", {
+						AnchorPoint = Vector2.new(1, 0.5),
+						Position = UDim2.new(1, -10, 0.5, 0),
+						Size = UDim2.new(0, 120, 0, 38),
+						BackgroundColor3 = COLORS.btnBuy,
+						Text = "$" .. item.cashPrice,
+						TextColor3 = Theme.Colors.textPrimary,
+						TextSize = Theme.TextSize.label,
+						Font = Theme.Font.bold,
+						[React.Event.Activated] = function()
 							purchaseItem(item.id, item.category)
-						end
-					end,
-				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
-				})
-			end
+						end,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+						BtnStroke = React.createElement("UIStroke", {
+							Thickness = 2,
+							Color = COLORS.border,
+						}),
+					})
+				else
+					actionButton = React.createElement("TextButton", {
+						AnchorPoint = Vector2.new(1, 0.5),
+						Position = UDim2.new(1, -10, 0.5, 0),
+						Size = UDim2.new(0, 120, 0, 38),
+						BackgroundColor3 = COLORS.btnCantAfford,
+						Text = "Can't Afford",
+						TextColor3 = Theme.Colors.textPrimary,
+						TextSize = Theme.TextSize.tiny,
+						Font = Theme.Font.bold,
+						[React.Event.Activated] = function()
+							if not isPurchasing then
+								purchaseItem(item.id, item.category)
+							end
+						end,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+						BtnStroke = React.createElement("UIStroke", {
+							Thickness = 2,
+							Color = COLORS.border,
+						}),
+					})
+				end
 
-			listChildren["Item_" .. i] = React.createElement("Frame", {
-				LayoutOrder = i,
-				BackgroundColor3 = Color3.fromRGB(40, 40, 55),
-			}, itemChildren)
+				listChildren["Item_" .. order] = React.createElement("Frame", {
+					LayoutOrder = order,
+					Size = UDim2.new(1, 0, 0, 90),
+					BackgroundColor3 = COLORS.itemRowBg,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+					Stroke = React.createElement("UIStroke", {
+						Thickness = 1.5,
+						Color = COLORS.rowBorder,
+					}),
+					-- Preview swatch
+					Swatch = React.createElement("Frame", {
+						AnchorPoint = Vector2.new(0, 0.5),
+						Position = UDim2.new(0, 10, 0.5, 0),
+						Size = UDim2.fromOffset(64, 64),
+						BackgroundColor3 = swatchColor,
+					}, {
+						SwatchCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+						Letter = React.createElement("TextLabel", {
+							Size = UDim2.fromScale(1, 1),
+							BackgroundTransparency = 1,
+							Text = firstLetter,
+							TextColor3 = Theme.Colors.textPrimary,
+							TextSize = Theme.TextSize.heading,
+							Font = Theme.Font.heading,
+						}, {
+							LetterStroke = React.createElement("UIStroke", {
+								Thickness = 1,
+								Color = Theme.Colors.black,
+							}),
+						}),
+					}),
+					-- Category pill
+					Pill = React.createElement("TextLabel", {
+						Position = UDim2.new(0, 84, 0, 8),
+						AutomaticSize = Enum.AutomaticSize.X,
+						Size = UDim2.new(0, 0, 0, 18),
+						BackgroundColor3 = pillColor,
+						Text = section.label,
+						TextColor3 = Theme.Colors.textPrimary,
+						TextSize = Theme.TextSize.tiny,
+						Font = Theme.Font.bold,
+					}, {
+						PillCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+						PillPad = React.createElement("UIPadding", {
+							PaddingTop = UDim.new(0, 2),
+							PaddingBottom = UDim.new(0, 2),
+							PaddingLeft = UDim.new(0, 8),
+							PaddingRight = UDim.new(0, 8),
+						}),
+					}),
+					-- Item name
+					Name = React.createElement("TextLabel", {
+						Position = UDim2.new(0, 84, 0, 30),
+						Size = UDim2.new(1, -220, 0, 22),
+						BackgroundTransparency = 1,
+						Text = item.name,
+						TextColor3 = Theme.Colors.textPrimary,
+						TextSize = Theme.TextSize.button,
+						Font = Theme.Font.bold,
+						TextXAlignment = Enum.TextXAlignment.Left,
+					}, {
+						NameStroke = React.createElement("UIStroke", {
+							Thickness = 1.5,
+							Color = Theme.Colors.black,
+						}),
+					}),
+					-- Description
+					Desc = React.createElement("TextLabel", {
+						Position = UDim2.new(0, 84, 0, 52),
+						Size = UDim2.new(1, -220, 0, 16),
+						BackgroundTransparency = 1,
+						Text = item.description,
+						TextColor3 = COLORS.descText,
+						TextSize = Theme.TextSize.tiny,
+						Font = Theme.Font.regular,
+						TextXAlignment = Enum.TextXAlignment.Left,
+						TextWrapped = true,
+					}),
+					-- Price
+					PriceTag = React.createElement("TextLabel", {
+						Position = UDim2.new(0, 84, 0, 68),
+						Size = UDim2.new(0, 100, 0, 16),
+						BackgroundTransparency = 1,
+						Text = "$" .. item.cashPrice,
+						TextColor3 = COLORS.cashText,
+						TextSize = Theme.TextSize.small,
+						Font = Theme.Font.bold,
+						TextXAlignment = Enum.TextXAlignment.Left,
+					}),
+					-- Action button
+					ActionBtn = actionButton,
+				})
+				order += 1
+			end
 		end
 	end
 
 	return React.createElement("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.4,
+		BackgroundColor3 = Theme.Colors.black,
+		BackgroundTransparency = Theme.Transparency.overlay,
 		ZIndex = 150,
 	}, {
 		Modal = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.5, 0.6),
-			BackgroundColor3 = Color3.fromRGB(15, 15, 25),
+			Size = UDim2.fromScale(0.55, 0.7),
+			BackgroundColor3 = COLORS.bodyBg,
+			ClipsDescendants = true,
 		}, {
-			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 16) }),
+			BorderStroke = React.createElement("UIStroke", {
+				Thickness = 3,
+				Color = COLORS.border,
+			}),
 			SizeConstraint = React.createElement("UISizeConstraint", {
-				MinSize = Vector2.new(320, 400),
+				MinSize = Vector2.new(380, 480),
 			}),
 
-			-- Title bar
-			TitleBar = React.createElement("Frame", {
-			Size = UDim2.new(1, 0, 0, 50),
-			BackgroundTransparency = 1,
-		}, {
-			Title = React.createElement("TextLabel", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.new(0, 200, 0, 40),
-				BackgroundTransparency = 1,
-				Text = "Shop",
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 32,
-				Font = Enum.Font.GothamBold,
-			}),
-			CashDisplay = React.createElement("TextLabel", {
-				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.new(0, 16, 0.5, 0),
-				Size = UDim2.new(0, 120, 0, 30),
-				BackgroundTransparency = 1,
-				Text = "Cash: $" .. playerCash,
-				TextColor3 = Color3.fromRGB(120, 255, 120),
-				TextSize = 18,
-				Font = Enum.Font.GothamBold,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			}),
-			CloseButton = React.createElement("TextButton", {
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, -16, 0.5, 0),
-				Size = UDim2.fromOffset(36, 36),
-				BackgroundColor3 = Color3.fromRGB(200, 60, 60),
-				Text = "X",
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 20,
-				Font = Enum.Font.GothamBold,
-				[React.Event.Activated] = function()
-					props.onClose()
-				end,
+			-- Header (gold bar)
+			Header = React.createElement("Frame", {
+				Size = UDim2.new(1, 0, 0, 56),
+				BackgroundColor3 = COLORS.headerBg,
 			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				HeaderCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 16) }),
+				Title = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.new(0, 200, 0, 40),
+					BackgroundTransparency = 1,
+					Text = "Shop!",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.title,
+					Font = Theme.Font.heading,
+				}, {
+					TitleStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.black,
+					}),
+				}),
+				CloseButton = React.createElement("TextButton", {
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -8, 0.5, 0),
+					Size = UDim2.fromOffset(42, 42),
+					BackgroundColor3 = COLORS.closeBtn,
+					Text = "X",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.large,
+					Font = Theme.Font.bold,
+					[React.Event.Activated] = function()
+						props.onClose()
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+					CloseStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = COLORS.border,
+					}),
+				}),
 			}),
-		}),
 
-		-- Category tabs
-		TabBar = React.createElement("Frame", {
-			Position = UDim2.new(0, 0, 0, 50),
-			Size = UDim2.new(1, 0, 0, 40),
-			BackgroundTransparency = 1,
-		}, tabChildren),
+			-- Category tabs
+			TabBar = React.createElement("Frame", {
+				Position = UDim2.new(0, 0, 0, 56),
+				Size = UDim2.new(1, 0, 0, 44),
+				BackgroundTransparency = 1,
+			}, tabChildren),
 
-		-- Purchase message
-		Message = if purchaseMessage ~= "" then React.createElement("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 92),
-			Size = UDim2.new(0, 300, 0, 24),
-			BackgroundTransparency = 1,
-			Text = purchaseMessage,
-			TextColor3 = Color3.fromRGB(255, 220, 80),
-			TextSize = 16,
-			Font = Enum.Font.GothamBold,
-			ZIndex = 151,
-		}) else nil,
+			-- Purchase message (floating)
+			Message = if purchaseMessage ~= "" then React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, 92),
+				Size = UDim2.new(0, 300, 0, 24),
+				BackgroundTransparency = 1,
+				Text = purchaseMessage,
+				TextColor3 = Theme.Colors.warning,
+				TextSize = Theme.TextSize.body,
+				Font = Theme.Font.bold,
+				ZIndex = 151,
+			}) else nil,
 
-		-- Item grid
-		ItemGrid = React.createElement("ScrollingFrame", {
-			Position = UDim2.new(0, 16, 0, 118),
-			Size = UDim2.new(1, -32, 1, -134),
-			CanvasSize = UDim2.new(0, 0, 0, math.ceil(#(category.items or {}) / 2) * 128 + 20),
-			ScrollBarThickness = 4,
-			ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120),
-			BackgroundTransparency = 1,
-			BorderSizePixel = 0,
-		}, listChildren),
+			-- Item list (scrolling)
+			ItemList = React.createElement("ScrollingFrame", {
+				Position = UDim2.new(0, 0, 0, 100),
+				Size = UDim2.new(1, 0, 1, -144),
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				CanvasSize = UDim2.new(0, 0, 0, 0),
+				ScrollBarThickness = 4,
+				ScrollBarImageColor3 = Theme.Colors.scrollbar,
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+			}, listChildren),
+
+			-- Bottom bar
+			BottomBar = React.createElement("Frame", {
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.new(0, 0, 1, 0),
+				Size = UDim2.new(1, 0, 0, 44),
+				BackgroundColor3 = COLORS.bottomBarBg,
+			}, {
+				BarCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 16) }),
+				CashLabel = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.new(1, 0, 0, 30),
+					BackgroundTransparency = 1,
+					Text = "Your Cash: $" .. playerCash,
+					TextColor3 = COLORS.cashText,
+					TextSize = Theme.TextSize.large,
+					Font = Theme.Font.bold,
+				}, {
+					CashStroke = React.createElement("UIStroke", {
+						Thickness = 1.5,
+						Color = Theme.Colors.black,
+					}),
+				}),
+			}),
 		}),
 	})
 end

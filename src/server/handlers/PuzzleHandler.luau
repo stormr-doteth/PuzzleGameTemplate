@@ -6,6 +6,13 @@ local ProgressionConfig = require(Shared.ProgressionConfig)
 local ImageCatalog = require(Shared.ImageCatalog)
 
 local ProfileService = require(script.Parent.Parent.data.ProfileService)
+local TitleConfig = require(Shared.TitleConfig)
+
+-- TitleService loaded optionally
+local TitleService = nil
+pcall(function()
+	TitleService = require(script.Parent.Parent.services.TitleService)
+end)
 
 -- Rate limiting: track last completion time per player
 local lastCompletionTime: { [number]: number } = {}
@@ -91,34 +98,29 @@ function PuzzleHandler.Init()
 		local difficultyId = data.difficultyId
 		local completionTime = data.completionTime
 
-		-- Calculate base XP
-		local baseXP = ProgressionConfig.XP_BY_DIFFICULTY[difficultyId] or 0
+		-- Calculate base cash reward
+		local baseCash = ProgressionConfig.COIN_REWARDS_BY_DIFFICULTY[difficultyId] or 0
 
 		-- Check for speed bonus
 		local parTime = ProgressionConfig.PAR_TIMES[difficultyId]
 		local isSpeedBonus = parTime and completionTime <= parTime
-		local xpGained = baseXP
+		local cashGained = baseCash
 		if isSpeedBonus then
-			xpGained = math.floor(baseXP * ProgressionConfig.SPEED_BONUS_MULTIPLIER)
+			cashGained = math.floor(baseCash * ProgressionConfig.SPEED_BONUS_MULTIPLIER)
 		end
 
-		-- Check VIP GamePass for 2x XP (MonetizationConfig loaded optionally)
+		-- Check VIP GamePass for 2x Cash (MonetizationConfig loaded optionally)
 		local MonetizationConfig = nil
 		pcall(function()
 			MonetizationConfig = require(Shared.MonetizationConfig)
 		end)
 		if MonetizationConfig and MonetizationConfig.GAME_PASSES and MonetizationConfig.GAME_PASSES.VIP then
 			if hasGamePass(player, MonetizationConfig.GAME_PASSES.VIP.id) then
-				xpGained = xpGained * 2
+				cashGained = cashGained * 2
 			end
 		end
 
-		-- Calculate cash
-		local cashGained = math.floor(xpGained * ProgressionConfig.CASH_PER_XP)
-
 		-- Update profile
-		local oldLevel = profileData.Level
-		profileData.XP = profileData.XP + xpGained
 		profileData.Cash = profileData.Cash + cashGained
 		profileData.TotalPuzzlesCompleted = (profileData.TotalPuzzlesCompleted or 0) + 1
 		profileData.TotalPlayTime = (profileData.TotalPlayTime or 0) + completionTime
@@ -132,9 +134,10 @@ function PuzzleHandler.Init()
 		end
 		profileData.PuzzlesCompletedByDifficulty[difficultyId] = (profileData.PuzzlesCompletedByDifficulty[difficultyId] or 0) + 1
 
-		-- Calculate new level
-		local newLevel = ProgressionConfig.getLevelFromXP(profileData.XP)
-		profileData.Level = newLevel
+		-- Update title billboard
+		if TitleService then
+			TitleService.UpdateTitle(player, profileData.PuzzlesCompletedByDifficulty)
+		end
 
 		-- Check for personal best
 		local bestKey = data.imageId .. "_" .. difficultyId
@@ -147,21 +150,6 @@ function PuzzleHandler.Init()
 			profileData.PersonalBests[bestKey] = completionTime
 		end
 
-		-- Check for new image unlocks
-		local newlyUnlocked = {}
-		if newLevel > oldLevel then
-			if not profileData.UnlockedImages then
-				profileData.UnlockedImages = {}
-			end
-			local allUnlocked = ProgressionConfig.getUnlockedImagesAtLevel(newLevel)
-			for _, imgId in allUnlocked do
-				if not profileData.UnlockedImages[imgId] then
-					profileData.UnlockedImages[imgId] = true
-					table.insert(newlyUnlocked, imgId)
-				end
-			end
-		end
-
 		-- Submit to leaderboard if personal best
 		if isPersonalBest and LeaderboardService then
 			task.spawn(function()
@@ -171,10 +159,7 @@ function PuzzleHandler.Init()
 
 		-- Fire reward data back to client
 		xpAwarded:FireClient(player, {
-			xpGained = xpGained,
 			cashGained = cashGained,
-			newLevel = if newLevel > oldLevel then newLevel else nil,
-			unlockedImages = if #newlyUnlocked > 0 then newlyUnlocked else nil,
 			isPersonalBest = isPersonalBest,
 			isSpeedBonus = isSpeedBonus,
 			previousBest = previousBest,
@@ -194,7 +179,8 @@ function PuzzleHandler.Init()
 
 	-- Handle GetPlayerData requests
 	getPlayerData.OnServerInvoke = function(player)
-		local profileData = ProfileService.GetData(player)
+		-- Wait for profile to load (handles Play Solo race condition)
+		local profileData = ProfileService.WaitForData(player, 10)
 		if not profileData then
 			return nil
 		end
@@ -207,12 +193,7 @@ function PuzzleHandler.Init()
 				unlockedImages[entry.id] = true
 			end
 		end
-		-- Add level-unlocked
-		local levelUnlocks = ProgressionConfig.getUnlockedImagesAtLevel(profileData.Level)
-		for _, imgId in levelUnlocks do
-			unlockedImages[imgId] = true
-		end
-		-- Add any manually unlocked (from purchases etc.)
+		-- Add any unlocked (from purchases etc.)
 		if profileData.UnlockedImages then
 			for imgId, val in profileData.UnlockedImages do
 				if val then
@@ -234,25 +215,32 @@ function PuzzleHandler.Init()
 			end
 		end
 
+		-- Check for Expert gamepass
+		local hasExpertPass = false
+		if MonetizationConfig and MonetizationConfig.GAME_PASSES and MonetizationConfig.GAME_PASSES.EXPERT then
+			hasExpertPass = hasGamePass(player, MonetizationConfig.GAME_PASSES.EXPERT.id)
+		end
+
+		local completions = profileData.PuzzlesCompletedByDifficulty or {}
+		local titleName = TitleConfig.getTitleFromCompletions(completions)
+
 		return {
-			level = profileData.Level,
-			xp = profileData.XP,
 			cash = profileData.Cash,
 			unlockedImages = unlockedImages,
 			personalBests = profileData.PersonalBests or {},
+			hasExpertPass = hasExpertPass,
+			titleName = titleName,
 			equippedBoardSkin = profileData.EquippedBoardSkin or "",
 			equippedConfettiStyle = profileData.EquippedConfettiStyle or "",
-			equippedBadge = profileData.EquippedBadge or "",
 			equippedSnapEffect = profileData.EquippedSnapEffect or "",
 			hintsRemaining = profileData.HintsRemaining or 0,
 			ownedBoardSkins = profileData.OwnedBoardSkins or {},
 			ownedConfettiStyles = profileData.OwnedConfettiStyles or {},
-			ownedBadges = profileData.OwnedBadges or {},
 			ownedSnapEffects = profileData.OwnedSnapEffects or {},
 			totalPuzzlesCompleted = profileData.TotalPuzzlesCompleted or 0,
 			totalPlayTime = profileData.TotalPlayTime or 0,
 			totalPiecesPlaced = profileData.TotalPiecesPlaced or 0,
-			puzzlesCompletedByDifficulty = profileData.PuzzlesCompletedByDifficulty or {},
+			puzzlesCompletedByDifficulty = completions,
 		}
 	end
 
@@ -368,6 +356,41 @@ function PuzzleHandler.Init()
 
 		profileData.HintsRemaining = hints - 1
 		return { success = true, hintsRemaining = profileData.HintsRemaining }
+	end
+
+	-- Handle UnlockImage requests (coin purchase)
+	local unlockImage = Remotes.GetFunction("UnlockImage")
+	unlockImage.OnServerInvoke = function(player, imageId)
+		if type(imageId) ~= "string" or imageId == "" then
+			return { success = false, message = "Invalid imageId" }
+		end
+
+		local entry = ImageCatalog.getById(imageId)
+		if not entry then
+			return { success = false, message = "Unknown image" }
+		end
+
+		local profileData = ProfileService.GetData(player)
+		if not profileData then
+			return { success = false, message = "Profile not loaded" }
+		end
+
+		if not profileData.UnlockedImages then
+			profileData.UnlockedImages = {}
+		end
+
+		if profileData.UnlockedImages[imageId] or entry.defaultUnlocked then
+			return { success = false, message = "Already unlocked" }
+		end
+
+		local price = ProgressionConfig.COIN_UNLOCK_PRICE
+		if profileData.Cash < price then
+			return { success = false, message = "Not enough coins" }
+		end
+
+		profileData.Cash = profileData.Cash - price
+		profileData.UnlockedImages[imageId] = true
+		return { success = true, newCash = profileData.Cash }
 	end
 end
 

@@ -5,13 +5,11 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Packages = ServerScriptService:WaitForChild("Packages")
 local ProfileStore = require(Packages.ProfileStore)
 
-local CURRENT_SCHEMA_VERSION = 1
+local CURRENT_SCHEMA_VERSION = 2
 
 local PROFILE_TEMPLATE = {
 	SchemaVersion = CURRENT_SCHEMA_VERSION,
 	Cash = 250,
-	Level = 1,
-	XP = 0,
 	UnlockedImages = {},         -- { [string]: true }
 	TotalPuzzlesCompleted = 0,
 	TotalPlayTime = 0,
@@ -22,12 +20,10 @@ local PROFILE_TEMPLATE = {
 	PurchaseHistory = {},        -- { { productId, timestamp } }
 	OwnedBoardSkins = {},        -- { [string]: true }
 	OwnedConfettiStyles = {},    -- { [string]: true }
-	OwnedBadges = {},            -- { [string]: true }
 	OwnedSnapEffects = {},       -- { [string]: true }
 	HintsRemaining = 0,
 	EquippedBoardSkin = "",
 	EquippedConfettiStyle = "",
-	EquippedBadge = "",
 	EquippedSnapEffect = "",
 	SavedPuzzles = {},  -- { SavedPuzzleData }, max 3 entries
 }
@@ -52,8 +48,14 @@ local function migrateProfile(data)
 		data.SchemaVersion = 1
 	end
 
-	-- Future migrations go here:
-	-- if version < 2 then ... data.SchemaVersion = 2 end
+	-- Migration from v1 to v2: remove XP/Level/Badge system
+	if version < 2 then
+		data.Level = nil
+		data.XP = nil
+		data.OwnedBadges = nil
+		data.EquippedBadge = nil
+		data.SchemaVersion = 2
+	end
 end
 
 local PlayerStore = ProfileStore.New("PlayerData", PROFILE_TEMPLATE)
@@ -92,7 +94,6 @@ local function loadProfile(player)
 		data.OwnedConfettiStyles["confetti_stars"] = true
 		data.OwnedSnapEffects["snap_sparkle"] = true
 		data.OwnedSnapEffects["snap_ripple"] = true
-		data.OwnedBadges["badge_puzzle_master"] = true
 		-- Equip defaults if nothing equipped
 		if data.EquippedBoardSkin == "" then
 			data.EquippedBoardSkin = "skin_midnight"
@@ -104,9 +105,13 @@ local function loadProfile(player)
 		if data.HintsRemaining < 5 then
 			data.HintsRemaining = 5
 		end
-		-- Set a reasonable level so level-gated images are accessible
-		if data.Level < 10 then
-			data.Level = 10
+		-- Seed some puzzle completions for title testing
+		if not data.PuzzlesCompletedByDifficulty or not next(data.PuzzlesCompletedByDifficulty) then
+			data.PuzzlesCompletedByDifficulty = {
+				["2x2"] = 10,
+				["6x6"] = 5,
+				["9x9"] = 3,
+			}
 		end
 	end
 
@@ -142,6 +147,23 @@ function ProfileService.GetData(player)
 		return nil
 	end
 	return profile.Data
+end
+
+-- Wait for a player's profile to finish loading (up to timeoutSeconds).
+-- Returns profile Data, or nil if the player left or timed out.
+function ProfileService.WaitForData(player, timeoutSeconds: number?)
+	local deadline = os.clock() + (timeoutSeconds or 10)
+	while os.clock() < deadline do
+		if player.Parent == nil then
+			return nil
+		end
+		local profile = activeProfiles[player]
+		if profile then
+			return profile.Data
+		end
+		task.wait(0.1)
+	end
+	return nil
 end
 
 function ProfileService.Start()

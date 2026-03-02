@@ -6,12 +6,12 @@ local React = require(Packages.React)
 
 local ImageCatalog = require(Shared.ImageCatalog)
 local PuzzlePacks = require(Shared.PuzzlePacks)
+local Theme = require(Shared.Theme)
 
 export type ImagePickerProps = {
 	selectedImageId: string?,
 	onSelectImage: (imageId: string, assetId: string) -> (),
 	unlockedImages: { [string]: boolean }?,
-	playerLevel: number?,
 	personalBests: { [string]: number }?,
 	packId: string?,
 	onBack: (() -> ())?,
@@ -36,6 +36,24 @@ local function ImagePicker(props: ImagePickerProps)
 		local pack = PuzzlePacks.getById(props.packId)
 		local packName = if pack then pack.name else props.packId
 
+		-- Count completed unique images in this pack
+		local completedInPack = 0
+		if props.personalBests then
+			local seen: { [string]: boolean } = {}
+			for key, _ in props.personalBests do
+				local imgId = string.match(key, "^(.+)_[^_]+$")
+				if imgId and not seen[imgId] then
+					for _, entry in images do
+						if entry.id == imgId then
+							seen[imgId] = true
+							completedInPack += 1
+							break
+						end
+					end
+				end
+			end
+		end
+
 		children["Header"] = React.createElement("Frame", {
 			LayoutOrder = 0,
 			Size = UDim2.new(1, 0, 0, 40),
@@ -44,11 +62,11 @@ local function ImagePicker(props: ImagePickerProps)
 			BackButton = React.createElement("TextButton", {
 				Position = UDim2.fromOffset(0, 0),
 				Size = UDim2.new(0, 80, 0, 36),
-				BackgroundColor3 = Color3.fromRGB(55, 55, 75),
+				BackgroundColor3 = Theme.Colors.bgButton,
 				Text = "< Back",
-				TextColor3 = Color3.fromRGB(200, 200, 220),
-				TextSize = 14,
-				Font = Enum.Font.GothamMedium,
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.medium,
 				[React.Event.Activated] = function()
 					if props.onBack then
 						props.onBack()
@@ -62,10 +80,21 @@ local function ImagePicker(props: ImagePickerProps)
 				Size = UDim2.new(1, -90, 0, 36),
 				BackgroundTransparency = 1,
 				Text = packName,
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 20,
-				Font = Enum.Font.GothamBold,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
 				TextXAlignment = Enum.TextXAlignment.Left,
+			}),
+			Progress = React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, 0, 0.5, 0),
+				Size = UDim2.new(0, 120, 0, 24),
+				BackgroundTransparency = 1,
+				Text = completedInPack .. " / " .. #images .. " completed",
+				TextColor3 = Theme.Colors.textMuted,
+				TextSize = Theme.TextSize.small,
+				Font = Theme.Font.medium,
+				TextXAlignment = Enum.TextXAlignment.Right,
 			}),
 		})
 	end
@@ -101,7 +130,7 @@ local function ImagePicker(props: ImagePickerProps)
 
 		if isSelected then
 			imageChildren["Highlight"] = React.createElement("UIStroke", {
-				Color = Color3.fromRGB(80, 200, 255),
+				Color = Theme.Colors.accentCyan,
 				Thickness = 3,
 			})
 		end
@@ -120,7 +149,7 @@ local function ImagePicker(props: ImagePickerProps)
 					AnchorPoint = Vector2.new(1, 1),
 					Position = UDim2.new(1, -4, 1, -4),
 					Size = UDim2.fromOffset(28, 16),
-					BackgroundColor3 = Color3.fromRGB(255, 180, 30),
+					BackgroundColor3 = Theme.Colors.orange,
 					ZIndex = 8,
 				}, {
 					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
@@ -129,8 +158,8 @@ local function ImagePicker(props: ImagePickerProps)
 						BackgroundTransparency = 1,
 						Text = "\u{2605}" .. completedCount,
 						TextColor3 = Color3.fromRGB(40, 20, 0),
-						TextSize = 11,
-						Font = Enum.Font.GothamBold,
+						TextSize = Theme.TextSize.tiny,
+						Font = Theme.Font.bold,
 						ZIndex = 9,
 					}),
 				})
@@ -141,18 +170,29 @@ local function ImagePicker(props: ImagePickerProps)
 		if not isUnlocked then
 			imageChildren["LockOverlay"] = React.createElement("Frame", {
 				Size = UDim2.fromScale(1, 1),
-				BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+				BackgroundColor3 = Theme.Colors.black,
 				BackgroundTransparency = 0.35,
 				ZIndex = 6,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 				LockIcon = React.createElement("TextLabel", {
 					AnchorPoint = Vector2.new(0.5, 0.5),
-					Position = UDim2.fromScale(0.5, 0.5),
+					Position = UDim2.new(0.5, 0, 0.5, -8),
 					Size = UDim2.fromOffset(32, 32),
 					BackgroundTransparency = 1,
 					Text = "\u{1F512}",
-					TextSize = 24,
+					TextSize = Theme.TextSize.heading,
+					ZIndex = 7,
+				}),
+				PriceLabel = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.new(0.5, 0, 0.5, 10),
+					Size = UDim2.fromOffset(60, 16),
+					BackgroundTransparency = 1,
+					Text = "$100",
+					TextColor3 = Theme.Colors.cashGreen,
+					TextSize = Theme.TextSize.small,
+					Font = Theme.Font.bold,
 					ZIndex = 7,
 				}),
 			})
@@ -160,7 +200,7 @@ local function ImagePicker(props: ImagePickerProps)
 
 		gridChildren["Image_" .. i] = React.createElement("ImageButton", {
 			LayoutOrder = i,
-			BackgroundColor3 = Color3.fromRGB(50, 50, 60),
+			BackgroundColor3 = Theme.Colors.bgInput,
 			Image = entry.thumbnailId,
 			ImageTransparency = if isUnlocked then 0 else 0.6,
 			ScaleType = Enum.ScaleType.Crop,
@@ -181,7 +221,7 @@ local function ImagePicker(props: ImagePickerProps)
 			CanvasSize = UDim2.fromScale(0, 0),
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			ScrollBarThickness = 4,
-			ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120),
+			ScrollBarImageColor3 = Theme.Colors.scrollbar,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			ScrollingDirection = Enum.ScrollingDirection.Y,

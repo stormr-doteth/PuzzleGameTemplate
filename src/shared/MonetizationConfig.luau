@@ -8,7 +8,7 @@ MonetizationConfig.GAME_PASSES = {
 	VIP = {
 		id = 0, -- Replace with actual GamePass ID
 		name = "VIP Pass",
-		description = "2x XP permanently + gold name on leaderboard",
+		description = "2x Cash permanently + gold name on leaderboard",
 		robuxPrice = 199,
 	},
 	ALL_IMAGES = {
@@ -16,6 +16,12 @@ MonetizationConfig.GAME_PASSES = {
 		name = "All Images Pack",
 		description = "Unlock every puzzle image immediately",
 		robuxPrice = 149,
+	},
+	EXPERT = {
+		id = 0, -- Replace with actual GamePass ID
+		name = "Expert Mode",
+		description = "Unlock Expert (25x25) difficulty",
+		robuxPrice = 199,
 	},
 }
 
@@ -35,11 +41,18 @@ MonetizationConfig.DEV_PRODUCTS = {
 		cashAmount = 100,
 		robuxPrice = 79,
 	},
-	SKIP_LEVEL = {
+	HINT_1 = {
 		id = 0, -- Replace with actual DevProduct ID
-		name = "Skip Level",
-		description = "Grant enough XP to reach the next level",
-		robuxPrice = 99,
+		name = "Instant Hint",
+		description = "Instantly place one puzzle piece",
+		hintCount = 1,
+		robuxPrice = 5,
+	},
+	UNLOCK_IMAGE = {
+		id = 0, -- Replace with actual DevProduct ID
+		name = "Unlock Puzzle",
+		description = "Unlock a single puzzle image",
+		robuxPrice = 25,
 	},
 }
 

@@ -5,7 +5,9 @@ local FOLDER_NAME = "PuzzleRemotes"
 
 local REMOTE_EVENTS = {
 	"PuzzleCompleted",  -- client → server: { imageId, difficultyId, completionTime }
-	"XPAwarded",        -- server → client: { xpGained, cashGained, newLevel?, unlockedImages?, isPersonalBest, previousBest? }
+	"XPAwarded",        -- server → client: { cashGained, isPersonalBest, isSpeedBonus, previousBest? }
+	"HintPurchased",    -- server → client: notifies that a Robux hint was granted
+	"SetPendingUnlock", -- client → server: sets imageId before Robux purchase
 
 	-- Multiplayer room events (server → client)
 	"RoomPlayerJoined",   -- server → clients: { player: RoomPlayer }
@@ -34,13 +36,14 @@ local REMOTE_EVENTS = {
 }
 
 local REMOTE_FUNCTIONS = {
-	"GetPlayerData",    -- returns { level, xp, cash, unlockedImages, personalBests, equipped/owned data }
+	"GetPlayerData",    -- returns { cash, unlockedImages, personalBests, titleName, equipped/owned data }
 	"GetLeaderboard",   -- returns { { userId, displayName, time, badge? } }
 	"SavePuzzle",       -- client → server: SavedPuzzleData, returns { success, slotIndex }
 	"LoadSavedPuzzles", -- client → server: returns { SavedPuzzleData }
 	"DeleteSavedPuzzle", -- client → server: slotIndex (number), returns { success }
 	"EquipItem",        -- client → server: (itemId, category), returns { success, message }
 	"UseHint",          -- client → server: returns { success, hintsRemaining }
+	"UnlockImage",      -- client → server: (imageId) → { success, newCash }
 
 	-- Multiplayer room functions (client → server)
 	"CreateRoom",       -- returns { roomId } or { error }

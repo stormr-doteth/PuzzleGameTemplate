@@ -2,6 +2,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local React = require(Packages.React)
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared.Theme)
 
 local useDrag = require(script.Parent.Parent.hooks.useDrag)
 
@@ -22,6 +24,7 @@ export type PuzzlePieceProps = {
 	onHoverEnd: ((id: number) -> ())?,
 	claimedByOther: boolean?,
 	claimerColor: Color3?,
+	isHintHighlighted: boolean?,
 	screenToWorld: ((screenX: number, screenY: number) -> (number, number))?,
 	worldToScreen: ((worldX: number, worldY: number) -> (number, number))?,
 	zoom: number?,
@@ -80,13 +83,13 @@ local function PuzzlePiece(props: PuzzlePieceProps)
 	-- Determine outline appearance
 	local outlineColor, outlineTransparency
 	if props.isLocked then
-		outlineColor = Color3.fromRGB(20, 20, 30)
+		outlineColor = Theme.Colors.bgHud
 		outlineTransparency = 1
 	elseif props.isHovered and not drag.isDragging then
-		outlineColor = Color3.fromRGB(120, 180, 255)
+		outlineColor = Theme.Colors.accentBlue
 		outlineTransparency = 0
 	else
-		outlineColor = Color3.fromRGB(20, 20, 30)
+		outlineColor = Theme.Colors.bgHud
 		outlineTransparency = 0.3
 	end
 
@@ -132,6 +135,17 @@ local function PuzzlePiece(props: PuzzlePieceProps)
 				Size = UDim2.fromScale(1, 1),
 				BackgroundColor3 = props.claimerColor or Color3.fromRGB(255, 100, 100),
 				BackgroundTransparency = 0.7,
+				BorderSizePixel = 0,
+				ZIndex = 2,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
+			})
+			else nil,
+		HintHighlight = if props.isHintHighlighted
+			then React.createElement("Frame", {
+				Size = UDim2.fromScale(1, 1),
+				BackgroundColor3 = Color3.fromRGB(80, 220, 100),
+				BackgroundTransparency = 0.45,
 				BorderSizePixel = 0,
 				ZIndex = 2,
 			}, {

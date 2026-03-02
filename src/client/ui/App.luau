@@ -8,6 +8,10 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local React = require(Packages.React)
 
+local ImageCatalog = require(Shared.ImageCatalog)
+local MonetizationConfig = require(Shared.MonetizationConfig)
+local Theme = require(Shared.Theme)
+
 local MenuScreen = require(script.Parent.components.MenuScreen)
 local PuzzleBoard = require(script.Parent.components.PuzzleBoard)
 local CompleteScreen = require(script.Parent.components.CompleteScreen)
@@ -17,12 +21,6 @@ local RoomLobbyScreen = require(script.Parent.components.RoomLobbyScreen)
 local SeatingService = nil
 pcall(function()
 	SeatingService = require(script.Parent.Parent.services.SeatingService)
-end)
-
--- XPBar loaded optionally (created in Phase 2)
-local XPBar = nil
-pcall(function()
-	XPBar = require(script.Parent.components.XPBar)
 end)
 
 type GameState = "walking" | "menu" | "playing" | "complete" | "admiring" | "room_lobby" | "room_playing" | "room_complete"
@@ -63,19 +61,17 @@ local function App()
 
 	-- Player data state (populated by remotes in Phase 2)
 	local playerData, setPlayerData = React.useState(nil :: {
-		level: number,
-		xp: number,
 		cash: number,
 		unlockedImages: { [string]: boolean },
 		personalBests: { [string]: number },
+		titleName: string?,
 		equippedBoardSkin: string?,
 		equippedConfettiStyle: string?,
-		equippedBadge: string?,
 		equippedSnapEffect: string?,
+		hasExpertPass: boolean?,
 		hintsRemaining: number?,
 		ownedBoardSkins: { [string]: boolean }?,
 		ownedConfettiStyles: { [string]: boolean }?,
-		ownedBadges: { [string]: boolean }?,
 		ownedSnapEffects: { [string]: boolean }?,
 		totalPuzzlesCompleted: number?,
 		totalPlayTime: number?,
@@ -131,22 +127,16 @@ local function App()
 				setPlayerData(function(prev)
 					if not prev then return prev end
 					local updated = table.clone(prev)
-					if data.newLevel then
-						updated.level = data.newLevel
-					end
-					if data.xpGained then
-						updated.xp = (updated.xp or 0) + data.xpGained
-					end
 					if data.cashGained then
 						updated.cash = (updated.cash or 0) + data.cashGained
 					end
-					if data.unlockedImages then
-						for _, imgId in data.unlockedImages do
-							updated.unlockedImages[imgId] = true
-						end
+					if data.imageUnlocked then
+						updated.unlockedImages = table.clone(updated.unlockedImages)
+						updated.unlockedImages[data.imageUnlocked] = true
 					end
 					if data.isPersonalBest and completionTime > 0 then
 						local bestKey = imageId .. "_" .. difficultyId
+						updated.personalBests = table.clone(updated.personalBests)
 						updated.personalBests[bestKey] = completionTime
 					end
 					updated.totalPuzzlesCompleted = (updated.totalPuzzlesCompleted or 0) + 1
@@ -635,13 +625,6 @@ local function App()
 	-- Build safe area children (menu, XP bar)
 	local safeChildren: { [string]: any } = {}
 
-	if XPBar and playerData then
-		safeChildren["XPBar"] = React.createElement(XPBar, {
-			level = playerData.level,
-			xp = playerData.xp,
-			cash = playerData.cash,
-		})
-	end
 
 	local function onHintUsed()
 		setPlayerData(function(prev)
@@ -660,8 +643,6 @@ local function App()
 				updated.equippedBoardSkin = itemId
 			elseif category == "confetti_styles" then
 				updated.equippedConfettiStyle = itemId
-			elseif category == "badges" then
-				updated.equippedBadge = itemId
 			elseif category == "snap_effects" then
 				updated.equippedSnapEffect = itemId
 			end
@@ -675,34 +656,147 @@ local function App()
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -30),
 			Size = UDim2.new(0, 300, 0, 40),
-			BackgroundColor3 = Color3.fromRGB(30, 30, 40),
-			BackgroundTransparency = 0.3,
+			BackgroundColor3 = Theme.Colors.bgMedium,
+			BackgroundTransparency = Theme.Transparency.hudButton,
 			Text = "Loading player data...",
-			TextColor3 = Color3.fromRGB(200, 200, 220),
-			TextSize = 18,
-			Font = Enum.Font.GothamMedium,
+			TextColor3 = Theme.Colors.textSecondary,
+			TextSize = Theme.TextSize.button,
+			Font = Theme.Font.medium,
 		}, {
-			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+			Corner = React.createElement("UICorner", { CornerRadius = Theme.Radius.md }),
 		})
 	end
 
 	if gameState == "walking" then
 		safeChildren["WalkingHint"] = React.createElement("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -30),
-			Size = UDim2.new(0, 500, 0, 50),
-			BackgroundColor3 = Color3.fromRGB(30, 30, 40),
-			BackgroundTransparency = 0.3,
+			Position = UDim2.fromScale(0.5, 0.95),
+			Size = UDim2.fromScale(0.35, 0.06),
+			BackgroundColor3 = Theme.Colors.bgMedium,
+			BackgroundTransparency = Theme.Transparency.hudButton,
 			Text = "Walk to a table and sit down to start a puzzle!",
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextSize = 20,
-			Font = Enum.Font.GothamMedium,
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.large,
+			Font = Theme.Font.medium,
 			TextWrapped = true,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
 			Padding = React.createElement("UIPadding", {
 				PaddingLeft = UDim.new(0, 16),
 				PaddingRight = UDim.new(0, 16),
+			}),
+		})
+
+		-- Cash display (bottom-left)
+		if playerData then
+			safeChildren["CashDisplay"] = React.createElement("Frame", {
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.new(0.02, 0, 0.96, 0),
+				Size = UDim2.new(0.22, 0, 0.07, 0),
+				BackgroundColor3 = Theme.Colors.bgHud,
+				BackgroundTransparency = Theme.Transparency.subtle,
+				ZIndex = 10,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = Theme.Radius.md }),
+				Stroke = React.createElement("UIStroke", {
+					Thickness = 1.5,
+					Color = Theme.Colors.border,
+				}),
+				SizeConstraint = React.createElement("UISizeConstraint", {
+					MinSize = Vector2.new(140, 40),
+					MaxSize = Vector2.new(300, 60),
+				}),
+				CashLabel = React.createElement("TextLabel", {
+					Size = UDim2.fromScale(1, 1),
+					BackgroundTransparency = 1,
+					Text = "$" .. (playerData.cash or 0),
+					TextColor3 = Theme.Colors.cashGreen,
+					TextScaled = true,
+					Font = Theme.Font.bold,
+					ZIndex = 11,
+				}, {
+					TextConstraint = React.createElement("UITextSizeConstraint", {
+						MinTextSize = 16,
+						MaxTextSize = 28,
+					}),
+					Padding = React.createElement("UIPadding", {
+						PaddingLeft = UDim.new(0.08, 0),
+						PaddingRight = UDim.new(0.08, 0),
+					}),
+					TextStroke = React.createElement("UIStroke", {
+						Thickness = 1.5,
+						Color = Theme.Colors.black,
+					}),
+				}),
+			})
+		end
+
+		-- Persistent HUD buttons (right side, vertically centered)
+		safeChildren["HUDButtons"] = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -16, 0.5, 0),
+			Size = UDim2.fromOffset(48, 164),
+			BackgroundColor3 = Theme.Colors.bgHud,
+			BackgroundTransparency = Theme.Transparency.hudButton,
+			ZIndex = 10,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+			Padding = React.createElement("UIPadding", {
+				PaddingTop = UDim.new(0, 6),
+				PaddingBottom = UDim.new(0, 6),
+				PaddingLeft = UDim.new(0, 4),
+				PaddingRight = UDim.new(0, 4),
+			}),
+			Layout = React.createElement("UIListLayout", {
+				FillDirection = Enum.FillDirection.Vertical,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				Padding = UDim.new(0, 6),
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			}),
+			ShopBtn = React.createElement("TextButton", {
+				LayoutOrder = 1,
+				Size = UDim2.fromOffset(40, 46),
+				BackgroundColor3 = Theme.Colors.bgInput,
+				Text = "Shop",
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.tiny,
+				Font = Theme.Font.medium,
+				ZIndex = 10,
+				[React.Event.Activated] = function()
+					setNpcShopOpen(true)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			}),
+			LeaderBtn = React.createElement("TextButton", {
+				LayoutOrder = 2,
+				Size = UDim2.fromOffset(40, 46),
+				BackgroundColor3 = Theme.Colors.bgInput,
+				Text = "Top",
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.tiny,
+				Font = Theme.Font.medium,
+				ZIndex = 10,
+				[React.Event.Activated] = function()
+					setNpcLeaderboardOpen(true)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			}),
+			StatsBtn = React.createElement("TextButton", {
+				LayoutOrder = 3,
+				Size = UDim2.fromOffset(40, 46),
+				BackgroundColor3 = Theme.Colors.bgInput,
+				Text = "Stats",
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.tiny,
+				Font = Theme.Font.medium,
+				ZIndex = 10,
+				[React.Event.Activated] = function()
+					setNpcStatsOpen(true)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 			}),
 		})
 
@@ -761,17 +855,72 @@ local function App()
 		end
 	end
 
+	local function onUnlockImage(unlockImageId: string)
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local unlockRemote = remotes:FindFirstChild("UnlockImage")
+			if not unlockRemote or not unlockRemote:IsA("RemoteFunction") then return end
+
+			local ok, result = pcall(function() return unlockRemote:InvokeServer(unlockImageId) end)
+			if ok and result and result.success then
+				setPlayerData(function(prev)
+					if not prev then return prev end
+					local updated = table.clone(prev)
+					updated.cash = result.newCash
+					updated.unlockedImages = table.clone(updated.unlockedImages)
+					updated.unlockedImages[unlockImageId] = true
+					return updated
+				end)
+			end
+		end)
+	end
+
+	local function onUnlockImageRobux(unlockImageId: string)
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local setPending = remotes:FindFirstChild("SetPendingUnlock")
+			if setPending and setPending:IsA("RemoteEvent") then
+				setPending:FireServer(unlockImageId)
+			end
+			local localPlayer = Players.LocalPlayer
+			if localPlayer then
+				local MarketplaceService = game:GetService("MarketplaceService")
+				pcall(function()
+					MarketplaceService:PromptProductPurchase(localPlayer, MonetizationConfig.DEV_PRODUCTS.UNLOCK_IMAGE.id)
+				end)
+			end
+		end)
+	end
+
+	local function onPromptExpertPass()
+		task.spawn(function()
+			local localPlayer = Players.LocalPlayer
+			if localPlayer then
+				local MarketplaceService = game:GetService("MarketplaceService")
+				pcall(function()
+					MarketplaceService:PromptGamePassPurchase(localPlayer, MonetizationConfig.GAME_PASSES.EXPERT.id)
+				end)
+			end
+		end)
+	end
+
 	if gameState == "menu" then
 		safeChildren["Menu"] = React.createElement(MenuScreen, {
 			onStart = onStart,
 			unlockedImages = if playerData then playerData.unlockedImages else nil,
-			playerLevel = if playerData then playerData.level else nil,
 			personalBests = if playerData then playerData.personalBests else nil,
 			savedPuzzles = savedPuzzles,
 			onResume = onResume,
 			onDeleteSave = onDeleteSave,
 			playerData = playerData,
 			onEquip = onEquip,
+			cash = if playerData then playerData.cash else nil,
+			hasExpertPass = if playerData then playerData.hasExpertPass else nil,
+			onUnlockImage = onUnlockImage,
+			onUnlockImageRobux = onUnlockImageRobux,
+			onPromptExpertPass = onPromptExpertPass,
 		})
 
 		-- Leave Table button
@@ -779,11 +928,11 @@ local function App()
 			AnchorPoint = Vector2.new(0, 1),
 			Position = UDim2.new(0, 20, 1, -20),
 			Size = UDim2.new(0, 140, 0, 40),
-			BackgroundColor3 = Color3.fromRGB(140, 60, 60),
+			BackgroundColor3 = Theme.Colors.dangerDark,
 			Text = "Leave Table",
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextSize = 16,
-			Font = Enum.Font.GothamBold,
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.body,
+			Font = Theme.Font.bold,
 			[React.Event.Activated] = function()
 				local localPlayer = Players.LocalPlayer
 				if localPlayer and localPlayer.Character then
@@ -811,7 +960,6 @@ local function App()
 			onConfigure = onConfigureRoom,
 			onStart = onStartRoom,
 			unlockedImages = if playerData then playerData.unlockedImages else nil,
-			playerLevel = if playerData then playerData.level else nil,
 		})
 	end
 
@@ -901,11 +1049,11 @@ local function App()
 				ScreenshotButton = React.createElement("TextButton", {
 					LayoutOrder = 1,
 					Size = UDim2.new(0, 220, 0, 48),
-					BackgroundColor3 = Color3.fromRGB(80, 200, 120),
+					BackgroundColor3 = Theme.Colors.successLight,
 					Text = "Save Screenshot",
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 22,
-					Font = Enum.Font.GothamBold,
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.large,
+					Font = Theme.Font.bold,
 					[React.Event.Activated] = function(rbx)
 						-- Hide all UI for a clean screenshot
 						local screenGui = rbx:FindFirstAncestorOfClass("ScreenGui")
@@ -930,11 +1078,11 @@ local function App()
 				BackButton = React.createElement("TextButton", {
 					LayoutOrder = 2,
 					Size = UDim2.new(0, 220, 0, 48),
-					BackgroundColor3 = Color3.fromRGB(100, 100, 120),
+					BackgroundColor3 = Theme.Colors.bgMuted,
 					Text = if admireIsMultiplayer then "Back to Lobby" else "Back to Menu",
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 22,
-					Font = Enum.Font.GothamBold,
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.large,
+					Font = Theme.Font.bold,
 					[React.Event.Activated] = function()
 						if admireIsMultiplayer then
 							onRoomPlayAgain()

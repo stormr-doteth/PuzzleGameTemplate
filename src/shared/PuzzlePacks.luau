@@ -70,6 +70,13 @@ local PACKS: { PuzzlePack } = {
 		iconAssetId = "",
 		sortOrder = 9,
 	},
+	{
+		id = "seals",
+		name = "Seals",
+		description = "Adorable seal photos from around the world",
+		iconAssetId = "",
+		sortOrder = 10,
+	},
 }
 
 local PuzzlePacks = {}

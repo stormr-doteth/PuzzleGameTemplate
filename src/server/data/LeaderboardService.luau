@@ -1,6 +1,11 @@
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local TitleConfig = require(Shared.TitleConfig)
+
 local ProfileService = require(script.Parent.ProfileService)
 
 local LeaderboardService = {}
@@ -70,13 +75,13 @@ function LeaderboardService.getTopTimes(difficultyId: string, count: number): { 
 			displayName = Players:GetNameFromUserIdAsync(userId)
 		end)
 
-		-- Try to get equipped badge from profile (online players only)
-		local badge = ""
+		-- Try to get title from profile (online players only)
+		local title = ""
 		local player = Players:GetPlayerByUserId(userId)
 		if player then
 			local profileData = ProfileService.GetData(player)
 			if profileData then
-				badge = profileData.EquippedBadge or ""
+				title = TitleConfig.getTitleFromCompletions(profileData.PuzzlesCompletedByDifficulty or {})
 			end
 		end
 
@@ -84,7 +89,7 @@ function LeaderboardService.getTopTimes(difficultyId: string, count: number): { 
 			userId = userId,
 			displayName = displayName,
 			time = timeSeconds,
-			badge = badge,
+			title = title,
 		})
 	end
 

@@ -3,6 +3,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local React = require(Packages.React)
 
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared.Theme)
+
 export type RoomJoinDialogProps = {
 	onCreateRoom: () -> (),
 	onJoinRoom: (roomId: string) -> (),
@@ -25,15 +28,15 @@ local function RoomJoinDialog(props: RoomJoinDialogProps)
 
 	return React.createElement("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.4,
+		BackgroundColor3 = Theme.Colors.black,
+		BackgroundTransparency = Theme.Transparency.overlay,
 		ZIndex = 150,
 	}, {
 		Modal = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 			Size = UDim2.fromOffset(360, 320),
-			BackgroundColor3 = Color3.fromRGB(15, 15, 25),
+			BackgroundColor3 = Theme.Colors.bgDeepest,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
 			Padding = React.createElement("UIPadding", {
@@ -53,19 +56,19 @@ local function RoomJoinDialog(props: RoomJoinDialogProps)
 				Size = UDim2.new(1, 0, 0, 36),
 				BackgroundTransparency = 1,
 				Text = "Multiplayer",
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 28,
-				Font = Enum.Font.GothamBold,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.heading,
+				Font = Theme.Font.bold,
 			}),
 
 			CreateButton = React.createElement("TextButton", {
 				LayoutOrder = 2,
 				Size = UDim2.new(1, 0, 0, 48),
-				BackgroundColor3 = Color3.fromRGB(50, 180, 80),
+				BackgroundColor3 = Theme.Colors.success,
 				Text = "Create Room",
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 20,
-				Font = Enum.Font.GothamBold,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
 				[React.Event.Activated] = function()
 					props.onCreateRoom()
 				end,
@@ -76,7 +79,7 @@ local function RoomJoinDialog(props: RoomJoinDialogProps)
 			Divider = React.createElement("Frame", {
 				LayoutOrder = 3,
 				Size = UDim2.new(1, 0, 0, 1),
-				BackgroundColor3 = Color3.fromRGB(60, 60, 80),
+				BackgroundColor3 = Theme.Colors.border,
 				BorderSizePixel = 0,
 			}),
 
@@ -85,22 +88,22 @@ local function RoomJoinDialog(props: RoomJoinDialogProps)
 				Size = UDim2.new(1, 0, 0, 20),
 				BackgroundTransparency = 1,
 				Text = "Or join with a room code:",
-				TextColor3 = Color3.fromRGB(180, 180, 200),
-				TextSize = 14,
-				Font = Enum.Font.GothamMedium,
+				TextColor3 = Theme.Colors.textMuted,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.medium,
 				TextXAlignment = Enum.TextXAlignment.Left,
 			}),
 
 			CodeInput = React.createElement("TextBox", {
 				LayoutOrder = 5,
 				Size = UDim2.new(1, 0, 0, 44),
-				BackgroundColor3 = Color3.fromRGB(40, 40, 55),
+				BackgroundColor3 = Theme.Colors.bgElevated,
 				Text = roomCode,
 				PlaceholderText = "Enter 6-digit code",
-				PlaceholderColor3 = Color3.fromRGB(100, 100, 120),
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 22,
-				Font = Enum.Font.GothamBold,
+				PlaceholderColor3 = Theme.Colors.bgMuted,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
 				ClearTextOnFocus = false,
 				[React.Change.Text] = function(rbx)
 					local text = string.upper(string.gsub(rbx.Text, "%s", ""))
@@ -124,9 +127,9 @@ local function RoomJoinDialog(props: RoomJoinDialogProps)
 					Size = UDim2.new(1, 0, 0, 16),
 					BackgroundTransparency = 1,
 					Text = errorText,
-					TextColor3 = Color3.fromRGB(255, 100, 100),
-					TextSize = 13,
-					Font = Enum.Font.Gotham,
+					TextColor3 = Theme.Colors.danger,
+					TextSize = Theme.TextSize.small,
+					Font = Theme.Font.regular,
 					TextXAlignment = Enum.TextXAlignment.Left,
 				})
 				else nil,
@@ -145,11 +148,11 @@ local function RoomJoinDialog(props: RoomJoinDialogProps)
 				JoinButton = React.createElement("TextButton", {
 					LayoutOrder = 1,
 					Size = UDim2.fromOffset(140, 40),
-					BackgroundColor3 = Color3.fromRGB(80, 140, 230),
+					BackgroundColor3 = Theme.Colors.accentBlue,
 					Text = "Join Room",
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 16,
-					Font = Enum.Font.GothamBold,
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.body,
+					Font = Theme.Font.bold,
 					[React.Event.Activated] = onJoin,
 				}, {
 					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
@@ -157,11 +160,11 @@ local function RoomJoinDialog(props: RoomJoinDialogProps)
 				CancelButton = React.createElement("TextButton", {
 					LayoutOrder = 2,
 					Size = UDim2.fromOffset(100, 40),
-					BackgroundColor3 = Color3.fromRGB(60, 60, 80),
+					BackgroundColor3 = Theme.Colors.border,
 					Text = "Cancel",
-					TextColor3 = Color3.fromRGB(200, 200, 220),
-					TextSize = 16,
-					Font = Enum.Font.GothamMedium,
+					TextColor3 = Theme.Colors.textSecondary,
+					TextSize = Theme.TextSize.body,
+					Font = Theme.Font.medium,
 					[React.Event.Activated] = function()
 						props.onCancel()
 					end,

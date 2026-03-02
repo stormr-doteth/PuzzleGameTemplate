@@ -49,6 +49,7 @@ export type PuzzleActions = {
 	snapPiece: (id: number, x: number, y: number) -> (),
 	claimPiece: (id: number) -> (),
 	releasePiece: (id: number, x: number, y: number) -> (),
+	markLocalSnap: ((id: number) -> ())?,
 }
 
 local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleState, PuzzleActions)
@@ -60,6 +61,8 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 	local snapEvents, setSnapEvents = React.useState({} :: { { x: number, y: number, key: string, effectId: string } })
 	local snapEventCounter = React.useRef(0)
 	local lastSendTime = React.useRef(0)
+	-- Track piece IDs that the local player just snapped (to skip duplicate server effects)
+	local localSnappedPieces = React.useRef({} :: { [number]: boolean })
 
 	-- Initialize pieces from server data
 	React.useEffect(function()
@@ -165,27 +168,32 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 					updated[snappedId] = nil
 					return updated
 				end)
-				-- Play snap sound and trigger snap effect
-				SoundService.playSnap()
-				snapEventCounter.current += 1
-				local effectKey = "mp_snap_" .. snapEventCounter.current
-				local effectId = data.snapEffect or ""
-				setSnapEvents(function(prev)
-					local updated = table.clone(prev)
-					table.insert(updated, { x = data.x, y = data.y, key = effectKey, effectId = effectId })
-					return updated
-				end)
-				task.delay(0.7, function()
+				-- Skip sound + effect for pieces the local player already handled client-side
+				if localSnappedPieces.current[snappedId] then
+					localSnappedPieces.current[snappedId] = nil
+				else
+					-- Play snap sound and trigger snap effect for remote players' snaps
+					SoundService.playSnap()
+					snapEventCounter.current += 1
+					local effectKey = "mp_snap_" .. snapEventCounter.current
+					local effectId = data.snapEffect or ""
 					setSnapEvents(function(prev)
-						local filtered = {}
-						for _, e in prev do
-							if e.key ~= effectKey then
-								table.insert(filtered, e)
-							end
-						end
-						return filtered
+						local updated = table.clone(prev)
+						table.insert(updated, { x = data.x, y = data.y, key = effectKey, effectId = effectId })
+						return updated
 					end)
-				end)
+					task.delay(0.7, function()
+						setSnapEvents(function(prev)
+							local filtered = {}
+							for _, e in prev do
+								if e.key ~= effectKey then
+									table.insert(filtered, e)
+								end
+							end
+							return filtered
+						end)
+					end)
+				end
 			end))
 		end
 
@@ -277,29 +285,40 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 					end
 					return updated
 				end)
-				-- Play snap sound and trigger snap effect on first piece
-				SoundService.playSnap()
+				-- Check if local player triggered this batch snap
 				local firstPiece = data.pieces[1]
-				if firstPiece and type(firstPiece) == "table" then
-					snapEventCounter.current += 1
-					local effectKey = "mp_bsnap_" .. snapEventCounter.current
-					local effectId = data.snapEffect or ""
-					setSnapEvents(function(prev)
-						local updated = table.clone(prev)
-						table.insert(updated, { x = firstPiece.x, y = firstPiece.y, key = effectKey, effectId = effectId })
-						return updated
-					end)
-					task.delay(0.7, function()
+				local isLocalSnap = firstPiece and type(firstPiece) == "table" and localSnappedPieces.current[firstPiece.id]
+				if isLocalSnap then
+					-- Clear all batch pieces from local tracking
+					for _, pieceData in data.pieces do
+						if type(pieceData) == "table" and type(pieceData.id) == "number" then
+							localSnappedPieces.current[pieceData.id] = nil
+						end
+					end
+				else
+					-- Play snap sound and trigger snap effect for remote players' batch snaps
+					SoundService.playSnap()
+					if firstPiece and type(firstPiece) == "table" then
+						snapEventCounter.current += 1
+						local effectKey = "mp_bsnap_" .. snapEventCounter.current
+						local effectId = data.snapEffect or ""
 						setSnapEvents(function(prev)
-							local filtered = {}
-							for _, e in prev do
-								if e.key ~= effectKey then
-									table.insert(filtered, e)
-								end
-							end
-							return filtered
+							local updated = table.clone(prev)
+							table.insert(updated, { x = firstPiece.x, y = firstPiece.y, key = effectKey, effectId = effectId })
+							return updated
 						end)
-					end)
+						task.delay(0.7, function()
+							setSnapEvents(function(prev)
+								local filtered = {}
+								for _, e in prev do
+									if e.key ~= effectKey then
+										table.insert(filtered, e)
+									end
+								end
+								return filtered
+							end)
+						end)
+					end
 				end
 			end))
 		end
@@ -444,10 +463,22 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 	end
 
 	-- trySnap: in multiplayer, server handles snapping. We just relay to releasePiece.
-	-- Return false so PuzzleBoard doesn't play snap sound (server event will handle it).
+	-- Return false so PuzzleBoard knows the server will confirm.
 	local function trySnap(id: number, x: number, y: number, _correctX: number, _correctY: number): boolean
 		releasePiece(id, x, y)
 		return false
+	end
+
+	-- markLocalSnap: called by PuzzleBoard when it predicts a snap will succeed,
+	-- so we skip the duplicate server effect for the local player.
+	local function markLocalSnap(id: number)
+		localSnappedPieces.current[id] = true
+		local p = pieces[id]
+		if p and p.groupId and groups[p.groupId] then
+			for _, mid in groups[p.groupId] do
+				localSnappedPieces.current[mid] = true
+			end
+		end
 	end
 
 	-- scramblePieces: no-op in multiplayer (server provides positions)
@@ -503,6 +534,7 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 		snapPiece = snapPiece,
 		claimPiece = claimPiece,
 		releasePiece = releasePiece,
+		markLocalSnap = markLocalSnap,
 	}
 
 	return state, actions

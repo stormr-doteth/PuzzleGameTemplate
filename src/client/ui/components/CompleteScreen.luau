@@ -4,15 +4,15 @@ local TweenService = game:GetService("TweenService")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local React = require(Packages.React)
 
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Theme = require(Shared.Theme)
+
 export type CompleteScreenProps = {
 	onPlayAgain: () -> (),
 	onAdmire: () -> (),
 	completionTime: number?,
 	rewardData: {
-		xpGained: number?,
 		cashGained: number?,
-		newLevel: number?,
-		unlockedImages: { string }?,
 		isPersonalBest: boolean?,
 		isSpeedBonus: boolean?,
 	}?,
@@ -180,10 +180,10 @@ local function CompleteScreen(props: CompleteScreenProps)
 		Size = UDim2.new(1, 0, 0, 50),
 		BackgroundTransparency = 1,
 		Text = "Puzzle Complete!",
-		TextColor3 = Color3.fromRGB(255, 220, 80),
-		TextSize = 44,
-		Font = Enum.Font.GothamBold,
-		TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
+		TextColor3 = Theme.Colors.warning,
+		TextSize = Theme.TextSize.display,
+		Font = Theme.Font.bold,
+		TextStrokeColor3 = Theme.Colors.black,
 		TextStrokeTransparency = 0.3,
 	})
 
@@ -195,10 +195,10 @@ local function CompleteScreen(props: CompleteScreenProps)
 			Size = UDim2.new(1, 0, 0, 28),
 			BackgroundTransparency = 1,
 			Text = timeText,
-			TextColor3 = Color3.fromRGB(220, 220, 230),
-			TextSize = 22,
-			Font = Enum.Font.GothamMedium,
-			TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
+			TextColor3 = Theme.Colors.textSecondary,
+			TextSize = Theme.TextSize.large,
+			Font = Theme.Font.medium,
+			TextStrokeColor3 = Theme.Colors.black,
 			TextStrokeTransparency = 0.5,
 		})
 	end
@@ -210,10 +210,10 @@ local function CompleteScreen(props: CompleteScreenProps)
 			Size = UDim2.new(1, 0, 0, 28),
 			BackgroundTransparency = 1,
 			Text = "NEW BEST! " .. formatTime(props.completionTime or 0),
-			TextColor3 = Color3.fromRGB(255, 215, 0),
-			TextSize = 24,
-			Font = Enum.Font.GothamBold,
-			TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
+			TextColor3 = Theme.Colors.gold,
+			TextSize = Theme.TextSize.heading,
+			Font = Theme.Font.bold,
+			TextStrokeColor3 = Theme.Colors.black,
 			TextStrokeTransparency = 0.3,
 		})
 	elseif props.previousBest then
@@ -222,10 +222,10 @@ local function CompleteScreen(props: CompleteScreenProps)
 			Size = UDim2.new(1, 0, 0, 24),
 			BackgroundTransparency = 1,
 			Text = "Best: " .. formatTime(props.previousBest) .. " | This run: " .. formatTime(props.completionTime or 0),
-			TextColor3 = Color3.fromRGB(180, 180, 200),
-			TextSize = 18,
-			Font = Enum.Font.Gotham,
-			TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
+			TextColor3 = Theme.Colors.textMuted,
+			TextSize = Theme.TextSize.button,
+			Font = Theme.Font.regular,
+			TextStrokeColor3 = Theme.Colors.black,
 			TextStrokeTransparency = 0.5,
 		})
 	end
@@ -233,24 +233,16 @@ local function CompleteScreen(props: CompleteScreenProps)
 	-- Reward display (Phase 2+)
 	local rewardData = props.rewardData
 	if rewardData then
-		local rewardParts = {}
-		if rewardData.xpGained and rewardData.xpGained > 0 then
-			table.insert(rewardParts, "+" .. rewardData.xpGained .. " XP")
-		end
 		if rewardData.cashGained and rewardData.cashGained > 0 then
-			table.insert(rewardParts, "+" .. rewardData.cashGained .. " Cash")
-		end
-
-		if #rewardParts > 0 then
 			cardChildren["Rewards"] = React.createElement("TextLabel", {
 				LayoutOrder = 4,
 				Size = UDim2.new(1, 0, 0, 30),
 				BackgroundTransparency = 1,
-				Text = table.concat(rewardParts, "  "),
-				TextColor3 = Color3.fromRGB(120, 255, 120),
-				TextSize = 22,
-				Font = Enum.Font.GothamBold,
-				TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
+				Text = "+" .. rewardData.cashGained .. " Cash",
+				TextColor3 = Theme.Colors.cashGreen,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
+				TextStrokeColor3 = Theme.Colors.black,
 				TextStrokeTransparency = 0.3,
 			})
 		end
@@ -261,38 +253,10 @@ local function CompleteScreen(props: CompleteScreenProps)
 				Size = UDim2.new(1, 0, 0, 26),
 				BackgroundTransparency = 1,
 				Text = "SPEED BONUS!",
-				TextColor3 = Color3.fromRGB(255, 180, 50),
-				TextSize = 22,
-				Font = Enum.Font.GothamBold,
-				TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
-				TextStrokeTransparency = 0.3,
-			})
-		end
-
-		if rewardData.newLevel then
-			cardChildren["LevelUp"] = React.createElement("TextLabel", {
-				LayoutOrder = 6,
-				Size = UDim2.new(1, 0, 0, 30),
-				BackgroundTransparency = 1,
-				Text = "LEVEL UP! Level " .. rewardData.newLevel,
-				TextColor3 = Color3.fromRGB(255, 220, 80),
-				TextSize = 26,
-				Font = Enum.Font.GothamBold,
-				TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
-				TextStrokeTransparency = 0.2,
-			})
-		end
-
-		if rewardData.unlockedImages and #rewardData.unlockedImages > 0 then
-			cardChildren["NewUnlocks"] = React.createElement("TextLabel", {
-				LayoutOrder = 7,
-				Size = UDim2.new(1, 0, 0, 24),
-				BackgroundTransparency = 1,
-				Text = "New images unlocked!",
-				TextColor3 = Color3.fromRGB(80, 200, 255),
-				TextSize = 20,
-				Font = Enum.Font.GothamBold,
-				TextStrokeColor3 = Color3.fromRGB(0, 0, 0),
+				TextColor3 = Theme.Colors.orange,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
+				TextStrokeColor3 = Theme.Colors.black,
 				TextStrokeTransparency = 0.3,
 			})
 		end
@@ -301,11 +265,11 @@ local function CompleteScreen(props: CompleteScreenProps)
 	cardChildren["AdmireButton"] = React.createElement("TextButton", {
 		LayoutOrder = 10,
 		Size = UDim2.new(0, 220, 0, 48),
-		BackgroundColor3 = Color3.fromRGB(80, 200, 120),
+		BackgroundColor3 = Theme.Colors.successLight,
 		Text = "Admire Puzzle",
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		TextSize = 22,
-		Font = Enum.Font.GothamBold,
+		TextColor3 = Theme.Colors.textPrimary,
+		TextSize = Theme.TextSize.large,
+		Font = Theme.Font.bold,
 		[React.Event.Activated] = function()
 			props.onAdmire()
 		end,
@@ -318,11 +282,11 @@ local function CompleteScreen(props: CompleteScreenProps)
 			cardChildren["PlayAgainButton"] = React.createElement("TextButton", {
 				LayoutOrder = 11,
 				Size = UDim2.new(0, 220, 0, 48),
-				BackgroundColor3 = Color3.fromRGB(80, 140, 230),
+				BackgroundColor3 = Theme.Colors.accentBlue,
 				Text = "PLAY AGAIN",
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 22,
-				Font = Enum.Font.GothamBold,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
 				[React.Event.Activated] = function()
 					props.onPlayAgain()
 				end,
@@ -333,11 +297,11 @@ local function CompleteScreen(props: CompleteScreenProps)
 			cardChildren["ChooseNewButton"] = React.createElement("TextButton", {
 				LayoutOrder = 12,
 				Size = UDim2.new(0, 220, 0, 48),
-				BackgroundColor3 = Color3.fromRGB(100, 100, 120),
+				BackgroundColor3 = Theme.Colors.bgMuted,
 				Text = "CHOOSE NEW PUZZLE",
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 18,
-				Font = Enum.Font.GothamBold,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.button,
+				Font = Theme.Font.bold,
 				[React.Event.Activated] = function()
 					if props.onChooseNewPuzzle then
 						props.onChooseNewPuzzle()
@@ -352,20 +316,20 @@ local function CompleteScreen(props: CompleteScreenProps)
 				Size = UDim2.new(0, 220, 0, 48),
 				BackgroundTransparency = 1,
 				Text = "Waiting for host...",
-				TextColor3 = Color3.fromRGB(180, 180, 200),
-				TextSize = 20,
-				Font = Enum.Font.GothamMedium,
+				TextColor3 = Theme.Colors.textMuted,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.medium,
 			})
 		end
 	else
 		cardChildren["PlayAgainButton"] = React.createElement("TextButton", {
 			LayoutOrder = 11,
 			Size = UDim2.new(0, 220, 0, 48),
-			BackgroundColor3 = Color3.fromRGB(80, 140, 230),
+			BackgroundColor3 = Theme.Colors.accentBlue,
 			Text = "PLAY AGAIN",
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextSize = 22,
-			Font = Enum.Font.GothamBold,
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.large,
+			Font = Theme.Font.bold,
 			[React.Event.Activated] = function()
 				props.onPlayAgain()
 			end,
@@ -387,8 +351,8 @@ local function CompleteScreen(props: CompleteScreenProps)
 
 		Backdrop = React.createElement("Frame", {
 			Size = UDim2.fromScale(1, 1),
-			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-			BackgroundTransparency = 0.4,
+			BackgroundColor3 = Theme.Colors.black,
+			BackgroundTransparency = Theme.Transparency.overlay,
 			BorderSizePixel = 0,
 			ZIndex = 105,
 		}),
@@ -397,7 +361,7 @@ local function CompleteScreen(props: CompleteScreenProps)
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
 			Size = UDim2.new(0, 380, 0, 420),
-			BackgroundColor3 = Color3.fromRGB(30, 30, 45),
+			BackgroundColor3 = Theme.Colors.bgMedium,
 			BorderSizePixel = 0,
 			ZIndex = 110,
 		}, cardChildren),

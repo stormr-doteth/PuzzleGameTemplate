@@ -1,4 +1,4 @@
-export type ShopItemCategory = "board_skins" | "confetti_styles" | "badges" | "hints" | "snap_effects"
+export type ShopItemCategory = "board_skins" | "confetti_styles" | "hints" | "snap_effects"
 
 export type ShopItem = {
 	id: string,
@@ -85,37 +85,6 @@ ShopItems.CONFETTI_STYLES = {
 	},
 }
 
-ShopItems.BADGES = {
-	{
-		id = "badge_puzzle_master",
-		name = "Puzzle Master",
-		description = "Show off your puzzle expertise",
-		category = "badges",
-		cashPrice = 100,
-	},
-	{
-		id = "badge_speedrunner",
-		name = "Speedrunner",
-		description = "For those who live fast",
-		category = "badges",
-		cashPrice = 100,
-	},
-	{
-		id = "badge_collector",
-		name = "Collector",
-		description = "A true image collector",
-		category = "badges",
-		cashPrice = 150,
-	},
-	{
-		id = "badge_champion",
-		name = "Champion",
-		description = "The ultimate puzzle champion badge",
-		category = "badges",
-		cashPrice = 250,
-	},
-}
-
 ShopItems.SNAP_EFFECTS = {
 	{
 		id = "snap_sparkle",
@@ -166,7 +135,6 @@ function ShopItems.getAll(): { ShopItem }
 	local all = {}
 	for _, item in ShopItems.BOARD_SKINS do table.insert(all, item) end
 	for _, item in ShopItems.CONFETTI_STYLES do table.insert(all, item) end
-	for _, item in ShopItems.BADGES do table.insert(all, item) end
 	for _, item in ShopItems.SNAP_EFFECTS do table.insert(all, item) end
 	for _, item in ShopItems.HINTS do table.insert(all, item) end
 	return all

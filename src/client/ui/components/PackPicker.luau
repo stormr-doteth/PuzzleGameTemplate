@@ -6,167 +6,151 @@ local React = require(Packages.React)
 
 local PuzzlePacks = require(Shared.PuzzlePacks)
 local ImageCatalog = require(Shared.ImageCatalog)
+local Theme = require(Shared.Theme)
 
 export type PackPickerProps = {
 	onSelectPack: (packId: string) -> (),
 	unlockedImages: { [string]: boolean }?,
 }
 
--- Colors for pack cards when no icon is set
-local PACK_COLORS = {
-	landscapes = Color3.fromRGB(60, 140, 80),
-	brain = Color3.fromRGB(160, 80, 180),
-	rot = Color3.fromRGB(100, 70, 50),
-	animals = Color3.fromRGB(200, 140, 60),
-	space = Color3.fromRGB(40, 50, 120),
-	urban = Color3.fromRGB(100, 100, 120),
-	food = Color3.fromRGB(200, 80, 60),
-	art = Color3.fromRGB(180, 60, 120),
-}
-
--- Emoji-style text icons as fallback when no iconAssetId is set
-local PACK_ICONS = {
-	landscapes = "\u{1F3DE}",
-	brain = "\u{1F9E0}",
-	rot = "\u{1F480}",
-	animals = "\u{1F43E}",
-	space = "\u{1F680}",
-	urban = "\u{1F3D9}",
-	food = "\u{1F354}",
-	art = "\u{1F3A8}",
-}
+-- Only these 3 packs are shown on the main screen
+local DISPLAY_PACKS = { "animals", "seals", "brainrots" }
 
 local function PackPicker(props: PackPickerProps)
-	local allPacks = PuzzlePacks.getAll()
-	local children: { [string]: any } = {}
+	local cardRow: { [string]: any } = {}
 
-	children["GridLayout"] = React.createElement("UIGridLayout", {
-		CellSize = UDim2.new(0, 160, 0, 180),
-		CellPadding = UDim2.new(0, 16, 0, 16),
+	cardRow["ListLayout"] = React.createElement("UIListLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
+		FillDirection = Enum.FillDirection.Horizontal,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0.02, 0),
 	})
 
-	children["Padding"] = React.createElement("UIPadding", {
-		PaddingLeft = UDim.new(0, 24),
-		PaddingRight = UDim.new(0, 24),
-		PaddingTop = UDim.new(0, 16),
-		PaddingBottom = UDim.new(0, 16),
-	})
-
-	for i, pack in allPacks do
-		local packImages = ImageCatalog.getByPackId(pack.id)
-		local totalCount = #packImages
-		local unlockedCount = 0
-		for _, img in packImages do
-			local isUnlocked = img.defaultUnlocked
-			if props.unlockedImages then
-				isUnlocked = img.defaultUnlocked or (props.unlockedImages[img.id] == true)
-			end
-			if isUnlocked then
-				unlockedCount += 1
-			end
+	for i, packId in DISPLAY_PACKS do
+		local pack = PuzzlePacks.getById(packId)
+		if not pack then
+			continue
 		end
 
-		local bgColor = PACK_COLORS[pack.id] or Color3.fromRGB(60, 60, 80)
-		local iconText = PACK_ICONS[pack.id] or "\u{2753}"
-		local hasIcon = pack.iconAssetId ~= ""
+		local packImages = ImageCatalog.getByPackId(packId)
+		local totalCount = #packImages
+
+		-- Find first valid image for background
+		local bgAssetId = ""
+		for _, img in packImages do
+			if img.assetId ~= "" then
+				bgAssetId = img.assetId
+				break
+			end
+		end
 
 		local cardChildren: { [string]: any } = {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 14) }),
+			AspectRatio = React.createElement("UIAspectRatioConstraint", {
+				AspectRatio = 1,
+				AspectType = Enum.AspectType.ScaleWithParentSize,
+				DominantAxis = Enum.DominantAxis.Height,
+			}),
+
+			-- Background image
+			BackgroundImage = React.createElement("ImageLabel", {
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				Image = bgAssetId,
+				ScaleType = Enum.ScaleType.Crop,
+				ZIndex = 1,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 14) }),
+			}),
+
+			-- Dark gradient overlay for text readability
+			GradientOverlay = React.createElement("Frame", {
+				Size = UDim2.fromScale(1, 1),
+				BackgroundColor3 = Theme.Colors.black,
+				BackgroundTransparency = 0.3,
+				ZIndex = 2,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 14) }),
+				Gradient = React.createElement("UIGradient", {
+					Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0.8),
+						NumberSequenceKeypoint.new(0.6, 0.5),
+						NumberSequenceKeypoint.new(1, 0.1),
+					}),
+					Rotation = 90,
+				}),
+			}),
+
+			-- Pack name (bottom-left area)
+			Name = React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.new(0.06, 0, 1, -30),
+				Size = UDim2.new(0.88, 0, 0, 28),
+				BackgroundTransparency = 1,
+				Text = pack.name,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextScaled = true,
+				ZIndex = 3,
+			}),
+
+			-- Puzzle count subtitle
+			Count = React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.new(0.06, 0, 1, -10),
+				Size = UDim2.new(0.88, 0, 0, 18),
+				BackgroundTransparency = 1,
+				Text = totalCount .. " puzzles",
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.regular,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				ZIndex = 3,
+			}),
 		}
 
-		-- Pack icon (image or emoji fallback)
-		if hasIcon then
-			cardChildren["Icon"] = React.createElement("ImageLabel", {
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.5, 0, 0, 12),
-				Size = UDim2.fromOffset(80, 80),
-				BackgroundTransparency = 1,
-				Image = pack.iconAssetId,
-				ScaleType = Enum.ScaleType.Fit,
-			})
-		else
-			cardChildren["IconText"] = React.createElement("TextLabel", {
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.5, 0, 0, 12),
-				Size = UDim2.fromOffset(80, 80),
-				BackgroundTransparency = 1,
-				Text = iconText,
-				TextSize = 48,
-			})
-		end
-
-		-- Pack name
-		cardChildren["Name"] = React.createElement("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 100),
-			Size = UDim2.new(1, -16, 0, 24),
-			BackgroundTransparency = 1,
-			Text = pack.name,
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextSize = 17,
-			Font = Enum.Font.GothamBold,
-			TextTruncate = Enum.TextTruncate.AtEnd,
-		})
-
-		-- Puzzle count
-		cardChildren["Count"] = React.createElement("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 126),
-			Size = UDim2.new(1, -16, 0, 18),
-			BackgroundTransparency = 1,
-			Text = unlockedCount .. " / " .. totalCount .. " puzzles",
-			TextColor3 = Color3.fromRGB(200, 200, 220),
-			TextSize = 13,
-			Font = Enum.Font.Gotham,
-		})
-
-		-- Progress bar
-		local progress = if totalCount > 0 then unlockedCount / totalCount else 0
-		cardChildren["ProgressBar"] = React.createElement("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 150),
-			Size = UDim2.new(1, -24, 0, 6),
-			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-			BackgroundTransparency = 0.5,
-			BorderSizePixel = 0,
-		}, {
-			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 3) }),
-			Fill = React.createElement("Frame", {
-				Size = UDim2.fromScale(progress, 1),
-				BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-				BackgroundTransparency = 0.2,
-				BorderSizePixel = 0,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 3) }),
-			}),
-		})
-
-		-- Skip rendering packs with no images
-		if totalCount > 0 then
-			children["Pack_" .. i] = React.createElement("TextButton", {
-				LayoutOrder = pack.sortOrder,
-				BackgroundColor3 = bgColor,
-				Text = "",
-				AutoButtonColor = true,
-				[React.Event.Activated] = function()
-					props.onSelectPack(pack.id)
-				end,
-			}, cardChildren)
-		end
+		cardRow["Pack_" .. packId] = React.createElement("TextButton", {
+			LayoutOrder = i,
+			Size = UDim2.fromScale(0, 0.85),
+			BackgroundColor3 = Theme.Colors.bgMedium,
+			Text = "",
+			AutoButtonColor = true,
+			ClipsDescendants = true,
+			[React.Event.Activated] = function()
+				props.onSelectPack(packId)
+			end,
+		}, cardChildren)
 	end
 
-	return React.createElement("ScrollingFrame", {
+	return React.createElement("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		CanvasSize = UDim2.fromScale(0, 0),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 4,
-		ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollingDirection = Enum.ScrollingDirection.Y,
-	}, children)
+	}, {
+		-- Header
+		Header = React.createElement("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, 0.05),
+			Size = UDim2.fromScale(1, 0.15),
+			BackgroundTransparency = 1,
+			Text = "Select a puzzle pack!",
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.title,
+			Font = Theme.Font.bold,
+			TextXAlignment = Enum.TextXAlignment.Center,
+		}),
+
+		-- Card row centered in the middle of the screen
+		CardRow = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.55),
+			Size = UDim2.fromScale(0.95, 0.75),
+			BackgroundTransparency = 1,
+		}, cardRow),
+	})
 end
 
 return PackPicker

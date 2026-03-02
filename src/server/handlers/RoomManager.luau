@@ -9,6 +9,12 @@ local RoomTypes = require(Shared.RoomTypes)
 
 local ProfileService = require(script.Parent.Parent.data.ProfileService)
 
+-- TitleService loaded optionally
+local TitleService = nil
+pcall(function()
+	TitleService = require(script.Parent.Parent.services.TitleService)
+end)
+
 local VIRTUAL_W = RoomTypes.VIRTUAL_CANVAS_WIDTH
 local VIRTUAL_H = RoomTypes.VIRTUAL_CANVAS_HEIGHT
 local MAX_PLAYERS = 4
@@ -102,7 +108,7 @@ local function destroyRoom(roomId: string)
 end
 
 -- Generate scrambled piece positions in virtual canvas coordinates
-local SCATTER_PAD = 150
+local SCATTER_PAD = 450
 
 local function generateScrambledPositions(puzzleDef: any, config: any): { [number]: any }
 	local pieces: { [number]: any } = {}
@@ -156,8 +162,8 @@ local function generateScrambledPositions(puzzleDef: any, config: any): { [numbe
 		local x = math.random(math.floor(zone.xMin), math.floor(zone.xMax))
 		local y = math.random(math.floor(zone.yMin), math.floor(zone.yMax))
 		-- Clamp to keep pieces visible on typical viewports
-		x = math.clamp(x, -150, VIRTUAL_W + 150)
-		y = math.clamp(y, -100, VIRTUAL_H + 100)
+		x = math.clamp(x, -SCATTER_PAD, VIRTUAL_W + SCATTER_PAD)
+		y = math.clamp(y, -SCATTER_PAD, VIRTUAL_H + SCATTER_PAD)
 		pieces[pieceDef.id] = {
 			x = x,
 			y = y,
@@ -194,7 +200,7 @@ local function checkCompletion(room: any): boolean
 	return true
 end
 
--- Award XP to a player (reuses PuzzleHandler logic pattern)
+-- Award cash to a player for completing a multiplayer puzzle
 local function awardCompletion(player: Player, room: any)
 	local config = room.config
 	if not config then return end
@@ -205,17 +211,14 @@ local function awardCompletion(player: Player, room: any)
 	local profileData = ProfileService.GetData(player)
 	if not profileData then return end
 
-	local baseXP = ProgressionConfig.XP_BY_DIFFICULTY[config.difficultyId] or 0
+	local baseCash = ProgressionConfig.COIN_REWARDS_BY_DIFFICULTY[config.difficultyId] or 0
 	local parTime = ProgressionConfig.PAR_TIMES[config.difficultyId]
 	local isSpeedBonus = parTime and completionTime <= parTime
-	local xpGained = baseXP
+	local cashGained = baseCash
 	if isSpeedBonus then
-		xpGained = math.floor(baseXP * ProgressionConfig.SPEED_BONUS_MULTIPLIER)
+		cashGained = math.floor(baseCash * ProgressionConfig.SPEED_BONUS_MULTIPLIER)
 	end
-	local cashGained = math.floor(xpGained * ProgressionConfig.CASH_PER_XP)
 
-	local oldLevel = profileData.Level
-	profileData.XP = profileData.XP + xpGained
 	profileData.Cash = profileData.Cash + cashGained
 	profileData.TotalPuzzlesCompleted = (profileData.TotalPuzzlesCompleted or 0) + 1
 	profileData.TotalPlayTime = (profileData.TotalPlayTime or 0) + completionTime
@@ -229,29 +232,14 @@ local function awardCompletion(player: Player, room: any)
 	end
 	profileData.PuzzlesCompletedByDifficulty[config.difficultyId] = (profileData.PuzzlesCompletedByDifficulty[config.difficultyId] or 0) + 1
 
-	local newLevel = ProgressionConfig.getLevelFromXP(profileData.XP)
-	profileData.Level = newLevel
-
-	local newlyUnlocked = {}
-	if newLevel > oldLevel then
-		if not profileData.UnlockedImages then
-			profileData.UnlockedImages = {}
-		end
-		local allUnlocked = ProgressionConfig.getUnlockedImagesAtLevel(newLevel)
-		for _, imgId in allUnlocked do
-			if not profileData.UnlockedImages[imgId] then
-				profileData.UnlockedImages[imgId] = true
-				table.insert(newlyUnlocked, imgId)
-			end
-		end
+	-- Update title billboard
+	if TitleService then
+		TitleService.UpdateTitle(player, profileData.PuzzlesCompletedByDifficulty)
 	end
 
 	local xpAwarded = Remotes.GetEvent("XPAwarded")
 	xpAwarded:FireClient(player, {
-		xpGained = xpGained,
 		cashGained = cashGained,
-		newLevel = if newLevel > oldLevel then newLevel else nil,
-		unlockedImages = if #newlyUnlocked > 0 then newlyUnlocked else nil,
 		isPersonalBest = false,
 		isSpeedBonus = isSpeedBonus,
 	})
