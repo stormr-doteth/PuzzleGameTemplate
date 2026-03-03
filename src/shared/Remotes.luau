@@ -8,6 +8,7 @@ local REMOTE_EVENTS = {
 	"XPAwarded",        -- server → client: { cashGained, isPersonalBest, isSpeedBonus, previousBest? }
 	"HintPurchased",    -- server → client: notifies that a Robux hint was granted
 	"SetPendingUnlock", -- client → server: sets imageId before Robux purchase
+	"ImageUnlockedRobux", -- server → client: { imageId } notifies Robux unlock succeeded
 
 	-- Multiplayer room events (server → client)
 	"RoomPlayerJoined",   -- server → clients: { player: RoomPlayer }

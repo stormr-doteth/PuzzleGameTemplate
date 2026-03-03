@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ImageCatalog = require(Shared.ImageCatalog)
 local Remotes = require(Shared.Remotes)
 local PuzzleGenerator = require(Shared.PuzzleGenerator)
 local ProgressionConfig = require(Shared.ProgressionConfig)
@@ -232,6 +233,20 @@ local function awardCompletion(player: Player, room: any)
 	end
 	profileData.PuzzlesCompletedByDifficulty[config.difficultyId] = (profileData.PuzzlesCompletedByDifficulty[config.difficultyId] or 0) + 1
 
+	-- Update personal best
+	local isPersonalBest = false
+	if config.imageId and config.difficultyId then
+		local bestKey = config.imageId .. "_" .. config.difficultyId
+		if not profileData.PersonalBests then
+			profileData.PersonalBests = {}
+		end
+		local previousBest = profileData.PersonalBests[bestKey]
+		if not previousBest or completionTime < previousBest then
+			profileData.PersonalBests[bestKey] = completionTime
+			isPersonalBest = true
+		end
+	end
+
 	-- Update title billboard
 	if TitleService then
 		TitleService.UpdateTitle(player, profileData.PuzzlesCompletedByDifficulty)
@@ -240,8 +255,9 @@ local function awardCompletion(player: Player, room: any)
 	local xpAwarded = Remotes.GetEvent("XPAwarded")
 	xpAwarded:FireClient(player, {
 		cashGained = cashGained,
-		isPersonalBest = false,
+		isPersonalBest = isPersonalBest,
 		isSpeedBonus = isSpeedBonus,
+		completionTime = completionTime,
 	})
 end
 
@@ -558,6 +574,18 @@ function RoomManager.Init()
 		if room.hostUserId ~= userId then return { error = "Only the host can start" } end
 		if room.state ~= "lobby" then return { error = "Room already started" } end
 		if not room.config then return { error = "No puzzle configured" } end
+
+		-- Verify the host has the selected image unlocked
+		local imageId = room.config.imageId
+		if imageId and imageId ~= "" then
+			local entry = ImageCatalog.getById(imageId)
+			if entry and not entry.defaultUnlocked then
+				local profileData = ProfileService.GetData(player)
+				if not profileData or not profileData.UnlockedImages or not profileData.UnlockedImages[imageId] then
+					return { error = "Image is locked" }
+				end
+			end
+		end
 
 		-- Generate puzzle on server
 		local config = room.config

@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local React = require(Packages.React)
 
 local ImageCatalog = require(Shared.ImageCatalog)
+local MonetizationConfig = require(Shared.MonetizationConfig)
 local ProgressionConfig = require(Shared.ProgressionConfig)
 local ImagePicker = require(script.Parent.ImagePicker)
 
@@ -376,7 +377,7 @@ local function MenuScreen(props: MenuScreenProps)
 					LayoutOrder = 2,
 					Size = UDim2.fromScale(0.46, 0.85),
 					BackgroundColor3 = Theme.Colors.accentBlue,
-					Text = "Unlock (R$25)",
+					Text = "Unlock (R$" .. MonetizationConfig.DEV_PRODUCTS.UNLOCK_PUZZLE.robuxPrice .. ")",
 					TextColor3 = Theme.Colors.textPrimary,
 					TextSize = Theme.TextSize.body,
 					Font = Theme.Font.bold,

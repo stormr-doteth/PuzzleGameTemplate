@@ -9,11 +9,16 @@ local Remotes = require(Shared.Remotes)
 
 local ProfileService = require(script.Parent.Parent.data.ProfileService)
 
+local ImageCatalog = require(Shared.ImageCatalog)
+
 local MonetizationHandler = {}
 
 -- Rate limiting for shop purchases (3s cooldown per player)
 local SHOP_COOLDOWN = 3
 local lastShopPurchaseTime: { [number]: number } = {}
+
+-- Pending Robux unlock: tracks which imageId each player wants to unlock
+local pendingUnlockImage: { [number]: string } = {}
 
 local function getPlayerByUserId(userId: number): Player?
 	for _, player in Players:GetPlayers() do
@@ -28,6 +33,15 @@ function MonetizationHandler.Init()
 	-- Clean up on PlayerRemoving
 	Players.PlayerRemoving:Connect(function(player)
 		lastShopPurchaseTime[player.UserId] = nil
+		pendingUnlockImage[player.UserId] = nil
+	end)
+
+	-- Listen for client setting pending unlock imageId before Robux purchase
+	local setPendingUnlock = Remotes.GetEvent("SetPendingUnlock")
+	setPendingUnlock.OnServerEvent:Connect(function(player, imageId)
+		if type(imageId) == "string" and imageId ~= "" then
+			pendingUnlockImage[player.UserId] = imageId
+		end
 	end)
 
 	-- Process DevProduct receipts
@@ -67,6 +81,27 @@ function MonetizationHandler.Init()
 			-- Cash products (CASH_100, CASH_500, CASH_1500, CASH_5000)
 			profileData.Cash = profileData.Cash + product.cashAmount
 			granted = true
+		elseif product.name == "Hint" then
+			-- Hint product — fire client event to immediately place a piece
+			granted = true
+			local hintPurchasedEvent = Remotes.GetEvent("HintPurchased")
+			hintPurchasedEvent:FireClient(player, {})
+		elseif product.name == "Unlock Puzzle" then
+			-- Unlock a specific puzzle image
+			local imageId = pendingUnlockImage[player.UserId]
+			if imageId then
+				local entry = ImageCatalog.getById(imageId)
+				if entry then
+					if not profileData.UnlockedImages then
+						profileData.UnlockedImages = {}
+					end
+					profileData.UnlockedImages[imageId] = true
+					granted = true
+					pendingUnlockImage[player.UserId] = nil
+					local unlockEvent = Remotes.GetEvent("ImageUnlockedRobux")
+					unlockEvent:FireClient(player, { imageId = imageId })
+				end
+			end
 		end
 
 		if granted then

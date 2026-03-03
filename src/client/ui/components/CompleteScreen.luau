@@ -326,7 +326,7 @@ local function CompleteScreen(props: CompleteScreenProps)
 			LayoutOrder = 11,
 			Size = UDim2.new(0, 220, 0, 48),
 			BackgroundColor3 = Theme.Colors.accentBlue,
-			Text = "PLAY AGAIN",
+			Text = "NEW PUZZLE",
 			TextColor3 = Theme.Colors.textPrimary,
 			TextSize = Theme.TextSize.large,
 			Font = Theme.Font.bold,

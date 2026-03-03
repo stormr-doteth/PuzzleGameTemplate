@@ -70,12 +70,20 @@ MonetizationConfig.DEV_PRODUCTS = {
 		iconText = "\u{1F48E}",
 	},
 	HINT_1 = {
-		id = 0, -- Replace with actual DevProduct ID
+		id = 3548789352,
 		name = "Hint",
 		description = "Reveals one puzzle piece placement",
-		robuxPrice = 25,
+		robuxPrice = 5,
 		iconColor = Color3.fromRGB(255, 200, 80),
 		iconText = "\u{1F4A1}",
+	},
+	UNLOCK_PUZZLE = {
+		id = 3548796483,
+		name = "Unlock Puzzle",
+		description = "Unlock a single locked puzzle image",
+		robuxPrice = 25,
+		iconColor = Color3.fromRGB(100, 200, 255),
+		iconText = "\u{1F513}",
 	},
 }
 

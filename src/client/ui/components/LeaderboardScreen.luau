@@ -140,13 +140,13 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 			if rank == 3 then rankColor = Theme.Colors.rank3 end
 
 			local hasTitle = entry.title and entry.title ~= ""
-			local nameXOffset = if hasTitle then 76 else 44
+			local nameXOffset = if hasTitle then 88 else 56
 
 			local rowChildren: { [string]: any } = {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
 				Rank = React.createElement("TextLabel", {
 					Position = UDim2.new(0, 8, 0, 0),
-					Size = UDim2.new(0, 30, 1, 0),
+					Size = UDim2.new(0, 42, 1, 0),
 					BackgroundTransparency = 1,
 					Text = "#" .. rank,
 					TextColor3 = rankColor,
@@ -180,7 +180,7 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 
 			if hasTitle then
 				rowChildren["Title"] = React.createElement("TextLabel", {
-					Position = UDim2.new(0, 42, 0, 4),
+					Position = UDim2.new(0, 54, 0, 4),
 					AutomaticSize = Enum.AutomaticSize.X,
 					Size = UDim2.fromOffset(0, 24),
 					BackgroundColor3 = Theme.Colors.headerGold,

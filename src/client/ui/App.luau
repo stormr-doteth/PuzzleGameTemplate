@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -35,6 +36,18 @@ local function App()
 	local completionTime, setCompletionTime = React.useState(0)
 	local rewardData, setRewardData = React.useState(nil :: any)
 
+	-- Refs to avoid stale closures in XPAwarded listener
+	local imageIdRef = React.useRef(imageId)
+	local difficultyIdRef = React.useRef(difficultyId)
+	local completionTimeRef = React.useRef(completionTime)
+	local rowsRef = React.useRef(rows)
+	local colsRef = React.useRef(cols)
+	imageIdRef.current = imageId
+	difficultyIdRef.current = difficultyId
+	completionTimeRef.current = completionTime
+	rowsRef.current = rows
+	colsRef.current = cols
+
 	-- Saved puzzles state
 	local savedPuzzles, setSavedPuzzles = React.useState({} :: { any })
 	local resumeState, setResumeState = React.useState(nil :: any)
@@ -51,11 +64,74 @@ local function App()
 	-- Loading state for initial data fetch
 	local isDataLoading, setIsDataLoading = React.useState(true)
 
-	-- NPC overlay state
-	local npcShopOpen, setNpcShopOpen = React.useState(false)
-	local npcRobuxShopOpen, setNpcRobuxShopOpen = React.useState(false)
-	local npcLeaderboardOpen, setNpcLeaderboardOpen = React.useState(false)
-	local npcStatsOpen, setNpcStatsOpen = React.useState(false)
+	-- NPC overlay state (only one open at a time)
+	local activeOverlay, setActiveOverlay = React.useState(nil :: string?)
+	local overlayRef = React.useRef(nil :: Frame?)
+
+	local function openOverlay(name: string)
+		-- If same overlay is already open, close it (toggle)
+		if activeOverlay == name then
+			setActiveOverlay(nil)
+			return
+		end
+
+		-- Close current overlay with slide-out, then open new one
+		local frame = overlayRef.current
+		if activeOverlay and frame then
+			local tweenOut = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Position = UDim2.new(0.5, 0, 0.5, 30),
+				GroupTransparency = 1,
+			})
+			tweenOut:Play()
+			tweenOut.Completed:Once(function()
+				setActiveOverlay(name)
+			end)
+		else
+			setActiveOverlay(name)
+		end
+	end
+
+	local function closeOverlay()
+		local frame = overlayRef.current
+		if frame then
+			local tweenOut = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Position = UDim2.new(0.5, 0, 0.5, 30),
+				GroupTransparency = 1,
+			})
+			tweenOut:Play()
+			tweenOut.Completed:Once(function()
+				setActiveOverlay(nil)
+			end)
+		else
+			setActiveOverlay(nil)
+		end
+	end
+
+	-- Compat shorthands for NPC proximity triggers
+	local npcShopOpen = activeOverlay == "shop"
+	local npcRobuxShopOpen = activeOverlay == "robux"
+	local npcLeaderboardOpen = activeOverlay == "leaderboard"
+	local npcStatsOpen = activeOverlay == "stats"
+
+	-- Tween-in on overlay mount
+	React.useEffect(function()
+		if activeOverlay == nil then return end
+		local frame = overlayRef.current
+		if not frame then return end
+
+		frame.Position = UDim2.new(0.5, 0, 0.5, 30)
+		frame.GroupTransparency = 1
+
+		local tweenIn = TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Position = UDim2.fromScale(0.5, 0.5),
+			GroupTransparency = 0,
+		})
+		tweenIn:Play()
+
+		return function()
+			tweenIn:Cancel()
+		end
+	end, { activeOverlay })
 
 	-- Seating state
 	local seatingInfo, setSeatingInfo = React.useState(nil :: any)
@@ -123,8 +199,14 @@ local function App()
 
 		local conn = xpAwarded.OnClientEvent:Connect(function(data)
 			setRewardData(data)
-			-- Update local player data
+			-- Update local player data (use refs to get current values, not stale closure)
 			if data then
+				local curImageId = imageIdRef.current
+				local curDifficultyId = difficultyIdRef.current
+				local curCompletionTime = if data.completionTime and data.completionTime > 0 then data.completionTime else completionTimeRef.current
+				local curRows = rowsRef.current
+				local curCols = colsRef.current
+
 				setPlayerData(function(prev)
 					if not prev then return prev end
 					local updated = table.clone(prev)
@@ -135,20 +217,44 @@ local function App()
 						updated.unlockedImages = table.clone(updated.unlockedImages)
 						updated.unlockedImages[data.imageUnlocked] = true
 					end
-					if data.isPersonalBest and completionTime > 0 then
-						local bestKey = imageId .. "_" .. difficultyId
+					if data.isPersonalBest and curCompletionTime > 0 then
+						local bestKey = curImageId .. "_" .. curDifficultyId
 						updated.personalBests = table.clone(updated.personalBests)
-						updated.personalBests[bestKey] = completionTime
+						updated.personalBests[bestKey] = curCompletionTime
 					end
 					updated.totalPuzzlesCompleted = (updated.totalPuzzlesCompleted or 0) + 1
-					updated.totalPlayTime = (updated.totalPlayTime or 0) + completionTime
-					updated.totalPiecesPlaced = (updated.totalPiecesPlaced or 0) + (rows * cols)
+					updated.totalPlayTime = (updated.totalPlayTime or 0) + curCompletionTime
+					updated.totalPiecesPlaced = (updated.totalPiecesPlaced or 0) + (curRows * curCols)
 					if not updated.puzzlesCompletedByDifficulty then
 						updated.puzzlesCompletedByDifficulty = {}
 					else
 						updated.puzzlesCompletedByDifficulty = table.clone(updated.puzzlesCompletedByDifficulty)
 					end
-					updated.puzzlesCompletedByDifficulty[difficultyId] = (updated.puzzlesCompletedByDifficulty[difficultyId] or 0) + 1
+					updated.puzzlesCompletedByDifficulty[curDifficultyId] = (updated.puzzlesCompletedByDifficulty[curDifficultyId] or 0) + 1
+					return updated
+				end)
+			end
+		end)
+
+		return function()
+			conn:Disconnect()
+		end
+	end, {} :: { any })
+
+	-- Listen for Robux image unlock confirmation from server
+	React.useEffect(function()
+		local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+		if not remotes then return end
+		local unlockEvent = remotes:FindFirstChild("ImageUnlockedRobux")
+		if not unlockEvent or not unlockEvent:IsA("RemoteEvent") then return end
+
+		local conn = unlockEvent.OnClientEvent:Connect(function(data)
+			if data and data.imageId then
+				setPlayerData(function(prev)
+					if not prev then return prev end
+					local updated = table.clone(prev)
+					updated.unlockedImages = table.clone(updated.unlockedImages or {})
+					updated.unlockedImages[data.imageId] = true
 					return updated
 				end)
 			end
@@ -231,11 +337,11 @@ local function App()
 
 			local npcType = npcTypeValue.Value
 			if npcType == "shop" then
-				setNpcShopOpen(true)
+				openOverlay("shop")
 			elseif npcType == "leaderboard" then
-				setNpcLeaderboardOpen(true)
+				openOverlay("leaderboard")
 			elseif npcType == "stats" then
-				setNpcStatsOpen(true)
+				openOverlay("stats")
 			end
 		end)
 
@@ -247,10 +353,7 @@ local function App()
 	-- Close NPC overlays when leaving walking state
 	React.useEffect(function()
 		if gameState ~= "walking" then
-			setNpcShopOpen(false)
-			setNpcRobuxShopOpen(false)
-			setNpcLeaderboardOpen(false)
-			setNpcStatsOpen(false)
+			setActiveOverlay(nil)
 		end
 	end, { gameState })
 
@@ -736,156 +839,277 @@ local function App()
 		-- Persistent HUD buttons (right side, vertically centered)
 		safeChildren["HUDButtons"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -16, 0.5, 0),
-			Size = UDim2.fromOffset(48, 216),
-			BackgroundColor3 = Theme.Colors.bgHud,
-			BackgroundTransparency = Theme.Transparency.hudButton,
+			Position = UDim2.new(1, -8, 0.5, 0),
+			Size = UDim2.fromScale(0.07, 0.55),
+			BackgroundTransparency = 1,
 			ZIndex = 10,
 		}, {
-			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
-			Padding = React.createElement("UIPadding", {
-				PaddingTop = UDim.new(0, 6),
-				PaddingBottom = UDim.new(0, 6),
-				PaddingLeft = UDim.new(0, 4),
-				PaddingRight = UDim.new(0, 4),
-			}),
 			Layout = React.createElement("UIListLayout", {
 				FillDirection = Enum.FillDirection.Vertical,
 				SortOrder = Enum.SortOrder.LayoutOrder,
-				Padding = UDim.new(0, 6),
+				Padding = UDim.new(0.01, 0),
 				HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			}),
-			CashShopBtn = React.createElement("TextButton", {
+			CashShopBtn = React.createElement("Frame", {
 				LayoutOrder = 1,
-				Size = UDim2.fromOffset(40, 40),
-				BackgroundColor3 = Theme.Colors.bgInput,
-				Text = "Cash",
-				TextColor3 = Theme.Colors.cashGreen,
-				TextSize = Theme.TextSize.tiny,
-				Font = Theme.Font.medium,
+				Size = UDim2.fromScale(1, 0.23),
+				BackgroundTransparency = 1,
 				ZIndex = 10,
-				[React.Event.Activated] = function()
-					setNpcShopOpen(true)
-				end,
 			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Icon = React.createElement("ImageButton", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.fromScale(0.5, 0),
+					Size = UDim2.fromScale(0.85, 0.72),
+					BackgroundColor3 = Theme.Colors.bgElevated,
+					Image = "rbxassetid://135280767376471",
+					ScaleType = Enum.ScaleType.Fit,
+					ZIndex = 10,
+					[React.Event.Activated] = function()
+						openOverlay("shop")
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+					Stroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.border,
+					}),
+					Aspect = React.createElement("UIAspectRatioConstraint", {
+						AspectRatio = 1,
+					}),
+				}),
+				Label = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.72),
+					Size = UDim2.fromScale(1.1, 0.3),
+					BackgroundTransparency = 1,
+					ZIndex = 11,
+					Text = "Shop",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextScaled = true,
+					Font = Theme.Font.heading,
+				}, {
+					LabelStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.black,
+					}),
+					TextConstraint = React.createElement("UITextSizeConstraint", {
+						MaxTextSize = 28,
+					}),
+				}),
 			}),
-			RobuxShopBtn = React.createElement("TextButton", {
+			RobuxShopBtn = React.createElement("Frame", {
 				LayoutOrder = 2,
-				Size = UDim2.fromOffset(40, 40),
-				BackgroundColor3 = Theme.Colors.bgInput,
-				Text = "R$",
-				TextColor3 = Theme.Colors.accentBlue,
-				TextSize = Theme.TextSize.tiny,
-				Font = Theme.Font.medium,
+				Size = UDim2.fromScale(1, 0.23),
+				BackgroundTransparency = 1,
 				ZIndex = 10,
-				[React.Event.Activated] = function()
-					setNpcRobuxShopOpen(true)
-				end,
 			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Icon = React.createElement("ImageButton", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.fromScale(0.5, 0),
+					Size = UDim2.fromScale(0.85, 0.72),
+					BackgroundColor3 = Theme.Colors.bgElevated,
+					Image = "rbxassetid://136485331602074",
+					ScaleType = Enum.ScaleType.Fit,
+					ZIndex = 10,
+					[React.Event.Activated] = function()
+						openOverlay("robux")
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+					Stroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.border,
+					}),
+					Aspect = React.createElement("UIAspectRatioConstraint", {
+						AspectRatio = 1,
+					}),
+				}),
+				Label = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.72),
+					Size = UDim2.fromScale(1.1, 0.3),
+					BackgroundTransparency = 1,
+					ZIndex = 11,
+					Text = "R$ Shop",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextScaled = true,
+					Font = Theme.Font.heading,
+				}, {
+					LabelStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.black,
+					}),
+					TextConstraint = React.createElement("UITextSizeConstraint", {
+						MaxTextSize = 28,
+					}),
+				}),
 			}),
-			LeaderBtn = React.createElement("TextButton", {
+			LeaderBtn = React.createElement("Frame", {
 				LayoutOrder = 3,
-				Size = UDim2.fromOffset(40, 40),
-				BackgroundColor3 = Theme.Colors.bgInput,
-				Text = "Top",
-				TextColor3 = Theme.Colors.textSecondary,
-				TextSize = Theme.TextSize.tiny,
-				Font = Theme.Font.medium,
+				Size = UDim2.fromScale(1, 0.23),
+				BackgroundTransparency = 1,
 				ZIndex = 10,
-				[React.Event.Activated] = function()
-					setNpcLeaderboardOpen(true)
-				end,
 			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Icon = React.createElement("ImageButton", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.fromScale(0.5, 0),
+					Size = UDim2.fromScale(0.85, 0.72),
+					BackgroundColor3 = Theme.Colors.bgElevated,
+					Image = "rbxassetid://87104752122465",
+					ScaleType = Enum.ScaleType.Fit,
+					ZIndex = 10,
+					[React.Event.Activated] = function()
+						openOverlay("leaderboard")
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+					Stroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.border,
+					}),
+					Aspect = React.createElement("UIAspectRatioConstraint", {
+						AspectRatio = 1,
+					}),
+				}),
+				Label = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.72),
+					Size = UDim2.fromScale(1.1, 0.3),
+					BackgroundTransparency = 1,
+					ZIndex = 11,
+					Text = "Leaderboard",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextScaled = true,
+					Font = Theme.Font.heading,
+				}, {
+					LabelStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.black,
+					}),
+					TextConstraint = React.createElement("UITextSizeConstraint", {
+						MaxTextSize = 24,
+					}),
+				}),
 			}),
-			StatsBtn = React.createElement("TextButton", {
+			StatsBtn = React.createElement("Frame", {
 				LayoutOrder = 4,
-				Size = UDim2.fromOffset(40, 40),
-				BackgroundColor3 = Theme.Colors.bgInput,
-				Text = "Stats",
-				TextColor3 = Theme.Colors.textSecondary,
-				TextSize = Theme.TextSize.tiny,
-				Font = Theme.Font.medium,
+				Size = UDim2.fromScale(1, 0.23),
+				BackgroundTransparency = 1,
 				ZIndex = 10,
-				[React.Event.Activated] = function()
-					setNpcStatsOpen(true)
-				end,
 			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Icon = React.createElement("ImageButton", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.fromScale(0.5, 0),
+					Size = UDim2.fromScale(0.85, 0.72),
+					BackgroundColor3 = Theme.Colors.bgElevated,
+					Image = "rbxassetid://80087999124116",
+					ScaleType = Enum.ScaleType.Fit,
+					ZIndex = 10,
+					[React.Event.Activated] = function()
+						openOverlay("stats")
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+					Stroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.border,
+					}),
+					Aspect = React.createElement("UIAspectRatioConstraint", {
+						AspectRatio = 1,
+					}),
+				}),
+				Label = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.72),
+					Size = UDim2.fromScale(1.1, 0.3),
+					BackgroundTransparency = 1,
+					ZIndex = 11,
+					Text = "Stats",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextScaled = true,
+					Font = Theme.Font.heading,
+				}, {
+					LabelStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.black,
+					}),
+					TextConstraint = React.createElement("UITextSizeConstraint", {
+						MaxTextSize = 28,
+					}),
+				}),
 			}),
 		})
 
-		-- NPC Shop overlay
-		if npcShopOpen then
-			local ShopScreen = nil
-			local ok = pcall(function()
-				ShopScreen = require(script.Parent.components.ShopScreen)
-			end)
-			if ok and ShopScreen then
-				safeChildren["NpcShopOverlay"] = React.createElement(ShopScreen, {
-					onClose = function()
-						setNpcShopOpen(false)
-					end,
-					playerData = playerData,
-					onEquip = onEquip,
-				})
-			else
-				setNpcShopOpen(false)
-			end
-		end
+		-- NPC overlay (animated wrapper)
+		if activeOverlay then
+			local overlayContent = nil
 
-		-- NPC Robux Shop overlay
-		if npcRobuxShopOpen then
-			local RobuxShopScreen = nil
-			local ok = pcall(function()
-				RobuxShopScreen = require(script.Parent.components.RobuxShopScreen)
-			end)
-			if ok and RobuxShopScreen then
-				safeChildren["NpcRobuxShopOverlay"] = React.createElement(RobuxShopScreen, {
-					onClose = function()
-						setNpcRobuxShopOpen(false)
-					end,
-					playerData = playerData,
-				})
-			else
-				setNpcRobuxShopOpen(false)
+			if activeOverlay == "shop" then
+				local ShopScreen = nil
+				local ok = pcall(function()
+					ShopScreen = require(script.Parent.components.ShopScreen)
+				end)
+				if ok and ShopScreen then
+					overlayContent = React.createElement(ShopScreen, {
+						onClose = closeOverlay,
+						playerData = playerData,
+						onEquip = onEquip,
+					})
+				else
+					setActiveOverlay(nil)
+				end
+			elseif activeOverlay == "robux" then
+				local RobuxShopScreen = nil
+				local ok = pcall(function()
+					RobuxShopScreen = require(script.Parent.components.RobuxShopScreen)
+				end)
+				if ok and RobuxShopScreen then
+					overlayContent = React.createElement(RobuxShopScreen, {
+						onClose = closeOverlay,
+						playerData = playerData,
+					})
+				else
+					setActiveOverlay(nil)
+				end
+			elseif activeOverlay == "leaderboard" then
+				local LeaderboardScreen = nil
+				local ok = pcall(function()
+					LeaderboardScreen = require(script.Parent.components.LeaderboardScreen)
+				end)
+				if ok and LeaderboardScreen then
+					overlayContent = React.createElement(LeaderboardScreen, {
+						onClose = closeOverlay,
+					})
+				else
+					setActiveOverlay(nil)
+				end
+			elseif activeOverlay == "stats" then
+				local StatsScreen = nil
+				local ok = pcall(function()
+					StatsScreen = require(script.Parent.components.StatsScreen)
+				end)
+				if ok and StatsScreen then
+					overlayContent = React.createElement(StatsScreen, {
+						onClose = closeOverlay,
+						playerData = playerData,
+					})
+				else
+					setActiveOverlay(nil)
+				end
 			end
-		end
 
-		-- NPC Leaderboard overlay
-		if npcLeaderboardOpen then
-			local LeaderboardScreen = nil
-			local ok = pcall(function()
-				LeaderboardScreen = require(script.Parent.components.LeaderboardScreen)
-			end)
-			if ok and LeaderboardScreen then
-				safeChildren["NpcLeaderboardOverlay"] = React.createElement(LeaderboardScreen, {
-					onClose = function()
-						setNpcLeaderboardOpen(false)
-					end,
+			if overlayContent then
+				safeChildren["NpcOverlay"] = React.createElement("CanvasGroup", {
+					ref = overlayRef,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.fromScale(1, 1),
+					BackgroundTransparency = 1,
+					GroupTransparency = 0,
+					ZIndex = 100,
+				}, {
+					Content = overlayContent,
 				})
-			else
-				setNpcLeaderboardOpen(false)
-			end
-		end
-
-		-- NPC Stats overlay
-		if npcStatsOpen then
-			local StatsScreen = nil
-			local ok = pcall(function()
-				StatsScreen = require(script.Parent.components.StatsScreen)
-			end)
-			if ok and StatsScreen then
-				safeChildren["NpcStatsOverlay"] = React.createElement(StatsScreen, {
-					onClose = function()
-						setNpcStatsOpen(false)
-					end,
-					playerData = playerData,
-				})
-			else
-				setNpcStatsOpen(false)
 			end
 		end
 	end
@@ -911,8 +1135,21 @@ local function App()
 		end)
 	end
 
-	local function onUnlockImageRobux(_unlockImageId: string)
-		-- Robux single-image unlock removed; unlock via All Images game pass instead
+	local function onUnlockImageRobux(unlockImageId: string)
+		task.spawn(function()
+			-- Tell server which image we want to unlock before prompting purchase
+			local remotes = ReplicatedStorage:WaitForChild("PuzzleRemotes")
+			local setPending = remotes:WaitForChild("SetPendingUnlock") :: RemoteEvent
+			setPending:FireServer(unlockImageId)
+
+			local localPlayer = Players.LocalPlayer
+			if localPlayer then
+				local MarketplaceService = game:GetService("MarketplaceService")
+				pcall(function()
+					MarketplaceService:PromptProductPurchase(localPlayer, MonetizationConfig.DEV_PRODUCTS.UNLOCK_PUZZLE.id)
+				end)
+			end
+		end)
 	end
 
 	local function onPromptExpertPass()
@@ -981,6 +1218,10 @@ local function App()
 			onConfigure = onConfigureRoom,
 			onStart = onStartRoom,
 			unlockedImages = if playerData then playerData.unlockedImages else nil,
+			personalBests = if playerData then playerData.personalBests else nil,
+			cash = if playerData then playerData.cash else 0,
+			onUnlockImage = onUnlockImage,
+			onUnlockImageRobux = onUnlockImageRobux,
 		})
 	end
 

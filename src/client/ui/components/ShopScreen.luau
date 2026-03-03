@@ -185,7 +185,7 @@ local function ShopScreen(props: ShopScreenProps)
 		}),
 		Padding = React.createElement("UIPadding", {
 			PaddingTop = UDim.new(0.01, 0),
-			PaddingBottom = UDim.new(0.01, 0),
+			PaddingBottom = UDim.new(0, 12),
 			PaddingLeft = UDim.new(0.02, 0),
 			PaddingRight = UDim.new(0.02, 0),
 		}),
@@ -343,6 +343,7 @@ local function ShopScreen(props: ShopScreenProps)
 							clickY = screenPos.Y - modalPos.Y
 						end
 
+						-- Just set new effect directly — React key forces remount
 						setDemoEffect({ effectId = item.id, key = key, x = clickX, y = clickY })
 						SoundService.playSnap()
 						task.delay(0.8, function()
@@ -597,7 +598,7 @@ local function ShopScreen(props: ShopScreenProps)
 			-- Item list (scrolling)
 			ItemList = React.createElement("ScrollingFrame", {
 				Position = UDim2.fromScale(0, 0.14),
-				Size = UDim2.fromScale(1, 0.79),
+				Size = UDim2.fromScale(1, 0.78),
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
 				CanvasSize = UDim2.new(0, 0, 0, 0),
 				ScrollBarThickness = 4,
@@ -613,7 +614,7 @@ local function ShopScreen(props: ShopScreenProps)
 				ZIndex = 160,
 				ClipsDescendants = false,
 			}, {
-				Effect = React.createElement(SnapEffect, {
+				[demoEffect.key] = React.createElement(SnapEffect, {
 					positionX = demoEffect.x,
 					positionY = demoEffect.y,
 					effectId = demoEffect.effectId,

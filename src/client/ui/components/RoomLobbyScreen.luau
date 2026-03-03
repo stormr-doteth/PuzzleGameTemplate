@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local React = require(Packages.React)
 
 local ImageCatalog = require(Shared.ImageCatalog)
+local MonetizationConfig = require(Shared.MonetizationConfig)
 local ProgressionConfig = require(Shared.ProgressionConfig)
 local ImagePicker = require(script.Parent.ImagePicker)
 local PackPicker = require(script.Parent.PackPicker)
@@ -26,6 +27,10 @@ export type RoomLobbyScreenProps = {
 	onConfigure: (config: any) -> (),
 	onStart: () -> (),
 	unlockedImages: { [string]: boolean }?,
+	personalBests: { [string]: number }?,
+	cash: number?,
+	onUnlockImage: ((imageId: string) -> ())?,
+	onUnlockImageRobux: ((imageId: string) -> ())?,
 }
 
 local PLAYER_COLORS = {
@@ -301,82 +306,208 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 				})
 			end
 
-			-- "Select Difficulty" label
-			panelChildren["DiffLabel"] = React.createElement("TextLabel", {
-				LayoutOrder = 3,
-				Size = UDim2.fromScale(1, 0.05),
-				BackgroundTransparency = 1,
-				Text = "Select Difficulty",
-				TextColor3 = Theme.Colors.textMuted,
-				TextSize = Theme.TextSize.body,
-				Font = Theme.Font.medium,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextScaled = true,
-			})
+			-- Check if the selected image is unlocked
+			local isSelectedUnlocked = selectedEntry and (selectedEntry.defaultUnlocked or (props.unlockedImages and props.unlockedImages[selectedEntry.id] == true))
 
-			-- Difficulty buttons with coin rewards
-			for i, diff in DIFFICULTIES do
-				local isSelected = i == selectedDifficulty
-				local coinReward = ProgressionConfig.COIN_REWARDS_BY_DIFFICULTY[diff.difficultyId] or 0
+			if isSelectedUnlocked then
+				-- "Select Difficulty" label
+				panelChildren["DiffLabel"] = React.createElement("TextLabel", {
+					LayoutOrder = 3,
+					Size = UDim2.fromScale(1, 0.05),
+					BackgroundTransparency = 1,
+					Text = "Select Difficulty",
+					TextColor3 = Theme.Colors.textMuted,
+					TextSize = Theme.TextSize.body,
+					Font = Theme.Font.medium,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextScaled = true,
+				})
 
-				panelChildren["Diff_" .. i] = React.createElement("TextButton", {
-					LayoutOrder = 3 + i,
-					Size = UDim2.fromScale(1, 0.09),
-					BackgroundColor3 = if isSelected
-						then Theme.Colors.accentBlue
-						else Theme.Colors.bgInput,
-					Text = "",
+				-- Difficulty buttons with coin rewards
+				local personalBests = props.personalBests
+				for i, diff in DIFFICULTIES do
+					local isSelected = i == selectedDifficulty
+					local coinReward = ProgressionConfig.COIN_REWARDS_BY_DIFFICULTY[diff.difficultyId] or 0
+					local hasCompleted = selectedImageId and personalBests and personalBests[selectedImageId .. "_" .. diff.difficultyId] ~= nil
+					local buttonText = if hasCompleted then diff.label .. " \u{2713}" else diff.label
+					local textColor = if hasCompleted then Theme.Colors.warning else Theme.Colors.textPrimary
+
+					panelChildren["Diff_" .. i] = React.createElement("TextButton", {
+						LayoutOrder = 3 + i,
+						Size = UDim2.fromScale(1, 0.09),
+						BackgroundColor3 = if isSelected
+							then Theme.Colors.accentBlue
+							else Theme.Colors.bgInput,
+						Text = "",
+						[React.Event.Activated] = function()
+							onSelectDifficulty(i)
+						end,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+						Label = React.createElement("TextLabel", {
+							Position = UDim2.fromScale(0.04, 0),
+							Size = UDim2.fromScale(0.7, 1),
+							BackgroundTransparency = 1,
+							Text = buttonText,
+							TextColor3 = textColor,
+							TextSize = Theme.TextSize.body,
+							Font = Theme.Font.medium,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							TextScaled = true,
+						}),
+						CoinReward = React.createElement("TextLabel", {
+							AnchorPoint = Vector2.new(1, 0.5),
+							Position = UDim2.fromScale(0.96, 0.5),
+							Size = UDim2.fromScale(0.22, 0.7),
+							BackgroundTransparency = 1,
+							Text = "+$" .. coinReward,
+							TextColor3 = Theme.Colors.cashGreen,
+							TextSize = Theme.TextSize.small,
+							Font = Theme.Font.bold,
+							TextXAlignment = Enum.TextXAlignment.Right,
+							TextScaled = true,
+						}),
+					})
+				end
+
+				-- Start button
+				panelChildren["StartButton"] = React.createElement("TextButton", {
+					LayoutOrder = 11,
+					Size = UDim2.fromScale(1, 0.12),
+					BackgroundColor3 = if currentConfig
+						then Theme.Colors.success
+						else Theme.Colors.border,
+					Text = "Start Puzzle",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.large,
+					Font = Theme.Font.bold,
+					TextScaled = true,
 					[React.Event.Activated] = function()
-						onSelectDifficulty(i)
+						if currentConfig then
+							props.onStart()
+						end
 					end,
 				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-					Label = React.createElement("TextLabel", {
-						Position = UDim2.fromScale(0.04, 0),
-						Size = UDim2.fromScale(0.7, 1),
-						BackgroundTransparency = 1,
-						Text = diff.label,
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+				})
+			else
+				-- Locked image: show unlock options
+				panelChildren["LockIcon"] = React.createElement("TextLabel", {
+					LayoutOrder = 3,
+					Size = UDim2.fromScale(1, 0.12),
+					BackgroundTransparency = 1,
+					Text = "\u{1F512}",
+					TextSize = Theme.TextSize.title,
+					TextXAlignment = Enum.TextXAlignment.Center,
+					TextScaled = true,
+				})
+
+				panelChildren["LockTitle"] = React.createElement("TextLabel", {
+					LayoutOrder = 4,
+					Size = UDim2.fromScale(1, 0.08),
+					BackgroundTransparency = 1,
+					Text = "Locked Puzzle",
+					TextColor3 = Theme.Colors.orange,
+					TextSize = Theme.TextSize.large,
+					Font = Theme.Font.bold,
+					TextXAlignment = Enum.TextXAlignment.Center,
+					TextScaled = true,
+				})
+
+				local price = ProgressionConfig.COIN_UNLOCK_PRICE
+				panelChildren["PriceLabel"] = React.createElement("TextLabel", {
+					LayoutOrder = 5,
+					Size = UDim2.fromScale(1, 0.08),
+					BackgroundTransparency = 1,
+					Text = "$" .. price,
+					TextColor3 = Theme.Colors.cashGreen,
+					TextSize = Theme.TextSize.large,
+					Font = Theme.Font.bold,
+					TextXAlignment = Enum.TextXAlignment.Center,
+					TextScaled = true,
+				})
+
+				local playerCash = props.cash or 0
+				local canAfford = playerCash >= price
+
+				panelChildren["UnlockButtons"] = React.createElement("Frame", {
+					LayoutOrder = 6,
+					Size = UDim2.fromScale(1, 0.14),
+					BackgroundTransparency = 1,
+				}, {
+					Layout = React.createElement("UIListLayout", {
+						FillDirection = Enum.FillDirection.Horizontal,
+						HorizontalAlignment = Enum.HorizontalAlignment.Center,
+						VerticalAlignment = Enum.VerticalAlignment.Center,
+						SortOrder = Enum.SortOrder.LayoutOrder,
+						Padding = UDim.new(0.02, 0),
+					}),
+					CoinBtn = React.createElement("TextButton", {
+						LayoutOrder = 1,
+						Size = UDim2.fromScale(0.46, 0.85),
+						BackgroundColor3 = if canAfford then Theme.Colors.success else Theme.Colors.bgElevated,
+						Text = "Unlock ($" .. price .. ")",
+						TextColor3 = if canAfford then Theme.Colors.textPrimary else Theme.Colors.textDisabled,
+						TextSize = Theme.TextSize.body,
+						Font = Theme.Font.bold,
+						TextScaled = true,
+						[React.Event.Activated] = function()
+							if canAfford and selectedEntry and props.onUnlockImage then
+								props.onUnlockImage(selectedEntry.id)
+							end
+						end,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+						Stroke = React.createElement("UIStroke", {
+							Thickness = 2,
+							Color = Theme.Colors.border,
+						}),
+						TextPadding = React.createElement("UIPadding", {
+							PaddingLeft = UDim.new(0.05, 0),
+							PaddingRight = UDim.new(0.05, 0),
+						}),
+					}),
+					RobuxBtn = React.createElement("TextButton", {
+						LayoutOrder = 2,
+						Size = UDim2.fromScale(0.46, 0.85),
+						BackgroundColor3 = Theme.Colors.accentBlue,
+						Text = "Unlock (R$" .. MonetizationConfig.DEV_PRODUCTS.UNLOCK_PUZZLE.robuxPrice .. ")",
 						TextColor3 = Theme.Colors.textPrimary,
 						TextSize = Theme.TextSize.body,
-						Font = Theme.Font.medium,
-						TextXAlignment = Enum.TextXAlignment.Left,
-						TextScaled = true,
-					}),
-					CoinReward = React.createElement("TextLabel", {
-						AnchorPoint = Vector2.new(1, 0.5),
-						Position = UDim2.fromScale(0.96, 0.5),
-						Size = UDim2.fromScale(0.22, 0.7),
-						BackgroundTransparency = 1,
-						Text = "+$" .. coinReward,
-						TextColor3 = Theme.Colors.cashGreen,
-						TextSize = Theme.TextSize.small,
 						Font = Theme.Font.bold,
-						TextXAlignment = Enum.TextXAlignment.Right,
 						TextScaled = true,
+						[React.Event.Activated] = function()
+							if selectedEntry and props.onUnlockImageRobux then
+								props.onUnlockImageRobux(selectedEntry.id)
+							end
+						end,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+						Stroke = React.createElement("UIStroke", {
+							Thickness = 2,
+							Color = Theme.Colors.border,
+						}),
+						TextPadding = React.createElement("UIPadding", {
+							PaddingLeft = UDim.new(0.05, 0),
+							PaddingRight = UDim.new(0.05, 0),
+						}),
 					}),
 				})
-			end
 
-			-- Start button
-			panelChildren["StartButton"] = React.createElement("TextButton", {
-				LayoutOrder = 11,
-				Size = UDim2.fromScale(1, 0.12),
-				BackgroundColor3 = if currentConfig
-					then Theme.Colors.success
-					else Theme.Colors.border,
-				Text = "Start Puzzle",
-				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.large,
-				Font = Theme.Font.bold,
-				TextScaled = true,
-				[React.Event.Activated] = function()
-					if currentConfig then
-						props.onStart()
-					end
-				end,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
-			})
+				if not canAfford then
+					panelChildren["CantAffordHint"] = React.createElement("TextLabel", {
+						LayoutOrder = 7,
+						Size = UDim2.fromScale(1, 0.06),
+						BackgroundTransparency = 1,
+						Text = "Not enough coins - complete puzzles to earn more!",
+						TextColor3 = Theme.Colors.textMuted,
+						TextSize = Theme.TextSize.small,
+						Font = Theme.Font.regular,
+						TextXAlignment = Enum.TextXAlignment.Center,
+						TextScaled = true,
+					})
+				end
+			end
 
 			local selectionPanel = React.createElement("Frame", {
 				AnchorPoint = Vector2.new(1, 0),
@@ -396,6 +527,7 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 					selectedImageId = selectedImageId,
 					onSelectImage = onSelectImage,
 					unlockedImages = props.unlockedImages,
+					personalBests = props.personalBests,
 					packId = selectedPackId,
 					onBack = function()
 						setSelectedPackId(nil)
