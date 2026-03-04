@@ -9,6 +9,7 @@ local TableManager = {}
 -- State
 local tableModels: { [string]: Model } = {}
 local RoomManager: any = nil
+local TableStatusService: any = nil
 
 -- Per-table occupancy: tableId -> { [seatIndex]: Player }
 local tableOccupancy: { [string]: { [number]: Player } } = {}
@@ -41,6 +42,11 @@ local function getTableType(tableModel: Model): string
 		return tv.Value
 	end
 	return "single"
+end
+
+local function getMaxPlayers(tableType: string): number
+	local n = tableType:match("multi_(%d+)p")
+	return if n then tonumber(n) else 4
 end
 
 local function getOccupantCount(tableId: string): number
@@ -103,9 +109,10 @@ local function handleSit(seat: Seat, tableId: string, seatIndex: number)
 	playerTable[player.UserId] = tableId
 	playerSeat[player.UserId] = seatIndex
 
+	local maxPlayers = getMaxPlayers(tableType)
 	local roomId: string? = nil
 
-	if tableType == "multi" then
+	if tableType:match("^multi") then
 		-- Check if this table already has a room
 		local existingRoomId = tableRooms[tableId]
 		if existingRoomId then
@@ -116,7 +123,7 @@ local function handleSit(seat: Seat, tableId: string, seatIndex: number)
 			end
 		else
 			-- Create new room (first sitter)
-			local newRoomId = RoomManager.CreateRoomInternal(player)
+			local newRoomId = RoomManager.CreateRoomInternal(player, maxPlayers)
 			if newRoomId then
 				tableRooms[tableId] = newRoomId
 				roomId = newRoomId
@@ -136,6 +143,18 @@ local function handleSit(seat: Seat, tableId: string, seatIndex: number)
 	})
 
 	fireOccupancyChanged(tableId)
+
+	-- Update table status billboard for multi tables
+	if tableType:match("^multi") and TableStatusService then
+		local roomState = "lobby"
+		if roomId and RoomManager then
+			local roomInfo = RoomManager.GetRoomInfo(roomId)
+			if roomInfo then
+				roomState = roomInfo.state
+			end
+		end
+		TableStatusService.UpdateTableStatus(tableId, roomState, getOccupantCount(tableId), maxPlayers)
+	end
 end
 
 local function handleUnsit(player: Player, tableId: string, seatIndex: number)
@@ -160,13 +179,34 @@ local function handleUnsit(player: Player, tableId: string, seatIndex: number)
 	playerTable[player.UserId] = nil
 	playerSeat[player.UserId] = nil
 
-	if tableType == "multi" then
+	local maxPlayers = getMaxPlayers(tableType)
+
+	if tableType:match("^multi") then
 		-- Leave the room
 		RoomManager.LeaveRoomInternal(player)
 
 		-- If table is now empty, clean up room mapping
-		if getOccupantCount(tableId) == 0 then
+		local count = getOccupantCount(tableId)
+		if count == 0 then
 			tableRooms[tableId] = nil
+			-- Hide billboard and re-enable seats
+			if TableStatusService then
+				TableStatusService.UpdateTableStatus(tableId, nil, 0, maxPlayers)
+				TableStatusService.SetSeatsEnabled(tableModels[tableId], true)
+			end
+		else
+			-- Update billboard with new count
+			if TableStatusService then
+				local roomId = tableRooms[tableId]
+				local roomState = "lobby"
+				if roomId and RoomManager then
+					local roomInfo = RoomManager.GetRoomInfo(roomId)
+					if roomInfo then
+						roomState = roomInfo.state
+					end
+				end
+				TableStatusService.UpdateTableStatus(tableId, roomState, count, maxPlayers)
+			end
 		end
 	end
 
@@ -260,6 +300,40 @@ function TableManager.Init(models: { [string]: Model }, roomManager: any)
 			handleUnsit(player, tableId, seatIndex)
 		end
 	end)
+end
+
+function TableManager.SetTableStatusService(service: any)
+	TableStatusService = service
+end
+
+-- Reverse lookup: find tableId for a given roomId
+function TableManager.GetTableIdForRoom(roomId: string): string?
+	for tableId, rid in tableRooms do
+		if rid == roomId then
+			return tableId
+		end
+	end
+	return nil
+end
+
+-- Called by RoomManager (via callback) when room state changes
+function TableManager.OnRoomStateChanged(tableId: string, newState: string?, playerCount: number)
+	if not TableStatusService then return end
+
+	local tableModel = tableModels[tableId]
+	local tableType = if tableModel then getTableType(tableModel) else "multi"
+	local maxPlayers = getMaxPlayers(tableType)
+
+	TableStatusService.UpdateTableStatus(tableId, newState, playerCount, maxPlayers)
+
+	local tableModel = tableModels[tableId]
+	if not tableModel then return end
+
+	if newState == "playing" then
+		TableStatusService.SetSeatsEnabled(tableModel, false)
+	elseif newState == "lobby" or newState == nil then
+		TableStatusService.SetSeatsEnabled(tableModel, true)
+	end
 end
 
 return TableManager

@@ -15,7 +15,7 @@ export type RobuxShopScreenProps = {
 }
 
 -- Ordered lists for consistent rendering
-local GAME_PASS_ORDER = { "VIP", "ALL_IMAGES", "EXPERT" }
+local GAME_PASS_ORDER = { "VIP", "ALL_IMAGES", "EXPERT", "PUZZLE_ASSIST" }
 local DEV_PRODUCT_ORDER = { "CASH_100", "CASH_500", "CASH_1500", "CASH_5000" }
 
 local function RobuxShopScreen(props: RobuxShopScreenProps)
@@ -231,7 +231,7 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 				TextWrapped = true,
 			}, {
 				TextConstraint = React.createElement("UITextSizeConstraint", {
-					MaxTextSize = 12,
+					MaxTextSize = 16,
 				}),
 			}),
 			-- Buy button or Owned badge
@@ -341,7 +341,7 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 				TextWrapped = true,
 			}, {
 				TextConstraint = React.createElement("UITextSizeConstraint", {
-					MaxTextSize = 12,
+					MaxTextSize = 16,
 				}),
 			}),
 			-- Buy button
@@ -398,6 +398,9 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 			AspectRatio = React.createElement("UIAspectRatioConstraint", {
 				AspectRatio = 0.85,
 				DominantAxis = Enum.DominantAxis.Height,
+			}),
+			SizeConstraint = React.createElement("UISizeConstraint", {
+				MaxSize = Vector2.new(720, math.huge),
 			}),
 			BorderStroke = React.createElement("UIStroke", {
 				Thickness = 3,

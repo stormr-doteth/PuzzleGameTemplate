@@ -18,7 +18,6 @@ end)
 
 local VIRTUAL_W = RoomTypes.VIRTUAL_CANVAS_WIDTH
 local VIRTUAL_H = RoomTypes.VIRTUAL_CANVAS_HEIGHT
-local MAX_PLAYERS = 4
 local SNAP_THRESHOLD = 25 -- in virtual canvas coords
 local CLAIM_EXPIRE_SECONDS = 10
 local LOBBY_TIMEOUT = 30 * 60  -- 30 minutes
@@ -36,6 +35,9 @@ local MOVE_MIN_INTERVAL = 1 / 30
 local lastMoveTime: { [number]: number } = {}
 
 local RoomManager = {}
+
+-- Callback for state changes: fn(roomId, newState, playerCount)
+local stateChangeCallback: ((string, string?, number) -> ())? = nil
 
 -- Generate a unique 6-char room code (returns nil if unable after 100 attempts)
 local function generateRoomCode(): string?
@@ -74,6 +76,7 @@ local function getRoomInfo(room: any): any
 		players = getPlayerList(room),
 		config = room.config,
 		hostUserId = room.hostUserId,
+		maxPlayers = room.maxPlayers,
 	}
 end
 
@@ -106,10 +109,17 @@ local function destroyRoom(roomId: string)
 		playerRooms[userId] = nil
 	end
 	rooms[roomId] = nil
+
+	if stateChangeCallback then
+		stateChangeCallback(roomId, nil, 0)
+	end
 end
 
 -- Generate scrambled piece positions in virtual canvas coordinates
-local SCATTER_PAD = 450
+-- Use scale-based padding so scatter adapts proportionally to canvas dimensions.
+-- Client-side clamping ensures pieces stay visible on any screen size.
+local SCATTER_PAD_X = math.floor(VIRTUAL_W * 0.35) -- 420
+local SCATTER_PAD_Y = math.floor(VIRTUAL_H * 0.35) -- 280
 
 local function generateScrambledPositions(puzzleDef: any, config: any): { [number]: any }
 	local pieces: { [number]: any } = {}
@@ -122,15 +132,18 @@ local function generateScrambledPositions(puzzleDef: any, config: any): { [numbe
 	local boardH = VIRTUAL_H
 
 	-- Scatter area extends beyond the virtual canvas so pieces land outside the board
-	local scatterXMin = -SCATTER_PAD
-	local scatterXMax = VIRTUAL_W + SCATTER_PAD
-	local scatterYMin = -SCATTER_PAD
-	local scatterYMax = VIRTUAL_H + SCATTER_PAD
+	local scatterXMin = -SCATTER_PAD_X
+	local scatterXMax = VIRTUAL_W + SCATTER_PAD_X
+	local scatterYMin = -SCATTER_PAD_Y
+	local scatterYMax = VIRTUAL_H + SCATTER_PAD_Y
 
 	-- Scatter pieces around the edges of the board
 	type Zone = { xMin: number, xMax: number, yMin: number, yMax: number }
 	local zones: { Zone } = {}
-	local gap = 10
+	-- Gap must account for piece image size (cell + tab overhang) so pieces don't overlap the grid
+	local cellW = VIRTUAL_W / config.cols
+	local cellH = VIRTUAL_H / config.rows
+	local gap = math.max(cellW, cellH)
 
 	-- Top zone
 	local topYMax = boardY - gap
@@ -162,9 +175,9 @@ local function generateScrambledPositions(puzzleDef: any, config: any): { [numbe
 		local zone = zones[math.random(1, #zones)]
 		local x = math.random(math.floor(zone.xMin), math.floor(zone.xMax))
 		local y = math.random(math.floor(zone.yMin), math.floor(zone.yMax))
-		-- Clamp to keep pieces visible on typical viewports
-		x = math.clamp(x, -SCATTER_PAD, VIRTUAL_W + SCATTER_PAD)
-		y = math.clamp(y, -SCATTER_PAD, VIRTUAL_H + SCATTER_PAD)
+		-- Clamp to scatter bounds
+		x = math.clamp(x, -SCATTER_PAD_X, VIRTUAL_W + SCATTER_PAD_X)
+		y = math.clamp(y, -SCATTER_PAD_Y, VIRTUAL_H + SCATTER_PAD_Y)
 		pieces[pieceDef.id] = {
 			x = x,
 			y = y,
@@ -324,7 +337,7 @@ local function leavePlayer(player: Player)
 end
 
 -- Internal API: create room without going through remotes
-function RoomManager.CreateRoomInternal(player: Player): string?
+function RoomManager.CreateRoomInternal(player: Player, maxPlayers: number?): string?
 	local userId = player.UserId
 
 	if playerRooms[userId] then
@@ -353,6 +366,7 @@ function RoomManager.CreateRoomInternal(player: Player): string?
 		createdAt = os.clock(),
 		groups = {},
 		nextGroupId = 1,
+		maxPlayers = maxPlayers or 4,
 	}
 	playerRooms[userId] = roomId
 
@@ -379,7 +393,7 @@ function RoomManager.JoinRoomInternal(player: Player, roomId: string): boolean
 	-- Count players
 	local count = 0
 	for _ in room.players do count += 1 end
-	if count >= MAX_PLAYERS then
+	if count >= (room.maxPlayers or 4) then
 		return false
 	end
 
@@ -420,6 +434,10 @@ end
 -- Internal API: get the roomId for a player
 function RoomManager.GetPlayerRoom(player: Player): string?
 	return playerRooms[player.UserId]
+end
+
+function RoomManager.SetStateChangeCallback(callback: (string, string?, number) -> ())
+	stateChangeCallback = callback
 end
 
 function RoomManager.Init()
@@ -467,6 +485,7 @@ function RoomManager.Init()
 			createdAt = os.clock(),
 			groups = {},
 			nextGroupId = 1,
+			maxPlayers = 4,
 		}
 		playerRooms[userId] = roomId
 
@@ -498,7 +517,7 @@ function RoomManager.Init()
 		-- Count players
 		local count = 0
 		for _ in room.players do count += 1 end
-		if count >= MAX_PLAYERS then
+		if count >= (room.maxPlayers or 4) then
 			return { error = "Room is full" }
 		end
 
@@ -596,6 +615,13 @@ function RoomManager.Init()
 		room.startTime = os.clock()
 		room.zCounter = 2
 
+		-- Notify table status
+		if stateChangeCallback then
+			local count = 0
+			for _ in room.players do count += 1 end
+			stateChangeCallback(roomId, "playing", count)
+		end
+
 		-- Build serializable pieces table
 		local piecesData = {}
 		for pieceId, piece in room.pieces do
@@ -638,6 +664,13 @@ function RoomManager.Init()
 
 		if sameConfig == false then
 			room.config = nil
+		end
+
+		-- Notify table status
+		if stateChangeCallback then
+			local count = 0
+			for _ in room.players do count += 1 end
+			stateChangeCallback(roomId, "lobby", count)
 		end
 
 		fireToAll(room, "RoomReturnedToLobby", { config = room.config })
@@ -790,6 +823,13 @@ function RoomManager.Init()
 		if checkCompletion(room) then
 			room.state = "complete"
 			fireToAll(room, "RoomCompleted", {})
+
+			if stateChangeCallback then
+				local count = 0
+				for _ in room.players do count += 1 end
+				stateChangeCallback(roomId, "complete", count)
+			end
+
 			for pUserId in room.players do
 				local p = Players:GetPlayerByUserId(pUserId)
 				if p then
@@ -902,6 +942,13 @@ function RoomManager.Init()
 				if checkCompletion(room) then
 					room.state = "complete"
 					fireToAll(room, "RoomCompleted", {})
+
+					if stateChangeCallback then
+						local count = 0
+						for _ in room.players do count += 1 end
+						stateChangeCallback(roomId, "complete", count)
+					end
+
 					for pUserId in room.players do
 						local p = Players:GetPlayerByUserId(pUserId)
 						if p then

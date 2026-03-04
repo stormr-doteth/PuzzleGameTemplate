@@ -14,7 +14,7 @@ export type PackPickerProps = {
 }
 
 -- Only these 3 packs are shown on the main screen
-local DISPLAY_PACKS = { "animals", "seals", "brainrots" }
+local DISPLAY_PACKS = { "landscapes", "animals", "seals", "brainrots" }
 
 local function PackPicker(props: PackPickerProps)
 	local cardRow: { [string]: any } = {}
@@ -34,8 +34,6 @@ local function PackPicker(props: PackPickerProps)
 		end
 
 		local packImages = ImageCatalog.getByPackId(packId)
-		local totalCount = #packImages
-
 		-- Find first valid image for background
 		local bgAssetId = ""
 		for _, img in packImages do
@@ -48,7 +46,7 @@ local function PackPicker(props: PackPickerProps)
 		local cardChildren: { [string]: any } = {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 14) }),
 			AspectRatio = React.createElement("UIAspectRatioConstraint", {
-				AspectRatio = 1,
+				AspectRatio = 0.75,
 				AspectType = Enum.AspectType.ScaleWithParentSize,
 				DominantAxis = Enum.DominantAxis.Height,
 			}),
@@ -74,41 +72,37 @@ local function PackPicker(props: PackPickerProps)
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 14) }),
 				Gradient = React.createElement("UIGradient", {
 					Transparency = NumberSequence.new({
-						NumberSequenceKeypoint.new(0, 0.8),
-						NumberSequenceKeypoint.new(0.6, 0.5),
-						NumberSequenceKeypoint.new(1, 0.1),
+						NumberSequenceKeypoint.new(0, 0.3),
+						NumberSequenceKeypoint.new(1, 0.3),
 					}),
 					Rotation = 90,
 				}),
 			}),
 
-			-- Pack name (bottom-left area)
+			-- Pack name (top-center, large)
 			Name = React.createElement("TextLabel", {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0.06, 0, 1, -30),
-				Size = UDim2.new(0.88, 0, 0, 28),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(0.9, 0.5),
 				BackgroundTransparency = 1,
 				Text = pack.name,
 				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.large,
-				Font = Theme.Font.bold,
-				TextXAlignment = Enum.TextXAlignment.Left,
+				Font = Theme.Font.heading,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				TextYAlignment = Enum.TextYAlignment.Center,
 				TextScaled = true,
 				ZIndex = 3,
+			}, {
+				TextStroke = React.createElement("UIStroke", {
+					Color = Theme.Colors.black,
+					Thickness = 2,
+				}),
 			}),
 
-			-- Puzzle count subtitle
-			Count = React.createElement("TextLabel", {
-				AnchorPoint = Vector2.new(0, 1),
-				Position = UDim2.new(0.06, 0, 1, -10),
-				Size = UDim2.new(0.88, 0, 0, 18),
-				BackgroundTransparency = 1,
-				Text = totalCount .. " puzzles",
-				TextColor3 = Theme.Colors.textSecondary,
-				TextSize = Theme.TextSize.label,
-				Font = Theme.Font.regular,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				ZIndex = 3,
+			-- Card border stroke
+			Stroke = React.createElement("UIStroke", {
+				Color = Theme.Colors.border,
+				Thickness = 2,
 			}),
 		}
 
@@ -145,7 +139,7 @@ local function PackPicker(props: PackPickerProps)
 			Text = "Select a puzzle pack!",
 			TextColor3 = Theme.Colors.textPrimary,
 			TextSize = Theme.TextSize.title,
-			Font = Theme.Font.bold,
+			Font = Theme.Font.heading,
 			TextXAlignment = Enum.TextXAlignment.Center,
 		}),
 

@@ -97,7 +97,7 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 			Position = UDim2.fromScale(0, 0),
 			Size = UDim2.fromScale(0.4, 1),
 			BackgroundTransparency = 1,
-			Text = "Room Lobby",
+			Text = "Puzzle Table",
 			TextColor3 = Theme.Colors.textPrimary,
 			TextSize = Theme.TextSize.heading,
 			Font = Theme.Font.bold,

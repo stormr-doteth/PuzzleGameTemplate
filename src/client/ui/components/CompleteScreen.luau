@@ -22,6 +22,7 @@ export type CompleteScreenProps = {
 	isMultiplayer: boolean?,
 	isHost: boolean?,
 	onChooseNewPuzzle: (() -> ())?,
+	onLeave: (() -> ())?,
 }
 
 local CONFETTI_COUNT = 50
@@ -319,6 +320,23 @@ local function CompleteScreen(props: CompleteScreenProps)
 				TextColor3 = Theme.Colors.textMuted,
 				TextSize = Theme.TextSize.large,
 				Font = Theme.Font.medium,
+			})
+		end
+
+		if props.onLeave then
+			cardChildren["LeaveTableButton"] = React.createElement("TextButton", {
+				LayoutOrder = 13,
+				Size = UDim2.new(0, 220, 0, 48),
+				BackgroundColor3 = Theme.Colors.danger,
+				Text = "LEAVE TABLE",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.button,
+				Font = Theme.Font.bold,
+				[React.Event.Activated] = function()
+					props.onLeave()
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
 			})
 		end
 	else

@@ -4,6 +4,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local React = require(Packages.React)
 
+local TouchState = require(script.Parent.TouchState)
+
 local MIN_ZOOM = 0.5
 local MAX_ZOOM = 4.0
 local ZOOM_STEP = 0.15
@@ -37,15 +39,9 @@ local function useZoomPan(): (ZoomPanState, ZoomPanActions)
 	local zoomRef = React.useRef(zoom)
 	local panXRef = React.useRef(panX)
 	local panYRef = React.useRef(panY)
-	React.useEffect(function()
-		zoomRef.current = zoom
-	end, { zoom })
-	React.useEffect(function()
-		panXRef.current = panX
-	end, { panX })
-	React.useEffect(function()
-		panYRef.current = panY
-	end, { panY })
+	zoomRef.current = zoom
+	panXRef.current = panX
+	panYRef.current = panY
 
 	local function worldToScreen(worldX: number, worldY: number): (number, number)
 		return (worldX - panXRef.current) * zoomRef.current, (worldY - panYRef.current) * zoomRef.current
@@ -145,37 +141,98 @@ local function useZoomPan(): (ZoomPanState, ZoomPanActions)
 			end
 		end))
 
-		-- Touch: two-finger pinch and pan
-		local activeTouches: { [number]: Vector2 } = {}
+		-- Touch: two-finger pan and pinch-to-zoom
+		-- Track by InputObject reference (same object fires across Started→Moved→Ended)
+		local activeTouches: { { input: InputObject, pos: Vector2 } } = {}
+		local singleTouchPanning = false
+		local singleTouchLastPos = Vector2.zero
 
 		table.insert(connections, UserInputService.TouchStarted:Connect(function(input: InputObject)
-			activeTouches[input.Position.X * 10000 + input.Position.Y] = Vector2.new(input.Position.X, input.Position.Y)
+			table.insert(activeTouches, { input = input, pos = Vector2.new(input.Position.X, input.Position.Y) })
+			TouchState.touchCount = #activeTouches
+
+			if #activeTouches == 1 and not TouchState.isDragging then
+				singleTouchPanning = true
+				singleTouchLastPos = Vector2.new(input.Position.X, input.Position.Y)
+			elseif #activeTouches >= 2 then
+				singleTouchPanning = false
+			end
 		end))
 
 		table.insert(connections, UserInputService.TouchMoved:Connect(function(input: InputObject)
-			-- Simple two-finger detection via touch count
-			local touchCount = 0
-			for _ in activeTouches do
-				touchCount += 1
-			end
-			if touchCount >= 2 then
-				-- Pan with touch movement
-				local pos = Vector2.new(input.Position.X, input.Position.Y)
-				local key = input.Position.X * 10000 + input.Position.Y
-				local prev = activeTouches[key]
-				if prev then
-					local dx = pos.X - prev.X
-					local dy = pos.Y - prev.Y
-					setPanX(function(p) return p - dx / zoomRef.current end)
-					setPanY(function(p) return p - dy / zoomRef.current end)
+			-- Find this touch by reference and get its previous position
+			local touchIndex = nil
+			local oldPos = nil
+			for i, t in activeTouches do
+				if t.input == input then
+					touchIndex = i
+					oldPos = t.pos
+					break
 				end
-				activeTouches[key] = pos
 			end
+			if not touchIndex or not oldPos then return end
+
+			local newPos = Vector2.new(input.Position.X, input.Position.Y)
+
+			-- Single-finger pan on empty space
+			if #activeTouches == 1 and singleTouchPanning and not TouchState.isDragging then
+				local delta = newPos - singleTouchLastPos
+				setPanX(panXRef.current - delta.X / zoomRef.current)
+				setPanY(panYRef.current - delta.Y / zoomRef.current)
+				singleTouchLastPos = newPos
+			end
+
+			if #activeTouches >= 2 then
+				-- Find the other touch
+				local otherTouch = nil
+				for i, t in activeTouches do
+					if i ~= touchIndex then
+						otherTouch = t
+						break
+					end
+				end
+
+				if otherTouch then
+					local otherPos = otherTouch.pos
+
+					-- Previous state
+					local oldMid = (oldPos + otherPos) / 2
+					local oldDist = (oldPos - otherPos).Magnitude
+
+					-- New state
+					local newMid = (newPos + otherPos) / 2
+					local newDist = (newPos - otherPos).Magnitude
+
+					-- Pan: apply midpoint delta
+					local panDelta = newMid - oldMid
+					setPanX(function(p) return p - panDelta.X / zoomRef.current end)
+					setPanY(function(p) return p - panDelta.Y / zoomRef.current end)
+
+					-- Pinch-to-zoom: apply distance ratio
+					if oldDist > 10 and newDist > 10 then
+						local ratio = newDist / oldDist
+						local zoomDelta = (ratio - 1) * zoomRef.current * 0.5
+						zoomAtPoint(newMid.X, newMid.Y, zoomDelta)
+					end
+				end
+			end
+
+			-- Update stored position
+			activeTouches[touchIndex].pos = newPos
 		end))
 
 		table.insert(connections, UserInputService.TouchEnded:Connect(function(input: InputObject)
-			local key = input.Position.X * 10000 + input.Position.Y
-			activeTouches[key] = nil
+			for i, t in activeTouches do
+				if t.input == input then
+					table.remove(activeTouches, i)
+					break
+				end
+			end
+			TouchState.touchCount = #activeTouches
+
+			if #activeTouches == 0 then
+				singleTouchPanning = false
+			end
 		end))
 
 		return function()

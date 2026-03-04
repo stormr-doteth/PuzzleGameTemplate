@@ -10,20 +10,28 @@ local ReactRoblox = require(Packages.ReactRoblox)
 local Remotes = require(Shared.Remotes)
 Remotes.Init()
 
--- Initialize SeatingService before mounting UI
 local SeatingService = require(script:WaitForChild("services"):WaitForChild("SeatingService"))
 SeatingService.Init()
 
 local MusicService = require(script:WaitForChild("services"):WaitForChild("MusicService"))
 MusicService.Init()
 
+local DialogService = require(script:WaitForChild("services"):WaitForChild("DialogService"))
+DialogService.Init()
+
 local App = require(script:WaitForChild("ui"):WaitForChild("App"))
 
 local localPlayer = Players.LocalPlayer
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
-local root = ReactRoblox.createRoot(playerGui)
-root:render(React.createElement(App))
+-- Use a Folder as React root so React doesn't destroy other PlayerGui children
+-- (e.g. TouchGui, Freecam). ScreenGuis are portaled into playerGui from App.
+local reactRoot = Instance.new("Folder")
+reactRoot.Name = "ReactRoot"
+reactRoot.Parent = playerGui
+
+local root = ReactRoblox.createRoot(reactRoot)
+root:render(React.createElement(App, { playerGui = playerGui }))
 
 script.Destroying:Connect(function()
 	root:unmount()

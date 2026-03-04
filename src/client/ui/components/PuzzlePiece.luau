@@ -1,3 +1,4 @@
+local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -22,13 +23,64 @@ export type PuzzlePieceProps = {
 	onDragEnd: ((id: number, x: number, y: number) -> ())?,
 	onHoverStart: ((id: number) -> ())?,
 	onHoverEnd: ((id: number) -> ())?,
+	registerFrameRef: ((pieceId: number, frame: ImageLabel?) -> ())?,
 	claimedByOther: boolean?,
 	claimerColor: Color3?,
 	isHintHighlighted: boolean?,
 	screenToWorld: ((screenX: number, screenY: number) -> (number, number))?,
 	worldToScreen: ((worldX: number, worldY: number) -> (number, number))?,
 	zoom: number?,
+	panX: number?,
+	panY: number?,
 }
+
+local function HintGlow()
+	local frameRef = React.useRef(nil :: Frame?)
+
+	React.useEffect(function()
+		local frame = frameRef.current
+		if not frame then return end
+
+		local pulseInfo = TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+
+		local frameTween = TweenService:Create(frame, pulseInfo, {
+			BackgroundTransparency = 0.6,
+		})
+		frameTween:Play()
+
+		local stroke = frame:FindFirstChildOfClass("UIStroke")
+		local strokeTween = nil
+		if stroke then
+			strokeTween = TweenService:Create(stroke, pulseInfo, {
+				Transparency = 0.5,
+			})
+			strokeTween:Play()
+		end
+
+		return function()
+			frameTween:Cancel()
+			if strokeTween then
+				strokeTween:Cancel()
+			end
+		end
+	end, {})
+
+	return React.createElement("Frame", {
+		ref = frameRef,
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Theme.Colors.gold,
+		BackgroundTransparency = 0.3,
+		BorderSizePixel = 0,
+		ZIndex = 2,
+	}, {
+		Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
+		Stroke = React.createElement("UIStroke", {
+			Color = Theme.Colors.gold,
+			Thickness = 3,
+			Transparency = 0,
+		}),
+	})
+end
 
 local function PuzzlePiece(props: PuzzlePieceProps)
 	local imageRef = React.useRef(nil :: ImageLabel?)
@@ -38,6 +90,8 @@ local function PuzzlePiece(props: PuzzlePieceProps)
 		initialPosition = props.position,
 		enabled = not props.isLocked and not props.claimedByOther,
 		screenToWorld = props.screenToWorld,
+		worldToScreen = props.worldToScreen,
+		frameRef = imageRef,
 		onDragStart = function()
 			if props.onDragStart then
 				props.onDragStart(props.pieceId)
@@ -46,6 +100,11 @@ local function PuzzlePiece(props: PuzzlePieceProps)
 		onDrop = function(finalPos: Vector2)
 			if props.onDragEnd then
 				props.onDragEnd(props.pieceId, finalPos.X, finalPos.Y)
+			end
+		end,
+		onMove = function(pos: Vector2)
+			if props.onDragMove then
+				props.onDragMove(props.pieceId, pos.X, pos.Y)
 			end
 		end,
 	})
@@ -73,12 +132,17 @@ local function PuzzlePiece(props: PuzzlePieceProps)
 		end
 	end, { props.isLocked, props.position } :: { any })
 
-	-- Report drag movement
+	-- Register frame ref with parent for direct manipulation of group followers
 	React.useEffect(function()
-		if drag.isDragging and props.onDragMove then
-			props.onDragMove(props.pieceId, drag.position.X, drag.position.Y)
+		if imageRef.current and props.registerFrameRef then
+			props.registerFrameRef(props.pieceId, imageRef.current)
 		end
-	end, { drag.isDragging, drag.position } :: { any })
+		return function()
+			if props.registerFrameRef then
+				props.registerFrameRef(props.pieceId, nil)
+			end
+		end
+	end, { imageRef.current } :: { any })
 
 	-- Determine outline appearance
 	local outlineColor, outlineTransparency
@@ -93,9 +157,10 @@ local function PuzzlePiece(props: PuzzlePieceProps)
 		outlineTransparency = 0.3
 	end
 
-	local sx, sy = drag.position.X, drag.position.Y
+	local currentPos = if drag.isDragging then drag.positionRef.current else drag.position
+	local sx, sy = currentPos.X, currentPos.Y
 	if props.worldToScreen then
-		sx, sy = props.worldToScreen(drag.position.X, drag.position.Y)
+		sx, sy = props.worldToScreen(currentPos.X, currentPos.Y)
 	end
 	local zoomedW = props.pieceWidth * (props.zoom or 1)
 	local zoomedH = props.pieceHeight * (props.zoom or 1)
@@ -141,18 +206,8 @@ local function PuzzlePiece(props: PuzzlePieceProps)
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
 			})
 			else nil,
-		HintHighlight = if props.isHintHighlighted
-			then React.createElement("Frame", {
-				Size = UDim2.fromScale(1, 1),
-				BackgroundColor3 = Color3.fromRGB(80, 220, 100),
-				BackgroundTransparency = 0.45,
-				BorderSizePixel = 0,
-				ZIndex = 2,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
-			})
-			else nil,
+		HintHighlight = if props.isHintHighlighted then React.createElement(HintGlow) else nil,
 	})
 end
 
-return PuzzlePiece
+return React.memo(PuzzlePiece)

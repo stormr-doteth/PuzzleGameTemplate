@@ -117,8 +117,6 @@ local function ShopScreen(props: ShopScreenProps)
 				if props.onEquip then
 					props.onEquip(itemId, category)
 				end
-				setPurchaseMessage("Equipped!")
-				task.delay(2, function() setPurchaseMessage("") end)
 			end
 		end)
 	end
@@ -369,7 +367,7 @@ local function ShopScreen(props: ShopScreenProps)
 
 			listChildren["Item_" .. order] = React.createElement("Frame", {
 				LayoutOrder = order,
-				Size = UDim2.new(1, 0, 0, 80),
+				Size = UDim2.new(1, 0, 0, 90),
 				BackgroundColor3 = COLORS.itemRowBg,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
@@ -381,7 +379,7 @@ local function ShopScreen(props: ShopScreenProps)
 				Swatch = React.createElement("Frame", {
 					AnchorPoint = Vector2.new(0, 0.5),
 					Position = UDim2.fromScale(0.02, 0.5),
-					Size = UDim2.fromScale(0.15, 0.75),
+					Size = UDim2.fromScale(0.22, 0.8),
 					BackgroundColor3 = swatchColor,
 				}, {
 					SwatchCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
@@ -407,8 +405,8 @@ local function ShopScreen(props: ShopScreenProps)
 				}),
 				-- Item name
 				Name = React.createElement("TextLabel", {
-					Position = UDim2.fromScale(0.2, 0.1),
-					Size = UDim2.fromScale(0.45, 0.25),
+					Position = UDim2.fromScale(0.26, 0.08),
+					Size = UDim2.fromScale(0.4, 0.28),
 					BackgroundTransparency = 1,
 					Text = item.name,
 					TextColor3 = Theme.Colors.textPrimary,
@@ -426,8 +424,8 @@ local function ShopScreen(props: ShopScreenProps)
 				}),
 				-- Description
 				Desc = React.createElement("TextLabel", {
-					Position = UDim2.fromScale(0.2, 0.38),
-					Size = UDim2.fromScale(0.45, 0.2),
+					Position = UDim2.fromScale(0.26, 0.38),
+					Size = UDim2.fromScale(0.4, 0.24),
 					BackgroundTransparency = 1,
 					Text = item.description,
 					TextColor3 = COLORS.descText,
@@ -437,13 +435,13 @@ local function ShopScreen(props: ShopScreenProps)
 					TextWrapped = true,
 				}, {
 					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 11,
+						MaxTextSize = 16,
 					}),
 				}),
 				-- Price
 				PriceTag = React.createElement("TextLabel", {
-					Position = UDim2.fromScale(0.2, 0.62),
-					Size = UDim2.fromScale(0.2, 0.18),
+					Position = UDim2.fromScale(0.26, 0.65),
+					Size = UDim2.fromScale(0.2, 0.22),
 					BackgroundTransparency = 1,
 					Text = "$" .. item.cashPrice,
 					TextColor3 = COLORS.cashText,
@@ -452,7 +450,7 @@ local function ShopScreen(props: ShopScreenProps)
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}, {
 					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 13,
+						MaxTextSize = 16,
 					}),
 				}),
 				-- Action button
@@ -482,6 +480,9 @@ local function ShopScreen(props: ShopScreenProps)
 			AspectRatio = React.createElement("UIAspectRatioConstraint", {
 				AspectRatio = 0.85,
 				DominantAxis = Enum.DominantAxis.Height,
+			}),
+			SizeConstraint = React.createElement("UISizeConstraint", {
+				MaxSize = Vector2.new(720, math.huge),
 			}),
 			BorderStroke = React.createElement("UIStroke", {
 				Thickness = 3,
@@ -514,7 +515,7 @@ local function ShopScreen(props: ShopScreenProps)
 				}),
 				CloseButton = React.createElement("TextButton", {
 					AnchorPoint = Vector2.new(1, 0.5),
-					Position = UDim2.new(1, -8, 0.5, 0),
+					Position = UDim2.fromScale(0.98, 0.5),
 					Size = UDim2.fromScale(0.06, 0.8),
 					BackgroundColor3 = COLORS.closeBtn,
 					Text = "X",

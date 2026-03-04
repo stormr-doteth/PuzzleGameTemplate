@@ -37,6 +37,9 @@
       },
       "Shared": {
         "$path": "src/shared"
+      },
+      "DialogModule": {
+        "$path": "src/dialog/DialogModule.luau"
       }
     },
     "ServerScriptService": {
@@ -51,6 +54,11 @@
       "$properties": {
         "DefaultListenerLocation": "Camera",
         "RespectFilteringEnabled": true
+      }
+    },
+    "StarterGui": {
+      "dialog": {
+        "$path": "src/gui/dialog"
       }
     },
     "StarterPlayer": {
@@ -104,7 +112,10 @@
         }
       },
       "CafeTables": {
-        "$className": "Folder"
+        "$path": "src/workspace/CafeTables"
+      },
+      "Nerd": {
+        "$path": "src/workspace/Nerd"
       },
       "$properties": {
         "FilteringEnabled": true,
@@ -112,7 +123,7 @@
           "Enum": 0
         },
         "PlayerScriptsUseInputActionSystem": {
-          "Enum": 0
+          "Enum": 2
         },
         "SignalBehavior": "Deferred",
         "StreamOutBehavior": "Opportunistic",

@@ -28,8 +28,20 @@ for _, child in cafeFolder:GetChildren() do
 	end
 end
 
+local TableStatusService = require(script:WaitForChild("services"):WaitForChild("TableStatusService"))
+TableStatusService.Init(tableModels)
+
 local TableManager = require(script:WaitForChild("cafe"):WaitForChild("TableManager"))
 TableManager.Init(tableModels, RoomManager)
+TableManager.SetTableStatusService(TableStatusService)
+
+-- Register callback so RoomManager notifies TableManager on state changes
+RoomManager.SetStateChangeCallback(function(roomId, newState, playerCount)
+	local tableId = TableManager.GetTableIdForRoom(roomId)
+	if tableId then
+		TableManager.OnRoomStateChanged(tableId, newState, playerCount)
+	end
+end)
 
 -- Initialize MonetizationHandler if available
 pcall(function()

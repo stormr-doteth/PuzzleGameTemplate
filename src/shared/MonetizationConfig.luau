@@ -29,6 +29,14 @@ MonetizationConfig.GAME_PASSES = {
 		iconColor = Color3.fromRGB(200, 80, 255),
 		iconText = "\u{1F9E9}",
 	},
+	PUZZLE_ASSIST = {
+		id = 0, -- Replace with actual GamePass ID
+		name = "Puzzle Assist",
+		description = "Shows the original image behind your puzzle as a guide",
+		robuxPrice = 99,
+		iconColor = Color3.fromRGB(80, 200, 255),
+		iconText = "\u{1F50D}",
+	},
 }
 
 -- DevProduct IDs (replace with actual IDs from Roblox after creating them)

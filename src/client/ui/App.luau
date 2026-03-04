@@ -1,13 +1,16 @@
 local CaptureService = game:GetService("CaptureService")
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local React = require(Packages.React)
+local ReactRoblox = require(Packages.ReactRoblox)
 
 local ImageCatalog = require(Shared.ImageCatalog)
 local MonetizationConfig = require(Shared.MonetizationConfig)
@@ -24,9 +27,16 @@ pcall(function()
 	SeatingService = require(script.Parent.Parent.services.SeatingService)
 end)
 
+-- DialogService loaded optionally
+local DialogService = nil
+pcall(function()
+	DialogService = require(script.Parent.Parent.services.DialogService)
+end)
+
 type GameState = "walking" | "menu" | "playing" | "complete" | "admiring" | "room_lobby" | "room_playing" | "room_complete"
 
-local function App()
+local function App(props)
+	local playerGui = props.playerGui
 	local gameState, setGameState = React.useState("walking" :: GameState)
 	local rows, setRows = React.useState(3)
 	local cols, setCols = React.useState(3)
@@ -91,6 +101,11 @@ local function App()
 		end
 	end
 
+	-- Register overlay opener with DialogService so NPCs can open shop/etc.
+	if DialogService then
+		DialogService.SetOverlayOpener(openOverlay)
+	end
+
 	local function closeOverlay()
 		local frame = overlayRef.current
 		if frame then
@@ -132,6 +147,25 @@ local function App()
 			tweenIn:Cancel()
 		end
 	end, { activeOverlay })
+
+	-- Toggle mobile touch controls based on game state
+	-- Skip initial mount to avoid racing PlayerModule's TouchGui creation;
+	-- only toggle when gameState actually changes after first render.
+	local touchMounted = React.useRef(false)
+	React.useEffect(function()
+		if not UserInputService.TouchEnabled then return end
+		if not touchMounted.current then
+			touchMounted.current = true
+			return
+		end
+		if gameState ~= "walking" then
+			GuiService.TouchControlsEnabled = false
+		else
+			task.defer(function()
+				GuiService.TouchControlsEnabled = true
+			end)
+		end
+	end, { gameState })
 
 	-- Seating state
 	local seatingInfo, setSeatingInfo = React.useState(nil :: any)
@@ -342,6 +376,11 @@ local function App()
 				openOverlay("leaderboard")
 			elseif npcType == "stats" then
 				openOverlay("stats")
+			elseif npcType == "dialog" then
+				if DialogService then
+					local npcName = model:FindFirstChild("NPCName") and model:FindFirstChild("NPCName").Value or model.Name
+					DialogService.TriggerDialog(npcName, model, prompt)
+				end
 			end
 		end)
 
@@ -1282,6 +1321,7 @@ local function App()
 				isMultiplayer = gameState == "room_complete",
 				isHost = gameState == "room_complete" and roomInfo ~= nil and roomInfo.hostUserId == (Players.LocalPlayer and Players.LocalPlayer.UserId or 0),
 				onChooseNewPuzzle = onRoomChooseNewPuzzle,
+				onLeave = if gameState == "room_complete" then onLeaveRoom else nil,
 			}),
 		})
 	end
@@ -1371,14 +1411,17 @@ local function App()
 		Content = React.createElement("Frame", {
 			Size = UDim2.fromScale(1, 1),
 			BackgroundTransparency = 1,
+			Active = false,
 		}, safeChildren),
 	})
 
+	-- Portal each ScreenGui into playerGui so React doesn't manage playerGui
+	-- directly (which would destroy Roblox's TouchGui, Freecam, etc.)
 	return React.createElement(React.Fragment, nil, {
-		SafeGui = safeGui,
-		BoardGui = boardGui,
-		CompleteGui = completeGui,
-		AdmireGui = admireGui,
+		SafeGui = ReactRoblox.createPortal(safeGui, playerGui, "SafeGui"),
+		BoardGui = boardGui and ReactRoblox.createPortal(boardGui, playerGui, "BoardGui") or nil,
+		CompleteGui = completeGui and ReactRoblox.createPortal(completeGui, playerGui, "CompleteGui") or nil,
+		AdmireGui = admireGui and ReactRoblox.createPortal(admireGui, playerGui, "AdmireGui") or nil,
 	})
 end
 

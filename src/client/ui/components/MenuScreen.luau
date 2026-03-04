@@ -65,6 +65,7 @@ local function MenuScreen(props: MenuScreenProps)
 	local showStats, setShowStats = React.useState(false)
 	local showSavedPuzzles, setShowSavedPuzzles = React.useState(false)
 	local warningText, setWarningText = React.useState("")
+	local showImagePreview, setShowImagePreview = React.useState(false)
 
 	local function onSelectImage(imageId: string, assetId: string)
 		setSelectedImageId(imageId)
@@ -101,17 +102,40 @@ local function MenuScreen(props: MenuScreenProps)
 				Size = UDim2.fromScale(1, 0.18),
 				BackgroundTransparency = 1,
 			}, {
-				PreviewImage = React.createElement("ImageLabel", {
+				PreviewImage = React.createElement("ImageButton", {
 					Size = UDim2.fromScale(0.3, 1),
 					BackgroundColor3 = Theme.Colors.bgElevated,
 					Image = selectedEntry.thumbnailId,
 					ScaleType = Enum.ScaleType.Crop,
+					[React.Event.Activated] = function()
+						setShowImagePreview(true)
+					end,
 				}, {
 					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 					AspectRatio = React.createElement("UIAspectRatioConstraint", {
 						AspectRatio = 1,
 						AspectType = Enum.AspectType.ScaleWithParentSize,
 						DominantAxis = Enum.DominantAxis.Height,
+					}),
+					PreviewLabel = React.createElement("Frame", {
+						AnchorPoint = Vector2.new(0, 1),
+						Position = UDim2.fromScale(0, 1),
+						Size = UDim2.fromScale(1, 0.25),
+						BackgroundColor3 = Theme.Colors.black,
+						BackgroundTransparency = 0.4,
+						ZIndex = 2,
+					}, {
+						LabelCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+						LabelText = React.createElement("TextLabel", {
+							Size = UDim2.fromScale(1, 1),
+							BackgroundTransparency = 1,
+							Text = "Preview",
+							TextColor3 = Theme.Colors.textPrimary,
+							TextSize = Theme.TextSize.tiny,
+							Font = Theme.Font.bold,
+							TextScaled = true,
+							ZIndex = 2,
+						}),
 					}),
 				}),
 				InfoFrame = React.createElement("Frame", {
@@ -736,6 +760,65 @@ local function MenuScreen(props: MenuScreenProps)
 				ZIndex = 11,
 			}, saveEntries),
 		})
+	end
+
+	-- Image Preview modal overlay
+	if showImagePreview then
+		local previewEntry = ImageCatalog.getById(selectedImageId)
+		if previewEntry then
+			rootChildren["ImagePreviewBackdrop"] = React.createElement("TextButton", {
+				Size = UDim2.fromScale(1, 1),
+				BackgroundColor3 = Theme.Colors.black,
+				BackgroundTransparency = Theme.Transparency.overlay,
+				Text = "",
+				ZIndex = Theme.ZIndex.modal,
+				[React.Event.Activated] = function()
+					setShowImagePreview(false)
+				end,
+			})
+			rootChildren["ImagePreviewModal"] = React.createElement("Frame", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(0.85, 0.85),
+				BackgroundColor3 = Theme.Colors.bgCard,
+				ZIndex = Theme.ZIndex.modal + 1,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, Theme.Radius.modal) }),
+				Stroke = React.createElement("UIStroke", {
+					Thickness = 2,
+					Color = Theme.Colors.border,
+				}),
+				Padding = React.createElement("UIPadding", {
+					PaddingLeft = UDim.new(0, 12),
+					PaddingRight = UDim.new(0, 12),
+					PaddingTop = UDim.new(0, 12),
+					PaddingBottom = UDim.new(0, 12),
+				}),
+				PreviewImage = React.createElement("ImageLabel", {
+					Size = UDim2.fromScale(1, 1),
+					BackgroundTransparency = 1,
+					Image = previewEntry.assetId,
+					ScaleType = Enum.ScaleType.Fit,
+					ZIndex = Theme.ZIndex.modal + 1,
+				}),
+				CloseBtn = React.createElement("TextButton", {
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(1, 8, 0, -8),
+					Size = UDim2.fromOffset(32, 32),
+					BackgroundColor3 = Theme.Colors.closeRed,
+					Text = "X",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.body,
+					Font = Theme.Font.bold,
+					ZIndex = Theme.ZIndex.modal + 2,
+					[React.Event.Activated] = function()
+						setShowImagePreview(false)
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				}),
+			})
+		end
 	end
 
 	return React.createElement("Frame", {

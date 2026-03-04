@@ -8,6 +8,7 @@ local camera = Workspace.CurrentCamera
 local localPlayer = Players.LocalPlayer
 
 local isSeated = false
+local savedJumpHeight: number? = nil
 local currentSeating: {
 	tableId: string,
 	tableType: string,
@@ -58,11 +59,31 @@ end
 function SeatingService.SetSeated(seatingInfo: any)
 	isSeated = true
 	currentSeating = seatingInfo
+
+	-- Disable jumping while seated
+	local character = localPlayer.Character
+	if character then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			savedJumpHeight = humanoid.JumpHeight
+			humanoid.JumpHeight = 0
+		end
+	end
 end
 
 function SeatingService.ClearSeated()
 	isSeated = false
 	currentSeating = nil
+
+	-- Restore jumping
+	local character = localPlayer.Character
+	if character then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid and savedJumpHeight then
+			humanoid.JumpHeight = savedJumpHeight
+		end
+	end
+	savedJumpHeight = nil
 end
 
 function SeatingService.IsSeated(): boolean

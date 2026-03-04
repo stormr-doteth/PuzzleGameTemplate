@@ -62,9 +62,9 @@ Theme.Colors = {
 
 Theme.Font = {
 	heading = Enum.Font.FredokaOne,
-	bold = Enum.Font.GothamBold,
-	medium = Enum.Font.GothamMedium,
-	regular = Enum.Font.Gotham,
+	bold = Enum.Font.FredokaOne,
+	medium = Enum.Font.FredokaOne,
+	regular = Enum.Font.FredokaOne,
 }
 
 Theme.TextSize = {

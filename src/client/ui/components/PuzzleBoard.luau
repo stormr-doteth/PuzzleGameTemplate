@@ -85,6 +85,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local snapEffectCounter = React.useRef(0)
 	local showSavePrompt, setShowSavePrompt = React.useState(false)
 	local hintHighlightId, setHintHighlightId = React.useState(nil :: number?)
+	local showArtworkModal, setShowArtworkModal = React.useState(false)
+	local ownsPuzzleAssist, setOwnsPuzzleAssist = React.useState(false)
+	local showAssistOverlay, setShowAssistOverlay = React.useState(false)
 
 	-- Dynamic top inset to clear Roblox top bar in full-screen ScreenGui
 	local topInset = React.useMemo(function()
@@ -102,6 +105,32 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 
 	-- Ref to track group follower offsets during drag
 	local groupDragOffsets = React.useRef({})
+
+	-- Refs for direct frame manipulation of group followers during drag
+	local pieceFrameRefs = React.useRef({} :: { [number]: ImageLabel })
+	local followerPositionsRef = React.useRef({} :: { [number]: { x: number, y: number } })
+
+	-- Refs for current values (so useCallback closures always see latest state)
+	local stateRef = React.useRef(state)
+	local puzzleDefRef = React.useRef(puzzleDef)
+	local pieceImagesRef = React.useRef(pieceImages)
+	local pixelScaleRef = React.useRef(pixelScale)
+	local cellSizeRef = React.useRef(cellSize)
+	local boardSizeRef = React.useRef(boardSize)
+	local zoomActionsRef = React.useRef(zoomActions)
+	local zoomStateRef = React.useRef(zoomState)
+	local actionsRef = React.useRef(actions)
+
+	-- Update refs each render (cheap, no allocations)
+	stateRef.current = state
+	puzzleDefRef.current = puzzleDef
+	pieceImagesRef.current = pieceImages
+	pixelScaleRef.current = pixelScale
+	cellSizeRef.current = cellSize
+	boardSizeRef.current = boardSize
+	zoomActionsRef.current = zoomActions
+	zoomStateRef.current = zoomState
+	actionsRef.current = actions
 
 	-- Load image and generate/restore puzzle on mount
 	React.useEffect(function()
@@ -232,30 +261,53 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		return math.floor((viewportH - boardSize.Y) / 2)
 	end, { boardSize } :: { any })
 
+	-- Keep refs up to date for boardOffset (used in stable callbacks)
+	local boardOffsetXRef = React.useRef(boardOffsetX)
+	local boardOffsetYRef = React.useRef(boardOffsetY)
+	boardOffsetXRef.current = boardOffsetX
+	boardOffsetYRef.current = boardOffsetY
+
+	-- Stable registerFrameRef callback for PuzzlePiece to register its frame
+	local registerFrameRef = React.useCallback(function(pieceId: number, frame: ImageLabel?)
+		if frame then
+			pieceFrameRefs.current[pieceId] = frame
+		else
+			pieceFrameRefs.current[pieceId] = nil
+		end
+	end, {})
+
+	-- Stable wrappers for zoom functions (useZoomPan creates new references every render,
+	-- but the functions already use refs internally so delegating to .current is safe)
+	local stableScreenToWorld = React.useCallback(function(screenX: number, screenY: number)
+		return zoomActionsRef.current.screenToWorld(screenX, screenY)
+	end, {})
+
+	local stableWorldToScreen = React.useCallback(function(worldX: number, worldY: number)
+		return zoomActionsRef.current.worldToScreen(worldX, worldY)
+	end, {})
+
 	-- Convert screen image position → virtual cell position (for sending to server)
+	-- Uses refs so it works correctly inside stable useCallback closures
 	local function screenToVirtual(screenX: number, screenY: number, imgOffsetX: number, imgOffsetY: number)
-		-- Add tab offset: image pos → cell pos
 		local cellX = screenX + imgOffsetX
 		local cellY = screenY + imgOffsetY
-		-- Map board-relative screen position to virtual canvas
 		local vw = RoomTypes.VIRTUAL_CANVAS_WIDTH
 		local vh = RoomTypes.VIRTUAL_CANVAS_HEIGHT
-		return (cellX - boardOffsetX) / boardSize.X * vw,
-			(cellY - boardOffsetY) / boardSize.Y * vh
+		return (cellX - boardOffsetXRef.current) / boardSizeRef.current.X * vw,
+			(cellY - boardOffsetYRef.current) / boardSizeRef.current.Y * vh
 	end
 
 	-- Convert virtual cell position → screen image position (for display)
 	local function virtualToScreen(virtualX: number, virtualY: number, imgOffsetX: number, imgOffsetY: number)
 		local vw = RoomTypes.VIRTUAL_CANVAS_WIDTH
 		local vh = RoomTypes.VIRTUAL_CANVAS_HEIGHT
-		local cellX = virtualX / vw * boardSize.X + boardOffsetX
-		local cellY = virtualY / vh * boardSize.Y + boardOffsetY
-		-- Subtract tab offset: cell pos → image pos
+		local cellX = virtualX / vw * boardSizeRef.current.X + boardOffsetXRef.current
+		local cellY = virtualY / vh * boardSizeRef.current.Y + boardOffsetYRef.current
 		return cellX - imgOffsetX, cellY - imgOffsetY
 	end
 
-	local function onPieceHoverStart(pieceId: number)
-		local pieceState = state.pieces[pieceId]
+	local onPieceHoverStart = React.useCallback(function(pieceId: number)
+		local pieceState = stateRef.current.pieces[pieceId]
 		if pieceState and not pieceState.locked then
 			SoundService.playHover()
 		end
@@ -264,42 +316,45 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			next[pieceId] = true
 			return next
 		end)
-	end
+	end, {})
 
-	local function onPieceHoverEnd(pieceId: number)
+	local onPieceHoverEnd = React.useCallback(function(pieceId: number)
 		setHoveredPieceIds(function(prev)
 			local next = table.clone(prev)
 			next[pieceId] = nil
 			return next
 		end)
-	end
+	end, {})
 
-	local function onDragStart(pieceId: number)
-		actions.bringToFront(pieceId)
+	local onDragStart = React.useCallback(function(pieceId: number)
+		actionsRef.current.bringToFront(pieceId)
 		SoundService.playPickup()
-		if props.isMultiplayer and actions.claimPiece then
-			actions.claimPiece(pieceId)
+		if props.isMultiplayer and actionsRef.current.claimPiece then
+			actionsRef.current.claimPiece(pieceId)
 		end
 
 		-- Compute group follower offsets for drag (in screen coords)
-		local piece = state.pieces[pieceId]
+		local curState = stateRef.current
+		local curPieceImages = pieceImagesRef.current
+		local curPixelScale = pixelScaleRef.current
+		local piece = curState.pieces[pieceId]
 		local groupId = piece and piece.groupId
-		if groupId and state.groups and state.groups[groupId] then
+		if groupId and curState.groups and curState.groups[groupId] then
 			local offsets = {}
-			if props.isMultiplayer and pieceImages then
+			if props.isMultiplayer and curPieceImages then
 				-- Multiplayer: piece positions are virtual coords, convert to screen for offsets
-				local dragImg = pieceImages[pieceId]
+				local dragImg = curPieceImages[pieceId]
 				if dragImg then
-					local dragSox = math.floor(dragImg.offsetX * pixelScale)
-					local dragSoy = math.floor(dragImg.offsetY * pixelScale)
+					local dragSox = math.floor(dragImg.offsetX * curPixelScale)
+					local dragSoy = math.floor(dragImg.offsetY * curPixelScale)
 					local dragScreenX, dragScreenY = virtualToScreen(piece.x, piece.y, dragSox, dragSoy)
-					for _, memberId in state.groups[groupId] do
+					for _, memberId in curState.groups[groupId] do
 						if memberId ~= pieceId then
-							local memberPiece = state.pieces[memberId]
-							local memberImg = pieceImages[memberId]
+							local memberPiece = curState.pieces[memberId]
+							local memberImg = curPieceImages[memberId]
 							if memberPiece and memberImg then
-								local mSox = math.floor(memberImg.offsetX * pixelScale)
-								local mSoy = math.floor(memberImg.offsetY * pixelScale)
+								local mSox = math.floor(memberImg.offsetX * curPixelScale)
+								local mSoy = math.floor(memberImg.offsetY * curPixelScale)
 								local mScreenX, mScreenY = virtualToScreen(memberPiece.x, memberPiece.y, mSox, mSoy)
 								offsets[memberId] = {
 									dx = mScreenX - dragScreenX,
@@ -311,9 +366,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end
 			else
 				-- Solo: positions are already screen coords
-				for _, memberId in state.groups[groupId] do
+				for _, memberId in curState.groups[groupId] do
 					if memberId ~= pieceId then
-						local memberPiece = state.pieces[memberId]
+						local memberPiece = curState.pieces[memberId]
 						if memberPiece then
 							offsets[memberId] = {
 								dx = memberPiece.x - piece.x,
@@ -327,51 +382,91 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		else
 			groupDragOffsets.current = {}
 		end
-	end
+		followerPositionsRef.current = {}
+	end, {})
 
-	local function onDragMove(pieceId: number, x: number, y: number)
-		if props.isMultiplayer and pieceImages then
-			-- Multiplayer: move followers locally (server handles their network broadcast)
+	local onDragMove = React.useCallback(function(pieceId: number, x: number, y: number)
+		local curPieceImages = pieceImagesRef.current
+		local curPixelScale = pixelScaleRef.current
+		if props.isMultiplayer and curPieceImages then
+			-- Multiplayer: move followers directly via frame refs, send to server
 			for memberId, offset in groupDragOffsets.current do
-				local memberImg = pieceImages[memberId]
-				if memberImg and actions.movePieceLocal then
-					local mSox = math.floor(memberImg.offsetX * pixelScale)
-					local mSoy = math.floor(memberImg.offsetY * pixelScale)
-					local mvx, mvy = screenToVirtual(x + offset.dx, y + offset.dy, mSox, mSoy)
-					actions.movePieceLocal(memberId, mvx, mvy)
+				local memberFrame = pieceFrameRefs.current[memberId]
+				if memberFrame then
+					local memberImg = curPieceImages[memberId]
+					if memberImg then
+						local mSox = math.floor(memberImg.offsetX * curPixelScale)
+						local mSoy = math.floor(memberImg.offsetY * curPixelScale)
+						local mvx, mvy = screenToVirtual(x + offset.dx, y + offset.dy, mSox, mSoy)
+						-- Direct visual update: virtualToScreen gives world coords, apply zoom transform
+						local worldX, worldY = virtualToScreen(mvx, mvy, mSox, mSoy)
+						local sx, sy = worldX, worldY
+						if zoomActionsRef.current.worldToScreen then
+							sx, sy = zoomActionsRef.current.worldToScreen(worldX, worldY)
+						end
+						memberFrame.Position = UDim2.fromOffset(sx, sy)
+						followerPositionsRef.current[memberId] = { x = mvx, y = mvy, isVirtual = true }
+					end
 				end
 			end
 			-- Send dragged piece to server
-			local imageData = pieceImages[pieceId]
+			local imageData = curPieceImages[pieceId]
 			if imageData then
-				local sox = math.floor(imageData.offsetX * pixelScale)
-				local soy = math.floor(imageData.offsetY * pixelScale)
+				local sox = math.floor(imageData.offsetX * curPixelScale)
+				local soy = math.floor(imageData.offsetY * curPixelScale)
 				local vx, vy = screenToVirtual(x, y, sox, soy)
-				actions.movePiece(pieceId, vx, vy)
+				actionsRef.current.movePiece(pieceId, vx, vy)
 			end
 		else
-			-- Solo: move all followers via movePiece (screen coords)
+			-- Solo: move all followers directly via frame refs (bypass React state)
 			for memberId, offset in groupDragOffsets.current do
-				actions.movePiece(memberId, x + offset.dx, y + offset.dy)
+				local memberFrame = pieceFrameRefs.current[memberId]
+				if memberFrame then
+					local mx, my = x + offset.dx, y + offset.dy
+					if zoomActionsRef.current.worldToScreen then
+						local sx, sy = zoomActionsRef.current.worldToScreen(mx, my)
+						memberFrame.Position = UDim2.fromOffset(sx, sy)
+					else
+						memberFrame.Position = UDim2.fromOffset(mx, my)
+					end
+					followerPositionsRef.current[memberId] = { x = mx, y = my }
+				end
 			end
 		end
-	end
+	end, {})
 
-	local function onDragEnd(pieceId: number, x: number, y: number)
+	local onDragEnd = React.useCallback(function(pieceId: number, x: number, y: number)
+		-- Sync follower positions back to state (single batch after drag)
+		for memberId, pos in followerPositionsRef.current do
+			if pos.isVirtual then
+				if actionsRef.current.movePieceLocal then
+					actionsRef.current.movePieceLocal(memberId, pos.x, pos.y)
+				end
+			else
+				actionsRef.current.movePiece(memberId, pos.x, pos.y)
+			end
+		end
 		groupDragOffsets.current = {}
+		followerPositionsRef.current = {}
 
 		-- Always persist drop position to state so it stays in sync
-		-- (prevents snap-back via initialPosition effect and fixes save/restore)
 		if not props.isMultiplayer then
-			actions.movePiece(pieceId, x, y)
+			actionsRef.current.movePiece(pieceId, x, y)
 		end
 
-		if not puzzleDef or not pieceImages then
+		local curPuzzleDef = puzzleDefRef.current
+		local curPieceImages = pieceImagesRef.current
+		local curPixelScale = pixelScaleRef.current
+		local curCellSize = cellSizeRef.current
+		local curBoardOffsetX = boardOffsetXRef.current
+		local curBoardOffsetY = boardOffsetYRef.current
+
+		if not curPuzzleDef or not curPieceImages then
 			return
 		end
 
 		local pieceDef = nil
-		for _, p in puzzleDef.pieces do
+		for _, p in curPuzzleDef.pieces do
 			if p.id == pieceId then
 				pieceDef = p
 				break
@@ -380,18 +475,18 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		if not pieceDef then return end
 
 		-- Correct screen position accounts for the piece's tab offset
-		local imageData = pieceImages[pieceId]
-		local scaledOffsetX = math.floor(imageData.offsetX * pixelScale)
-		local scaledOffsetY = math.floor(imageData.offsetY * pixelScale)
-		local correctX = boardOffsetX + (pieceDef.col - 1) * cellSize.X - scaledOffsetX
-		local correctY = boardOffsetY + (pieceDef.row - 1) * cellSize.Y - scaledOffsetY
+		local imageData = curPieceImages[pieceId]
+		local scaledOffsetX = math.floor(imageData.offsetX * curPixelScale)
+		local scaledOffsetY = math.floor(imageData.offsetY * curPixelScale)
+		local correctX = curBoardOffsetX + (pieceDef.col - 1) * curCellSize.X - scaledOffsetX
+		local correctY = curBoardOffsetY + (pieceDef.row - 1) * curCellSize.Y - scaledOffsetY
 
 		if props.isMultiplayer then
 			local vx, vy = screenToVirtual(x, y, scaledOffsetX, scaledOffsetY)
-			actions.trySnap(pieceId, vx, vy, 0, 0)
+			actionsRef.current.trySnap(pieceId, vx, vy, 0, 0)
 
-			-- Client-side snap prediction: check if the piece will snap (grid or neighbor)
-			local MP_SNAP_THRESHOLD = 25 -- must match server SNAP_THRESHOLD
+			-- Client-side snap prediction
+			local MP_SNAP_THRESHOLD = 25
 			local vw = RoomTypes.VIRTUAL_CANVAS_WIDTH
 			local vh = RoomTypes.VIRTUAL_CANVAS_HEIGHT
 			local cellVW = vw / props.cols
@@ -399,28 +494,24 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			local correctVX = (pieceDef.col - 1) * cellVW
 			local correctVY = (pieceDef.row - 1) * cellVH
 
-			-- Check grid snap
 			local gdx = vx - correctVX
 			local gdy = vy - correctVY
 			local gdist = math.sqrt(gdx * gdx + gdy * gdy)
 			local willSnap = gdist <= MP_SNAP_THRESHOLD
 
-			-- Check neighbor snap if grid snap didn't match
 			if not willSnap then
-				for _, otherDef in puzzleDef.pieces do
+				local curState = stateRef.current
+				for _, otherDef in curPuzzleDef.pieces do
 					if otherDef.id == pieceId then continue end
-					local otherState = state.pieces[otherDef.id]
+					local otherState = curState.pieces[otherDef.id]
 					if not otherState or otherState.locked then continue end
-					-- Skip pieces in the same group
-					local pieceState = state.pieces[pieceId]
+					local pieceState = curState.pieces[pieceId]
 					if pieceState and pieceState.groupId and otherState.groupId == pieceState.groupId then continue end
 
-					-- Check if this piece is a grid neighbor
 					local rowDiff = math.abs(otherDef.row - pieceDef.row)
 					local colDiff = math.abs(otherDef.col - pieceDef.col)
 					if not (rowDiff + colDiff == 1) then continue end
 
-					-- Expected relative position in virtual coords
 					local expectedDx = (otherDef.col - pieceDef.col) * cellVW
 					local expectedDy = (otherDef.row - pieceDef.row) * cellVH
 					local actualDx = otherState.x - vx
@@ -436,14 +527,13 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end
 			end
 
-			-- Only trigger local effect if snap is predicted
 			if willSnap then
-				if actions.markLocalSnap then
-					actions.markLocalSnap(pieceId)
+				if actionsRef.current.markLocalSnap then
+					actionsRef.current.markLocalSnap(pieceId)
 				end
 				SoundService.playSnap()
-				local effectX = x + cellSize.X / 2
-				local effectY = y + cellSize.Y / 2
+				local effectX = x + curCellSize.X / 2
+				local effectY = y + curCellSize.Y / 2
 				snapEffectCounter.current += 1
 				local effectKey = "snap_" .. snapEffectCounter.current
 				local effectId = props.equippedSnapEffect or ""
@@ -465,16 +555,15 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end)
 			end
 		else
-			local snapped = actions.trySnap(
+			local snapped = actionsRef.current.trySnap(
 				pieceId, x, y, correctX, correctY,
-				puzzleDef, pieceImages, cellSize, pixelScale, boardOffsetX, boardOffsetY,
-				zoomState.zoom
+				curPuzzleDef, curPieceImages, curCellSize, curPixelScale, curBoardOffsetX, curBoardOffsetY,
+				zoomStateRef.current.zoom
 			)
 			if snapped then
 				SoundService.playSnap()
-				-- Trigger snap effect at the drop/cursor position (center of piece)
-				local effectX = x + cellSize.X / 2
-				local effectY = y + cellSize.Y / 2
+				local effectX = x + curCellSize.X / 2
+				local effectY = y + curCellSize.Y / 2
 				snapEffectCounter.current += 1
 				local effectKey = "snap_" .. snapEffectCounter.current
 				local effectId = props.equippedSnapEffect or ""
@@ -496,7 +585,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end)
 			end
 		end
-	end
+	end, {})
 
 	-- Helper: snap a random unlocked piece to its correct position and highlight it
 	local function executeHint(): number?
@@ -532,7 +621,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 
 		-- Flash green highlight
 		setHintHighlightId(targetId)
-		task.delay(1.0, function()
+		task.delay(5.0, function()
 			setHintHighlightId(function(current)
 				if current == targetId then
 					return nil
@@ -557,6 +646,22 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			connection:Disconnect()
 		end
 	end, { props.isMultiplayer, puzzleDef, pieceImages } :: { any })
+
+	-- Check Puzzle Assist gamepass ownership
+	React.useEffect(function()
+		task.spawn(function()
+			local localPlayer = Players.LocalPlayer
+			if not localPlayer then return end
+			local passConfig = MonetizationConfig.GAME_PASSES.PUZZLE_ASSIST
+			if passConfig.id == 0 then return end
+			local ok, ownsPass = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(localPlayer.UserId, passConfig.id)
+			end)
+			if ok and ownsPass then
+				setOwnsPuzzleAssist(true)
+			end
+		end)
+	end, {})
 
 	-- Compute board colors from equipped skin
 	local boardBgColor = Theme.Colors.bgDark
@@ -744,29 +849,34 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	else
 		-- Grid outline showing target positions
 		local gridScreenX, gridScreenY = zoomActions.worldToScreen(boardOffsetX, boardOffsetY)
+		local totalCells = props.rows * props.cols
 		local gridCells: { [string]: any } = {
 			Border = React.createElement("UIStroke", {
 				Color = Theme.Colors.scrollbar,
 				Thickness = 2,
 			}),
-			Grid = React.createElement("UIGridLayout", {
+		}
+		-- Only render individual cell frames for small puzzles (≤100 cells)
+		-- For larger puzzles (10x10+), skip per-cell frames to avoid reconciling hundreds of elements
+		if totalCells <= 100 then
+			gridCells["Grid"] = React.createElement("UIGridLayout", {
 				CellSize = UDim2.fromOffset(cellSize.X * zoomState.zoom, cellSize.Y * zoomState.zoom),
 				CellPadding = UDim2.fromOffset(0, 0),
 				SortOrder = Enum.SortOrder.LayoutOrder,
-			}),
-		}
-		for i = 1, props.rows * props.cols do
-			gridCells["Cell_" .. i] = React.createElement("Frame", {
-				LayoutOrder = i,
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-			}, {
-				Stroke = React.createElement("UIStroke", {
-					Color = Theme.Colors.border,
-					Thickness = 1,
-					Transparency = 0.5,
-				}),
 			})
+			for i = 1, totalCells do
+				gridCells["Cell_" .. i] = React.createElement("Frame", {
+					LayoutOrder = i,
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+				}, {
+					Stroke = React.createElement("UIStroke", {
+						Color = Theme.Colors.border,
+						Thickness = 1,
+						Transparency = 0.5,
+					}),
+				})
+			end
 		end
 
 		children["GridOutline"] = React.createElement("Frame", {
@@ -777,6 +887,19 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			BorderSizePixel = 0,
 			ZIndex = 0,
 		}, gridCells)
+
+		-- Semi-transparent assist overlay (when Guide is active)
+		if showAssistOverlay then
+			children["AssistOverlay"] = React.createElement("ImageLabel", {
+				Position = UDim2.fromOffset(gridScreenX, gridScreenY),
+				Size = UDim2.fromOffset(boardSize.X * zoomState.zoom, boardSize.Y * zoomState.zoom),
+				Image = props.imageAssetId,
+				ScaleType = Enum.ScaleType.Fit,
+				ImageTransparency = 0.75,
+				BackgroundTransparency = 1,
+				ZIndex = 1,
+			})
+		end
 
 		-- Bottom controls (EdgesOnly, Shuffle, Zoom) pinned to bottom-center of screen
 		local bottomControlChildren: { [string]: any } = {
@@ -928,6 +1051,42 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			}),
 		})
 
+		-- View Artwork button (always visible)
+		bottomControlChildren["ViewArtworkButton"] = React.createElement("TextButton", {
+			LayoutOrder = 4,
+			Size = UDim2.fromOffset(110, 36),
+			BackgroundColor3 = Theme.Colors.bgInput,
+			Text = "View Artwork",
+			TextColor3 = Theme.Colors.textSecondary,
+			TextSize = Theme.TextSize.label,
+			Font = Theme.Font.medium,
+			ZIndex = 50,
+			[React.Event.Activated] = function()
+				setShowArtworkModal(true)
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+		})
+
+		-- Guide toggle button (gamepass owners only)
+		if ownsPuzzleAssist then
+			bottomControlChildren["GuideToggleButton"] = React.createElement("TextButton", {
+				LayoutOrder = 5,
+				Size = UDim2.fromOffset(100, 36),
+				BackgroundColor3 = if showAssistOverlay then Theme.Colors.accentCyan else Theme.Colors.bgInput,
+				Text = if showAssistOverlay then "Guide ON" else "Guide OFF",
+				TextColor3 = if showAssistOverlay then Theme.Colors.textPrimary else Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.medium,
+				ZIndex = 50,
+				[React.Event.Activated] = function()
+					setShowAssistOverlay(function(prev) return not prev end)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			})
+		end
+
 		children["BottomControls"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.new(0.5, 0, 1, -12),
@@ -985,6 +1144,15 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 						local scaledOffX = math.floor(imageData.offsetX * pixelScale)
 						local scaledOffY = math.floor(imageData.offsetY * pixelScale)
 						displayX, displayY = virtualToScreen(pieceState.x, pieceState.y, scaledOffX, scaledOffY)
+
+						-- Clamp to viewport so pieces stay on-screen on any device
+						local camera = workspace.CurrentCamera
+						if camera then
+							local vpW = camera.ViewportSize.X
+							local vpH = camera.ViewportSize.Y
+							displayX = math.clamp(displayX, 0, vpW - displayW)
+							displayY = math.clamp(displayY, 0, vpH - displayH)
+						end
 					end
 
 					children["Piece_" .. pieceId] = React.createElement(PuzzlePiece, {
@@ -1003,11 +1171,14 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 						onDragEnd = onDragEnd,
 						onHoverStart = onPieceHoverStart,
 						onHoverEnd = onPieceHoverEnd,
+						registerFrameRef = registerFrameRef,
 						claimedByOther = claimedByOther,
 						claimerColor = claimerColor,
-						screenToWorld = zoomActions.screenToWorld,
-						worldToScreen = zoomActions.worldToScreen,
+						screenToWorld = stableScreenToWorld,
+						worldToScreen = stableWorldToScreen,
 						zoom = zoomState.zoom,
+						panX = zoomState.panX,
+						panY = zoomState.panY,
 					})
 				end
 			end
@@ -1039,6 +1210,62 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				effectKey = event.key,
 			})
 		end
+	end
+
+	-- Artwork modal overlay
+	if showArtworkModal then
+		children["ArtworkModalBackdrop"] = React.createElement("TextButton", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Theme.Colors.black,
+			BackgroundTransparency = Theme.Transparency.overlay,
+			Text = "",
+			ZIndex = Theme.ZIndex.modal,
+			[React.Event.Activated] = function()
+				setShowArtworkModal(false)
+			end,
+		})
+		children["ArtworkModalCard"] = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(0.85, 0.85),
+			BackgroundColor3 = Theme.Colors.bgCard,
+			ZIndex = Theme.ZIndex.modal + 1,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = Theme.Radius.modal }),
+			Stroke = React.createElement("UIStroke", {
+				Thickness = 2,
+				Color = Theme.Colors.border,
+			}),
+			Padding = React.createElement("UIPadding", {
+				PaddingTop = UDim.new(0, 12),
+				PaddingBottom = UDim.new(0, 12),
+				PaddingLeft = UDim.new(0, 12),
+				PaddingRight = UDim.new(0, 12),
+			}),
+			ArtworkImage = React.createElement("ImageLabel", {
+				Size = UDim2.fromScale(1, 1),
+				Image = props.imageAssetId,
+				ScaleType = Enum.ScaleType.Fit,
+				BackgroundTransparency = 1,
+				ZIndex = Theme.ZIndex.modal + 1,
+			}),
+			CloseButton = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, 4, 0, -4),
+				Size = UDim2.fromOffset(32, 32),
+				BackgroundColor3 = Theme.Colors.closeRed,
+				Text = "X",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.bold,
+				ZIndex = Theme.ZIndex.modal + 2,
+				[React.Event.Activated] = function()
+					setShowArtworkModal(false)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			}),
+		})
 	end
 
 	-- Save confirmation prompt overlay
