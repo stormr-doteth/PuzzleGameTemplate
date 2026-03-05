@@ -248,6 +248,18 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		end
 	end, { state.isComplete })
 
+	-- Responsive UI scale: 1.0x on mobile (<=700px), 1.5x on desktop (>=1400px), lerp between
+	local uiScale = React.useMemo(function()
+		local camera = workspace.CurrentCamera
+		local viewportW = if camera then camera.ViewportSize.X else 1200
+		local t = math.clamp((viewportW - 700) / (1400 - 700), 0, 1)
+		return 1.0 + t * 0.5
+	end, { boardSize } :: { any })
+
+	local function scaled(px: number): number
+		return math.floor(px * uiScale + 0.5)
+	end
+
 	-- Board position (centered on screen)
 	local boardOffsetX = React.useMemo(function()
 		local camera = workspace.CurrentCamera
@@ -532,8 +544,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 					actionsRef.current.markLocalSnap(pieceId)
 				end
 				SoundService.playSnap()
-				local effectX = x + curCellSize.X / 2
-				local effectY = y + curCellSize.Y / 2
+				local effectX, effectY = zoomActionsRef.current.worldToScreen(
+					x + curCellSize.X / 2, y + curCellSize.Y / 2
+				)
 				snapEffectCounter.current += 1
 				local effectKey = "snap_" .. snapEffectCounter.current
 				local effectId = props.equippedSnapEffect or ""
@@ -562,8 +575,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			)
 			if snapped then
 				SoundService.playSnap()
-				local effectX = x + curCellSize.X / 2
-				local effectY = y + curCellSize.Y / 2
+				local effectX, effectY = zoomActionsRef.current.worldToScreen(
+					x + curCellSize.X / 2, y + curCellSize.Y / 2
+				)
 				snapEffectCounter.current += 1
 				local effectKey = "snap_" .. snapEffectCounter.current
 				local effectId = props.equippedSnapEffect or ""
@@ -665,7 +679,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 
 	-- Compute board colors from equipped skin
 	local boardBgColor = Theme.Colors.bgDark
-	local gridBgColor = Theme.Colors.bgElevated
+	local gridBgColor = Color3.fromRGB(80, 80, 80)
 	if props.equippedBoardSkin and props.equippedBoardSkin ~= "" then
 		local skin = ShopItems.getById(props.equippedBoardSkin)
 		if skin and skin.previewColor then
@@ -682,16 +696,17 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		children["Timer"] = React.createElement("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.new(0.5, 0, 0, 4),
-			Size = UDim2.fromOffset(120, 40),
-			BackgroundColor3 = Theme.Colors.bgMedium,
+			Size = UDim2.fromOffset(scaled(120), scaled(40)),
+			BackgroundColor3 = Theme.Colors.bgButtonContrast,
 			BackgroundTransparency = Theme.Transparency.hudButton,
 			Text = formatTime(timer.elapsedSeconds),
 			TextColor3 = Theme.Colors.textPrimary,
-			TextSize = Theme.TextSize.heading,
+			TextSize = scaled(Theme.TextSize.heading),
 			Font = Theme.Font.bold,
 			ZIndex = 50,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 			Padding = React.createElement("UIPadding", {
 				PaddingLeft = UDim.new(0, 8),
 				PaddingRight = UDim.new(0, 8),
@@ -704,11 +719,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		children["BackButton"] = React.createElement("TextButton", {
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -8, 0, 4),
-			Size = UDim2.fromOffset(130, 36),
-			BackgroundColor3 = Theme.Colors.bgInput,
+			Size = UDim2.fromOffset(scaled(130), scaled(36)),
+			BackgroundColor3 = Theme.Colors.bgButtonContrast,
 			Text = if props.isMultiplayer then "< Leave Room" else "< Back to Menu",
-			TextColor3 = Theme.Colors.textSecondary,
-			TextSize = Theme.TextSize.label,
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = scaled(Theme.TextSize.label),
 			Font = Theme.Font.medium,
 			ZIndex = 50,
 			[React.Event.Activated] = function()
@@ -723,16 +738,17 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			end,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 		})
 
 		children["GiveUpButton"] = React.createElement("TextButton", {
 			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -146, 0, 4),
-			Size = UDim2.fromOffset(80, 36),
+			Position = UDim2.new(1, -scaled(146), 0, 4),
+			Size = UDim2.fromOffset(scaled(80), scaled(36)),
 			BackgroundColor3 = Theme.Colors.dangerDark,
 			Text = "Give Up",
 			TextColor3 = Color3.fromRGB(255, 220, 220),
-			TextSize = Theme.TextSize.label,
+			TextSize = scaled(Theme.TextSize.label),
 			Font = Theme.Font.medium,
 			ZIndex = 50,
 			[React.Event.Activated] = function()
@@ -749,11 +765,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			children["HintButton"] = React.createElement("TextButton", {
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.new(1, -8, 0.5, 0),
-				Size = UDim2.fromOffset(110, 36),
+				Size = UDim2.fromOffset(scaled(110), scaled(36)),
 				BackgroundColor3 = Theme.Colors.orange,
 				Text = "Hint (" .. localHints .. ")",
 				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.label,
+				TextSize = scaled(Theme.TextSize.label),
 				Font = Theme.Font.medium,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
@@ -787,11 +803,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			children["RobuxHintButton"] = React.createElement("TextButton", {
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.new(1, -8, 0.5, robuxOffsetY),
-				Size = UDim2.fromOffset(130, 36),
+				Size = UDim2.fromOffset(scaled(130), scaled(36)),
 				BackgroundColor3 = Color3.fromRGB(0, 176, 111),
 				Text = "\xF0\x9F\x92\x8E Hint (R$" .. MonetizationConfig.DEV_PRODUCTS.HINT_1.robuxPrice .. ")",
 				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.label,
+				TextSize = scaled(Theme.TextSize.label),
 				Font = Theme.Font.medium,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
@@ -906,17 +922,17 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			Layout = React.createElement("UIListLayout", {
 				FillDirection = Enum.FillDirection.Horizontal,
 				SortOrder = Enum.SortOrder.LayoutOrder,
-				Padding = UDim.new(0, 8),
+				Padding = UDim.new(0, scaled(8)),
 				HorizontalAlignment = Enum.HorizontalAlignment.Center,
 				VerticalAlignment = Enum.VerticalAlignment.Center,
 			}),
 			EdgesOnlyButton = React.createElement("TextButton", {
 				LayoutOrder = 1,
-				Size = UDim2.fromOffset(100, 36),
-				BackgroundColor3 = if showEdgesOnly then Color3.fromRGB(50, 120, 80) else Theme.Colors.bgInput,
+				Size = UDim2.fromOffset(scaled(100), scaled(36)),
+				BackgroundColor3 = if showEdgesOnly then Color3.fromRGB(50, 120, 80) else Theme.Colors.bgButtonContrast,
 				Text = if showEdgesOnly then "Show All" else "Edges Only",
-				TextColor3 = Theme.Colors.textSecondary,
-				TextSize = Theme.TextSize.label,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.label),
 				Font = Theme.Font.medium,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
@@ -924,6 +940,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 			}),
 		}
 
@@ -931,11 +948,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		if not props.isMultiplayer and not state.isComplete then
 			bottomControlChildren["ShuffleButton"] = React.createElement("TextButton", {
 				LayoutOrder = 2,
-				Size = UDim2.fromOffset(80, 36),
-				BackgroundColor3 = Theme.Colors.bgInput,
+				Size = UDim2.fromOffset(scaled(80), scaled(36)),
+				BackgroundColor3 = Theme.Colors.bgButtonContrast,
 				Text = "Shuffle",
-				TextColor3 = Theme.Colors.textSecondary,
-				TextSize = Theme.TextSize.label,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.label),
 				Font = Theme.Font.medium,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
@@ -971,28 +988,29 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 			})
 		end
 
 		-- Zoom controls
 		bottomControlChildren["ZoomControls"] = React.createElement("Frame", {
 			LayoutOrder = 3,
-			Size = UDim2.fromOffset(140, 36),
+			Size = UDim2.fromOffset(scaled(140), scaled(36)),
 			BackgroundTransparency = 1,
 			ZIndex = 50,
 		}, {
 			Layout = React.createElement("UIListLayout", {
 				FillDirection = Enum.FillDirection.Horizontal,
 				SortOrder = Enum.SortOrder.LayoutOrder,
-				Padding = UDim.new(0, 4),
+				Padding = UDim.new(0, scaled(4)),
 			}),
 			ZoomOut = React.createElement("TextButton", {
 				LayoutOrder = 1,
-				Size = UDim2.fromOffset(32, 36),
-				BackgroundColor3 = Theme.Colors.bgInput,
+				Size = UDim2.fromOffset(scaled(32), scaled(36)),
+				BackgroundColor3 = Theme.Colors.bgButtonContrast,
 				Text = "-",
-				TextColor3 = Theme.Colors.textSecondary,
-				TextSize = Theme.TextSize.large,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.large),
 				Font = Theme.Font.bold,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
@@ -1003,26 +1021,28 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+				Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 			}),
 			ZoomLabel = React.createElement("TextLabel", {
 				LayoutOrder = 2,
-				Size = UDim2.fromOffset(48, 36),
-				BackgroundColor3 = Theme.Colors.bgElevated,
+				Size = UDim2.fromOffset(scaled(48), scaled(36)),
+				BackgroundColor3 = Theme.Colors.bgButtonContrast,
 				Text = math.floor(zoomState.zoom * 100 + 0.5) .. "%",
-				TextColor3 = Theme.Colors.textSecondary,
-				TextSize = Theme.TextSize.small,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.small),
 				Font = Theme.Font.medium,
 				ZIndex = 50,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+				Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 			}),
 			ZoomIn = React.createElement("TextButton", {
 				LayoutOrder = 3,
-				Size = UDim2.fromOffset(32, 36),
-				BackgroundColor3 = Theme.Colors.bgInput,
+				Size = UDim2.fromOffset(scaled(32), scaled(36)),
+				BackgroundColor3 = Theme.Colors.bgButtonContrast,
 				Text = "+",
-				TextColor3 = Theme.Colors.textSecondary,
-				TextSize = Theme.TextSize.large,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.large),
 				Font = Theme.Font.bold,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
@@ -1033,14 +1053,15 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+				Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 			}),
 			ResetBtn = React.createElement("TextButton", {
 				LayoutOrder = 4,
-				Size = UDim2.fromOffset(20, 36),
-				BackgroundColor3 = Theme.Colors.bgInput,
+				Size = UDim2.fromOffset(scaled(20), scaled(36)),
+				BackgroundColor3 = Theme.Colors.bgButtonContrast,
 				Text = "0",
-				TextColor3 = Theme.Colors.textMuted,
-				TextSize = Theme.TextSize.tiny,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.tiny),
 				Font = Theme.Font.medium,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
@@ -1048,17 +1069,18 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+				Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 			}),
 		})
 
 		-- View Artwork button (always visible)
 		bottomControlChildren["ViewArtworkButton"] = React.createElement("TextButton", {
 			LayoutOrder = 4,
-			Size = UDim2.fromOffset(110, 36),
-			BackgroundColor3 = Theme.Colors.bgInput,
+			Size = UDim2.fromOffset(scaled(110), scaled(36)),
+			BackgroundColor3 = Theme.Colors.bgButtonContrast,
 			Text = "View Artwork",
-			TextColor3 = Theme.Colors.textSecondary,
-			TextSize = Theme.TextSize.label,
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = scaled(Theme.TextSize.label),
 			Font = Theme.Font.medium,
 			ZIndex = 50,
 			[React.Event.Activated] = function()
@@ -1066,17 +1088,18 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			end,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 		})
 
 		-- Guide toggle button (gamepass owners only)
 		if ownsPuzzleAssist then
 			bottomControlChildren["GuideToggleButton"] = React.createElement("TextButton", {
 				LayoutOrder = 5,
-				Size = UDim2.fromOffset(100, 36),
-				BackgroundColor3 = if showAssistOverlay then Theme.Colors.accentCyan else Theme.Colors.bgInput,
+				Size = UDim2.fromOffset(scaled(100), scaled(36)),
+				BackgroundColor3 = if showAssistOverlay then Theme.Colors.accentCyan else Theme.Colors.bgButtonContrast,
 				Text = if showAssistOverlay then "Guide ON" else "Guide OFF",
-				TextColor3 = if showAssistOverlay then Theme.Colors.textPrimary else Theme.Colors.textSecondary,
-				TextSize = Theme.TextSize.label,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.label),
 				Font = Theme.Font.medium,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
@@ -1084,6 +1107,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 			})
 		end
 
@@ -1201,8 +1225,9 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			-- Convert virtual coords to screen center position
 			local vw = RoomTypes.VIRTUAL_CANVAS_WIDTH
 			local vh = RoomTypes.VIRTUAL_CANVAS_HEIGHT
-			local screenX = event.x / vw * boardSize.X + boardOffsetX
-			local screenY = event.y / vh * boardSize.Y + boardOffsetY
+			local worldX = event.x / vw * boardSize.X + boardOffsetX
+			local worldY = event.y / vh * boardSize.Y + boardOffsetY
+			local screenX, screenY = zoomActions.worldToScreen(worldX, worldY)
 			children["MPSnapEffect_" .. event.key] = React.createElement(SnapEffect, {
 				positionX = screenX,
 				positionY = screenY,
@@ -1360,10 +1385,13 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		})
 	end
 
-	return React.createElement("Frame", {
+	return React.createElement("ImageLabel", {
 		Size = UDim2.fromScale(1, 1),
+		Image = "rbxassetid://123416350069330",
+		ScaleType = Enum.ScaleType.Crop,
 		BackgroundColor3 = boardBgColor,
 		BackgroundTransparency = 0,
+		BorderSizePixel = 0,
 	}, children)
 end
 

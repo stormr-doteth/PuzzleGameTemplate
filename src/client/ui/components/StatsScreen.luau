@@ -134,8 +134,7 @@ local function StatsScreen(props: StatsScreenProps)
 
 	return React.createElement("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Theme.Colors.black,
-		BackgroundTransparency = Theme.Transparency.overlay,
+		BackgroundTransparency = 1,
 		ZIndex = 150,
 	}, {
 		Modal = React.createElement("Frame", {

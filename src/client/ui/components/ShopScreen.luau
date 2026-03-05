@@ -237,9 +237,6 @@ local function ShopScreen(props: ShopScreenProps)
 						Thickness = 2,
 						Color = COLORS.border,
 					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 14,
-					}),
 				})
 			elseif isOwned then
 				actionButton = React.createElement("TextButton", {
@@ -260,9 +257,6 @@ local function ShopScreen(props: ShopScreenProps)
 						Thickness = 2,
 						Color = COLORS.border,
 					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 14,
-					}),
 				})
 			elseif canAfford then
 				actionButton = React.createElement("TextButton", {
@@ -282,9 +276,6 @@ local function ShopScreen(props: ShopScreenProps)
 					BtnStroke = React.createElement("UIStroke", {
 						Thickness = 2,
 						Color = COLORS.border,
-					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 14,
 					}),
 				})
 			else
@@ -307,9 +298,6 @@ local function ShopScreen(props: ShopScreenProps)
 					BtnStroke = React.createElement("UIStroke", {
 						Thickness = 2,
 						Color = COLORS.border,
-					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 11,
 					}),
 				})
 			end
@@ -359,9 +347,6 @@ local function ShopScreen(props: ShopScreenProps)
 						Thickness = 2,
 						Color = COLORS.border,
 					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 12,
-					}),
 				})
 			end
 
@@ -398,9 +383,6 @@ local function ShopScreen(props: ShopScreenProps)
 							Thickness = 1,
 							Color = Theme.Colors.black,
 						}),
-						TextConstraint = React.createElement("UITextSizeConstraint", {
-							MaxTextSize = 28,
-						}),
 					}),
 				}),
 				-- Item name
@@ -418,9 +400,6 @@ local function ShopScreen(props: ShopScreenProps)
 						Thickness = 1.5,
 						Color = Theme.Colors.black,
 					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 16,
-					}),
 				}),
 				-- Description
 				Desc = React.createElement("TextLabel", {
@@ -434,9 +413,6 @@ local function ShopScreen(props: ShopScreenProps)
 					TextXAlignment = Enum.TextXAlignment.Left,
 					TextWrapped = true,
 				}, {
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 16,
-					}),
 				}),
 				-- Price
 				PriceTag = React.createElement("TextLabel", {
@@ -449,9 +425,6 @@ local function ShopScreen(props: ShopScreenProps)
 					Font = Theme.Font.bold,
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}, {
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 16,
-					}),
 				}),
 				-- Action button
 				ActionBtn = actionButton,
@@ -464,8 +437,7 @@ local function ShopScreen(props: ShopScreenProps)
 
 	return React.createElement("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Theme.Colors.black,
-		BackgroundTransparency = Theme.Transparency.overlay,
+		BackgroundTransparency = 1,
 		ZIndex = 150,
 	}, {
 		Modal = React.createElement("Frame", {
@@ -509,9 +481,6 @@ local function ShopScreen(props: ShopScreenProps)
 						Thickness = 2,
 						Color = Theme.Colors.black,
 					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 24,
-					}),
 				}),
 				CloseButton = React.createElement("TextButton", {
 					AnchorPoint = Vector2.new(1, 0.5),
@@ -534,9 +503,6 @@ local function ShopScreen(props: ShopScreenProps)
 					AspectRatio = React.createElement("UIAspectRatioConstraint", {
 						AspectRatio = 1,
 					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 20,
-					}),
 				}),
 			}),
 
@@ -551,10 +517,6 @@ local function ShopScreen(props: ShopScreenProps)
 				TextScaled = true,
 				Font = Theme.Font.bold,
 				ZIndex = 151,
-			}, {
-				TextConstraint = React.createElement("UITextSizeConstraint", {
-					MaxTextSize = 16,
-				}),
 			}) else nil,
 
 			-- Tab bar
@@ -588,9 +550,6 @@ local function ShopScreen(props: ShopScreenProps)
 						end,
 					}, {
 						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-						TextConstraint = React.createElement("UITextSizeConstraint", {
-							MaxTextSize = 13,
-						}),
 					})
 				end
 				return tabChildren
@@ -644,9 +603,6 @@ local function ShopScreen(props: ShopScreenProps)
 					CashStroke = React.createElement("UIStroke", {
 						Thickness = 1.5,
 						Color = Theme.Colors.black,
-					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 20,
 					}),
 				}),
 			}),

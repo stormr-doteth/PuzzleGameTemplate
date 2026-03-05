@@ -16,8 +16,6 @@ SeatingService.Init()
 local MusicService = require(script:WaitForChild("services"):WaitForChild("MusicService"))
 MusicService.Init()
 
-local DialogService = require(script:WaitForChild("services"):WaitForChild("DialogService"))
-DialogService.Init()
 
 local App = require(script:WaitForChild("ui"):WaitForChild("App"))
 

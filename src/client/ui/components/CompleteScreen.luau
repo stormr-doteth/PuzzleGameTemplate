@@ -280,28 +280,13 @@ local function CompleteScreen(props: CompleteScreenProps)
 
 	if props.isMultiplayer then
 		if props.isHost then
-			cardChildren["PlayAgainButton"] = React.createElement("TextButton", {
+			cardChildren["ChooseNewButton"] = React.createElement("TextButton", {
 				LayoutOrder = 11,
 				Size = UDim2.new(0, 220, 0, 48),
 				BackgroundColor3 = Theme.Colors.accentBlue,
-				Text = "PLAY AGAIN",
-				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.large,
-				Font = Theme.Font.bold,
-				[React.Event.Activated] = function()
-					props.onPlayAgain()
-				end,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
-			})
-
-			cardChildren["ChooseNewButton"] = React.createElement("TextButton", {
-				LayoutOrder = 12,
-				Size = UDim2.new(0, 220, 0, 48),
-				BackgroundColor3 = Theme.Colors.bgMuted,
 				Text = "CHOOSE NEW PUZZLE",
 				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.button,
+				TextSize = Theme.TextSize.large,
 				Font = Theme.Font.bold,
 				[React.Event.Activated] = function()
 					if props.onChooseNewPuzzle then

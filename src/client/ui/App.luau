@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
+local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
@@ -27,11 +28,6 @@ pcall(function()
 	SeatingService = require(script.Parent.Parent.services.SeatingService)
 end)
 
--- DialogService loaded optionally
-local DialogService = nil
-pcall(function()
-	DialogService = require(script.Parent.Parent.services.DialogService)
-end)
 
 type GameState = "walking" | "menu" | "playing" | "complete" | "admiring" | "room_lobby" | "room_playing" | "room_complete"
 
@@ -77,11 +73,47 @@ local function App(props)
 	-- NPC overlay state (only one open at a time)
 	local activeOverlay, setActiveOverlay = React.useState(nil :: string?)
 	local overlayRef = React.useRef(nil :: Frame?)
+	local blurRef = React.useRef(nil :: BlurEffect?)
+
+	local function closeOverlay()
+		-- Tween out blur + FOV
+		local blur = blurRef.current
+		if blur then
+			local blurOut = TweenService:Create(blur, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Size = 0,
+			})
+			blurOut:Play()
+			blurOut.Completed:Once(function()
+				if blurRef.current == blur then
+					blur:Destroy()
+					blurRef.current = nil
+				end
+			end)
+		end
+		local camera = workspace.CurrentCamera
+		TweenService:Create(camera, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			FieldOfView = 70,
+		}):Play()
+
+		local frame = overlayRef.current
+		if frame then
+			local tweenOut = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+				Position = UDim2.new(0.5, 0, 0.5, 30),
+				GroupTransparency = 1,
+			})
+			tweenOut:Play()
+			tweenOut.Completed:Once(function()
+				setActiveOverlay(nil)
+			end)
+		else
+			setActiveOverlay(nil)
+		end
+	end
 
 	local function openOverlay(name: string)
 		-- If same overlay is already open, close it (toggle)
 		if activeOverlay == name then
-			setActiveOverlay(nil)
+			closeOverlay()
 			return
 		end
 
@@ -101,34 +133,13 @@ local function App(props)
 		end
 	end
 
-	-- Register overlay opener with DialogService so NPCs can open shop/etc.
-	if DialogService then
-		DialogService.SetOverlayOpener(openOverlay)
-	end
-
-	local function closeOverlay()
-		local frame = overlayRef.current
-		if frame then
-			local tweenOut = TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-				Position = UDim2.new(0.5, 0, 0.5, 30),
-				GroupTransparency = 1,
-			})
-			tweenOut:Play()
-			tweenOut.Completed:Once(function()
-				setActiveOverlay(nil)
-			end)
-		else
-			setActiveOverlay(nil)
-		end
-	end
-
 	-- Compat shorthands for NPC proximity triggers
 	local npcShopOpen = activeOverlay == "shop"
 	local npcRobuxShopOpen = activeOverlay == "robux"
 	local npcLeaderboardOpen = activeOverlay == "leaderboard"
 	local npcStatsOpen = activeOverlay == "stats"
 
-	-- Tween-in on overlay mount
+	-- Tween-in on overlay mount + blur/FOV effect
 	React.useEffect(function()
 		if activeOverlay == nil then return end
 		local frame = overlayRef.current
@@ -143,8 +154,30 @@ local function App(props)
 		})
 		tweenIn:Play()
 
+		-- Blur effect
+		local blur = blurRef.current
+		if not blur then
+			blur = Instance.new("BlurEffect")
+			blur.Size = 0
+			blur.Parent = Lighting
+			blurRef.current = blur
+		end
+		local blurIn = TweenService:Create(blur, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = 24,
+		})
+		blurIn:Play()
+
+		-- FOV zoom
+		local camera = workspace.CurrentCamera
+		local fovIn = TweenService:Create(camera, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			FieldOfView = 60,
+		})
+		fovIn:Play()
+
 		return function()
 			tweenIn:Cancel()
+			blurIn:Cancel()
+			fovIn:Cancel()
 		end
 	end, { activeOverlay })
 
@@ -376,11 +409,6 @@ local function App(props)
 				openOverlay("leaderboard")
 			elseif npcType == "stats" then
 				openOverlay("stats")
-			elseif npcType == "dialog" then
-				if DialogService then
-					local npcName = model:FindFirstChild("NPCName") and model:FindFirstChild("NPCName").Value or model.Name
-					DialogService.TriggerDialog(npcName, model, prompt)
-				end
 			end
 		end)
 
@@ -859,10 +887,6 @@ local function App(props)
 					Font = Theme.Font.bold,
 					ZIndex = 11,
 				}, {
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MinTextSize = 16,
-						MaxTextSize = 28,
-					}),
 					Padding = React.createElement("UIPadding", {
 						PaddingLeft = UDim.new(0.08, 0),
 						PaddingRight = UDim.new(0.08, 0),
@@ -931,9 +955,6 @@ local function App(props)
 						Thickness = 2,
 						Color = Theme.Colors.black,
 					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 28,
-					}),
 				}),
 			}),
 			RobuxShopBtn = React.createElement("Frame", {
@@ -977,9 +998,6 @@ local function App(props)
 					LabelStroke = React.createElement("UIStroke", {
 						Thickness = 2,
 						Color = Theme.Colors.black,
-					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 28,
 					}),
 				}),
 			}),
@@ -1025,9 +1043,6 @@ local function App(props)
 						Thickness = 2,
 						Color = Theme.Colors.black,
 					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 24,
-					}),
 				}),
 			}),
 			StatsBtn = React.createElement("Frame", {
@@ -1071,9 +1086,6 @@ local function App(props)
 					LabelStroke = React.createElement("UIStroke", {
 						Thickness = 2,
 						Color = Theme.Colors.black,
-					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 28,
 					}),
 				}),
 			}),

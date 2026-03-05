@@ -39,8 +39,6 @@ local function XPBar(props: XPBarProps)
 			TextScaled = true,
 			Font = Theme.Font.bold,
 			ZIndex = 201,
-		}, {
-			TextConstraint = React.createElement("UITextSizeConstraint", { MaxTextSize = 16 }),
 		}),
 	})
 end

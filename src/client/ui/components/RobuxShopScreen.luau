@@ -69,9 +69,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 				Thickness = 1.5,
 				Color = Theme.Colors.black,
 			}),
-			TextConstraint = React.createElement("UITextSizeConstraint", {
-				MaxTextSize = 22,
-			}),
 		})
 	end
 
@@ -135,10 +132,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 					TextColor3 = Theme.Colors.textPrimary,
 					TextScaled = true,
 					Font = Theme.Font.bold,
-				}, {
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 14,
-					}),
 				}),
 			})
 		else
@@ -159,9 +152,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 				Stroke = React.createElement("UIStroke", {
 					Thickness = 2,
 					Color = Theme.Colors.border,
-				}),
-				TextConstraint = React.createElement("UITextSizeConstraint", {
-					MaxTextSize = 14,
 				}),
 			})
 		end
@@ -192,10 +182,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 					TextScaled = true,
 					Font = Theme.Font.heading,
 					TextColor3 = Theme.Colors.textPrimary,
-				}, {
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 28,
-					}),
 				}),
 			}),
 			-- Name
@@ -214,9 +200,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 					Thickness = 1,
 					Color = Theme.Colors.black,
 				}),
-				TextConstraint = React.createElement("UITextSizeConstraint", {
-					MaxTextSize = 16,
-				}),
 			}),
 			-- Description
 			Desc = React.createElement("TextLabel", {
@@ -230,9 +213,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextWrapped = true,
 			}, {
-				TextConstraint = React.createElement("UITextSizeConstraint", {
-					MaxTextSize = 16,
-				}),
 			}),
 			-- Buy button or Owned badge
 			Action = actionElement,
@@ -302,10 +282,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 					TextScaled = true,
 					Font = Theme.Font.heading,
 					TextColor3 = Theme.Colors.textPrimary,
-				}, {
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 28,
-					}),
 				}),
 			}),
 			-- Name
@@ -324,9 +300,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 					Thickness = 1,
 					Color = Theme.Colors.black,
 				}),
-				TextConstraint = React.createElement("UITextSizeConstraint", {
-					MaxTextSize = 16,
-				}),
 			}),
 			-- Description
 			Desc = React.createElement("TextLabel", {
@@ -340,9 +313,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 				TextXAlignment = Enum.TextXAlignment.Left,
 				TextWrapped = true,
 			}, {
-				TextConstraint = React.createElement("UITextSizeConstraint", {
-					MaxTextSize = 16,
-				}),
 			}),
 			-- Buy button
 			BuyButton = React.createElement("TextButton", {
@@ -363,9 +333,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 					Thickness = 2,
 					Color = Theme.Colors.border,
 				}),
-				TextConstraint = React.createElement("UITextSizeConstraint", {
-					MaxTextSize = 14,
-				}),
 			}),
 		})
 		cardOrder += 1
@@ -383,8 +350,7 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 
 	return React.createElement("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Theme.Colors.black,
-		BackgroundTransparency = Theme.Transparency.overlay,
+		BackgroundTransparency = 1,
 		ZIndex = 150,
 	}, {
 		Modal = React.createElement("Frame", {
@@ -427,9 +393,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 						Thickness = 2,
 						Color = Theme.Colors.black,
 					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 24,
-					}),
 				}),
 				CloseButton = React.createElement("TextButton", {
 					AnchorPoint = Vector2.new(1, 0.5),
@@ -451,9 +414,6 @@ local function RobuxShopScreen(props: RobuxShopScreenProps)
 					}),
 					AspectRatio = React.createElement("UIAspectRatioConstraint", {
 						AspectRatio = 1,
-					}),
-					TextConstraint = React.createElement("UITextSizeConstraint", {
-						MaxTextSize = 20,
 					}),
 				}),
 			}),

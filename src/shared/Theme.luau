@@ -3,48 +3,49 @@ local Theme = {}
 -- === COLOR PALETTE === --
 
 Theme.Colors = {
-	-- Backgrounds (dark navy gradient, darkest → lightest)
-	bgDeepest = Color3.fromRGB(15, 15, 25),
-	bgDark = Color3.fromRGB(25, 25, 35),
-	bgMedium = Color3.fromRGB(30, 30, 40),
-	bgCard = Color3.fromRGB(35, 35, 50),
-	bgElevated = Color3.fromRGB(40, 40, 55),
-	bgInput = Color3.fromRGB(45, 45, 60),
+	-- Backgrounds (cozy cafe gradient, darkest → lightest)
+	bgDeepest = Color3.fromRGB(30, 10, 9),
+	bgDark = Color3.fromRGB(55, 17, 16),
+	bgMedium = Color3.fromRGB(65, 30, 28),
+	bgCard = Color3.fromRGB(78, 44, 38),
+	bgElevated = Color3.fromRGB(95, 58, 50),
+	bgInput = Color3.fromRGB(108, 70, 62),
 
-	-- Text
-	textPrimary = Color3.fromRGB(255, 255, 255),
-	textSecondary = Color3.fromRGB(200, 200, 220),
-	textMuted = Color3.fromRGB(160, 160, 180),
-	textDisabled = Color3.fromRGB(120, 120, 150),
+	-- Text (warm cream tones)
+	textPrimary = Color3.fromRGB(255, 245, 235),
+	textSecondary = Color3.fromRGB(220, 200, 185),
+	textMuted = Color3.fromRGB(180, 155, 140),
+	textDisabled = Color3.fromRGB(140, 118, 105),
 
-	-- Accent (primary interactive color)
-	accentBlue = Color3.fromRGB(80, 140, 230),
-	accentCyan = Color3.fromRGB(80, 200, 255),
+	-- Accent (sienna/terracotta primary interactive color)
+	accentBlue = Color3.fromRGB(164, 84, 48),
+	accentCyan = Color3.fromRGB(188, 115, 72),
 
 	-- Status
-	success = Color3.fromRGB(50, 180, 80),
-	successLight = Color3.fromRGB(80, 200, 120),
-	warning = Color3.fromRGB(255, 220, 80),
-	gold = Color3.fromRGB(255, 215, 0),
-	orange = Color3.fromRGB(255, 180, 50),
-	danger = Color3.fromRGB(255, 80, 80),
-	dangerDark = Color3.fromRGB(200, 60, 60),
-	cashGreen = Color3.fromRGB(80, 255, 80),
+	success = Color3.fromRGB(60, 160, 75),
+	successLight = Color3.fromRGB(90, 185, 110),
+	warning = Color3.fromRGB(240, 200, 80),
+	gold = Color3.fromRGB(255, 200, 50),
+	orange = Color3.fromRGB(220, 155, 55),
+	danger = Color3.fromRGB(210, 70, 65),
+	dangerDark = Color3.fromRGB(175, 55, 50),
+	cashGreen = Color3.fromRGB(90, 220, 90),
 
 	-- Utility
 	black = Color3.fromRGB(0, 0, 0),
-	bgHud = Color3.fromRGB(20, 20, 30),
-	bgButton = Color3.fromRGB(55, 55, 75),
-	bgMuted = Color3.fromRGB(100, 100, 120),
+	bgHud = Color3.fromRGB(40, 14, 13),
+	bgButton = Color3.fromRGB(108, 70, 60),
+	bgButtonContrast = Color3.fromRGB(160, 120, 55),
+	bgMuted = Color3.fromRGB(129, 93, 85),
 
 	-- Borders & chrome
-	border = Color3.fromRGB(60, 60, 80),
-	borderDark = Color3.fromRGB(20, 25, 40),
-	scrollbar = Color3.fromRGB(80, 80, 100),
+	border = Color3.fromRGB(110, 78, 68),
+	borderDark = Color3.fromRGB(45, 20, 18),
+	scrollbar = Color3.fromRGB(129, 93, 85),
 
 	-- Header/Feature
-	headerGold = Color3.fromRGB(255, 200, 40),
-	closeRed = Color3.fromRGB(220, 50, 50),
+	headerGold = Color3.fromRGB(196, 156, 130),
+	closeRed = Color3.fromRGB(200, 55, 50),
 
 	-- Player colors (multiplayer)
 	player1 = Color3.fromRGB(80, 180, 230),
