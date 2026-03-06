@@ -119,6 +119,16 @@ function TableStatusService.SetSeatsEnabled(tableModel: Model, enabled: boolean)
 					descendant.Disabled = true
 				end
 			end
+
+			-- Also toggle ProximityPrompt on empty seats
+			local prompt = descendant:FindFirstChildOfClass("ProximityPrompt")
+			if prompt then
+				if enabled and not descendant.Occupant then
+					prompt.Enabled = true
+				elseif not enabled then
+					prompt.Enabled = false
+				end
+			end
 		end
 	end
 end

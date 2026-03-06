@@ -1,9 +1,7 @@
-local CaptureService = game:GetService("CaptureService")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local StarterGui = game:GetService("StarterGui")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -20,6 +18,7 @@ local Theme = require(Shared.Theme)
 local MenuScreen = require(script.Parent.components.MenuScreen)
 local PuzzleBoard = require(script.Parent.components.PuzzleBoard)
 local CompleteScreen = require(script.Parent.components.CompleteScreen)
+local NewItemNotification = require(script.Parent.components.NewItemNotification)
 local RoomLobbyScreen = require(script.Parent.components.RoomLobbyScreen)
 
 -- SeatingService loaded optionally
@@ -74,6 +73,12 @@ local function App(props)
 	local activeOverlay, setActiveOverlay = React.useState(nil :: string?)
 	local overlayRef = React.useRef(nil :: Frame?)
 	local blurRef = React.useRef(nil :: BlurEffect?)
+
+	-- New item purchase notification state
+	local newItemNotification, setNewItemNotification = React.useState(nil :: any)
+	local function onDismissNotification()
+		setNewItemNotification(nil)
+	end
 
 	local function closeOverlay()
 		-- Tween out blur + FOV
@@ -202,6 +207,7 @@ local function App(props)
 
 	-- Seating state
 	local seatingInfo, setSeatingInfo = React.useState(nil :: any)
+	local hasEverSat, setHasEverSat = React.useState(false)
 
 	-- Player data state (populated by remotes in Phase 2)
 	local playerData, setPlayerData = React.useState(nil :: {
@@ -343,6 +349,7 @@ local function App(props)
 		if playerSeated and playerSeated:IsA("RemoteEvent") then
 			table.insert(connections, playerSeated.OnClientEvent:Connect(function(data)
 				setSeatingInfo(data)
+				setHasEverSat(true)
 				if SeatingService then
 					SeatingService.SetSeated(data)
 					SeatingService.TransitionCameraToTable(data.tableId)
@@ -350,7 +357,7 @@ local function App(props)
 
 				if data.tableType == "single" then
 					setGameState("menu")
-				elseif data.tableType == "multi" then
+				elseif string.find(data.tableType, "^multi") then
 					-- Fetch room info via GetTableInfo
 					task.spawn(function()
 						local getTableInfo = remotes:FindFirstChild("GetTableInfo")
@@ -455,7 +462,7 @@ local function App(props)
 		end)
 	end
 
-	local function onBackToMenu(saveData: any)
+	local function savePuzzleData(saveData: any)
 		task.spawn(function()
 			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
 			if not remotes then return end
@@ -470,8 +477,16 @@ local function App(props)
 				if ok and saves then setSavedPuzzles(saves) end
 			end
 		end)
+	end
+
+	local function onBackToMenu(saveData: any)
+		savePuzzleData(saveData)
 		setResumeState(nil)
 		setGameState("menu")
+	end
+
+	local function onSaveContinue(saveData: any)
+		savePuzzleData(saveData)
 	end
 
 	local function onGiveUp()
@@ -568,11 +583,18 @@ local function App(props)
 		setRoomPuzzleDef(nil)
 		setRoomInitialPieces(nil)
 		setRoomConfig(nil)
-		if seatingInfo then
-			setGameState("menu")
-		else
+		-- Force stand up from the seat — this triggers server-side handleUnsit
+		-- which fires PlayerUnseated, cleaning up seatingInfo and going to "walking"
+		local humanoid = Players.LocalPlayer and Players.LocalPlayer.Character
+			and Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.Sit = false
+		end
+		-- Fallback: if not seated or humanoid not found, go to walking directly
+		if not seatingInfo then
 			setGameState("walking")
 		end
+		-- Otherwise, PlayerUnseated event will handle the state transition
 	end
 
 	local function onConfigureRoom(config: any)
@@ -820,6 +842,16 @@ local function App(props)
 			end
 			return updated
 		end)
+
+		-- Persist to server
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local equipRemote = remotes:FindFirstChild("EquipItem")
+			if equipRemote and equipRemote:IsA("RemoteFunction") then
+				pcall(function() equipRemote:InvokeServer(itemId, category) end)
+			end
+		end)
 	end
 
 	-- Show loading indicator while initial data is being fetched
@@ -840,24 +872,27 @@ local function App(props)
 	end
 
 	if gameState == "walking" then
-		safeChildren["WalkingHint"] = React.createElement("TextLabel", {
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromScale(0.5, 0.95),
-			Size = UDim2.fromScale(0.35, 0.06),
-			BackgroundColor3 = Theme.Colors.bgMedium,
-			BackgroundTransparency = Theme.Transparency.hudButton,
-			Text = "Walk to a table and sit down to start a puzzle!",
-			TextColor3 = Theme.Colors.textPrimary,
-			TextSize = Theme.TextSize.large,
-			Font = Theme.Font.medium,
-			TextWrapped = true,
-		}, {
-			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
-			Padding = React.createElement("UIPadding", {
-				PaddingLeft = UDim.new(0, 16),
-				PaddingRight = UDim.new(0, 16),
-			}),
-		})
+		-- Only show hint for players who haven't sat at a table yet
+		if not hasEverSat and not (playerData and (playerData.totalPuzzlesCompleted or 0) > 0) then
+			safeChildren["WalkingHint"] = React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 1),
+				Position = UDim2.fromScale(0.5, 0.95),
+				Size = UDim2.fromScale(0.35, 0.06),
+				BackgroundColor3 = Theme.Colors.bgMedium,
+				BackgroundTransparency = Theme.Transparency.hudButton,
+				Text = "Walk to a table and sit down to start a puzzle!",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.medium,
+				TextWrapped = true,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+				Padding = React.createElement("UIPadding", {
+					PaddingLeft = UDim.new(0, 16),
+					PaddingRight = UDim.new(0, 16),
+				}),
+			})
+		end
 
 		-- Cash display (bottom-left)
 		if playerData then
@@ -903,7 +938,7 @@ local function App(props)
 		safeChildren["HUDButtons"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -8, 0.5, 0),
-			Size = UDim2.fromScale(0.07, 0.55),
+			Size = UDim2.fromScale(0.105, 0.825),
 			BackgroundTransparency = 1,
 			ZIndex = 10,
 		}, {
@@ -923,19 +958,20 @@ local function App(props)
 					AnchorPoint = Vector2.new(0.5, 0),
 					Position = UDim2.fromScale(0.5, 0),
 					Size = UDim2.fromScale(0.85, 0.72),
-					BackgroundColor3 = Theme.Colors.bgElevated,
+					BackgroundTransparency = 1,
 					Image = "rbxassetid://135280767376471",
 					ScaleType = Enum.ScaleType.Fit,
 					ZIndex = 10,
 					[React.Event.Activated] = function()
 						openOverlay("shop")
 					end,
+					[React.Event.MouseEnter] = function(rbx)
+						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 5 }):Play()
+					end,
+					[React.Event.MouseLeave] = function(rbx)
+						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 0 }):Play()
+					end,
 				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
-					Stroke = React.createElement("UIStroke", {
-						Thickness = 2,
-						Color = Theme.Colors.border,
-					}),
 					Aspect = React.createElement("UIAspectRatioConstraint", {
 						AspectRatio = 1,
 					}),
@@ -967,19 +1003,20 @@ local function App(props)
 					AnchorPoint = Vector2.new(0.5, 0),
 					Position = UDim2.fromScale(0.5, 0),
 					Size = UDim2.fromScale(0.85, 0.72),
-					BackgroundColor3 = Theme.Colors.bgElevated,
+					BackgroundTransparency = 1,
 					Image = "rbxassetid://136485331602074",
 					ScaleType = Enum.ScaleType.Fit,
 					ZIndex = 10,
 					[React.Event.Activated] = function()
 						openOverlay("robux")
 					end,
+					[React.Event.MouseEnter] = function(rbx)
+						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 5 }):Play()
+					end,
+					[React.Event.MouseLeave] = function(rbx)
+						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 0 }):Play()
+					end,
 				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
-					Stroke = React.createElement("UIStroke", {
-						Thickness = 2,
-						Color = Theme.Colors.border,
-					}),
 					Aspect = React.createElement("UIAspectRatioConstraint", {
 						AspectRatio = 1,
 					}),
@@ -1011,19 +1048,20 @@ local function App(props)
 					AnchorPoint = Vector2.new(0.5, 0),
 					Position = UDim2.fromScale(0.5, 0),
 					Size = UDim2.fromScale(0.85, 0.72),
-					BackgroundColor3 = Theme.Colors.bgElevated,
+					BackgroundTransparency = 1,
 					Image = "rbxassetid://87104752122465",
 					ScaleType = Enum.ScaleType.Fit,
 					ZIndex = 10,
 					[React.Event.Activated] = function()
 						openOverlay("leaderboard")
 					end,
+					[React.Event.MouseEnter] = function(rbx)
+						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 5 }):Play()
+					end,
+					[React.Event.MouseLeave] = function(rbx)
+						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 0 }):Play()
+					end,
 				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
-					Stroke = React.createElement("UIStroke", {
-						Thickness = 2,
-						Color = Theme.Colors.border,
-					}),
 					Aspect = React.createElement("UIAspectRatioConstraint", {
 						AspectRatio = 1,
 					}),
@@ -1055,19 +1093,20 @@ local function App(props)
 					AnchorPoint = Vector2.new(0.5, 0),
 					Position = UDim2.fromScale(0.5, 0),
 					Size = UDim2.fromScale(0.85, 0.72),
-					BackgroundColor3 = Theme.Colors.bgElevated,
+					BackgroundTransparency = 1,
 					Image = "rbxassetid://80087999124116",
 					ScaleType = Enum.ScaleType.Fit,
 					ZIndex = 10,
 					[React.Event.Activated] = function()
 						openOverlay("stats")
 					end,
+					[React.Event.MouseEnter] = function(rbx)
+						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 5 }):Play()
+					end,
+					[React.Event.MouseLeave] = function(rbx)
+						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 0 }):Play()
+					end,
 				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
-					Stroke = React.createElement("UIStroke", {
-						Thickness = 2,
-						Color = Theme.Colors.border,
-					}),
 					Aspect = React.createElement("UIAspectRatioConstraint", {
 						AspectRatio = 1,
 					}),
@@ -1105,6 +1144,9 @@ local function App(props)
 						onClose = closeOverlay,
 						playerData = playerData,
 						onEquip = onEquip,
+						onItemPurchased = function(item)
+							setNewItemNotification(item)
+						end,
 					})
 				else
 					setActiveOverlay(nil)
@@ -1299,12 +1341,16 @@ local function App(props)
 				end else onComplete,
 				onGiveUp = if isMultiplayerBoard then onLeaveRoom else onGiveUp,
 				onBackToMenu = if isMultiplayerBoard then nil else onBackToMenu,
+				onSaveContinue = if isMultiplayerBoard then nil else onSaveContinue,
 				savedState = if isMultiplayerBoard then nil else resumeState,
 				equippedBoardSkin = if playerData then playerData.equippedBoardSkin else nil,
 				equippedSnapEffect = if playerData then playerData.equippedSnapEffect else nil,
+				ownedSnapEffects = if playerData then playerData.ownedSnapEffects else nil,
+				onEquip = onEquip,
 				hintsRemaining = if playerData then playerData.hintsRemaining else 0,
 				onHintUsed = onHintUsed,
 				isMultiplayer = isMultiplayerBoard,
+				roomPlayers = if isMultiplayerBoard and roomInfo then roomInfo.players else nil,
 				roomPuzzleDef = roomPuzzleDef,
 				roomInitialPieces = roomInitialPieces,
 			}),
@@ -1360,37 +1406,8 @@ local function App(props)
 					SortOrder = Enum.SortOrder.LayoutOrder,
 					Padding = UDim.new(0, 10),
 				}),
-				ScreenshotButton = React.createElement("TextButton", {
-					LayoutOrder = 1,
-					Size = UDim2.new(0, 220, 0, 48),
-					BackgroundColor3 = Theme.Colors.successLight,
-					Text = "Save Screenshot",
-					TextColor3 = Theme.Colors.textPrimary,
-					TextSize = Theme.TextSize.large,
-					Font = Theme.Font.bold,
-					[React.Event.Activated] = function(rbx)
-						-- Hide all UI for a clean screenshot
-						local screenGui = rbx:FindFirstAncestorOfClass("ScreenGui")
-						if screenGui then
-							screenGui.Enabled = false
-						end
-						StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
-
-						task.wait()
-
-						CaptureService:CaptureScreenshot(function(contentId)
-							if screenGui then
-								screenGui.Enabled = true
-							end
-							StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true)
-							CaptureService:PromptSaveCapturesToGallery({ contentId }, function() end)
-						end)
-					end,
-				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
-				}),
 				BackButton = React.createElement("TextButton", {
-					LayoutOrder = 2,
+					LayoutOrder = 1,
 					Size = UDim2.new(0, 220, 0, 48),
 					BackgroundColor3 = Theme.Colors.bgMuted,
 					Text = if admireIsMultiplayer then "Back to Lobby" else "Back to Menu",
@@ -1427,6 +1444,25 @@ local function App(props)
 		}, safeChildren),
 	})
 
+	-- New item notification ScreenGui (DisplayOrder=3 so it's always on top)
+	local notificationGui = nil
+	if newItemNotification ~= nil then
+		notificationGui = React.createElement("ScreenGui", {
+			Name = "PuzzleAppNotification",
+			ResetOnSpawn = false,
+			IgnoreGuiInset = true,
+			ScreenInsets = Enum.ScreenInsets.None,
+			DisplayOrder = 3,
+			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		}, {
+			Notification = React.createElement(NewItemNotification, {
+				item = newItemNotification,
+				equippedConfettiStyle = if playerData then playerData.equippedConfettiStyle else nil,
+				onDismiss = onDismissNotification,
+			}),
+		})
+	end
+
 	-- Portal each ScreenGui into playerGui so React doesn't manage playerGui
 	-- directly (which would destroy Roblox's TouchGui, Freecam, etc.)
 	return React.createElement(React.Fragment, nil, {
@@ -1434,6 +1470,7 @@ local function App(props)
 		BoardGui = boardGui and ReactRoblox.createPortal(boardGui, playerGui, "BoardGui") or nil,
 		CompleteGui = completeGui and ReactRoblox.createPortal(completeGui, playerGui, "CompleteGui") or nil,
 		AdmireGui = admireGui and ReactRoblox.createPortal(admireGui, playerGui, "AdmireGui") or nil,
+		NotificationGui = notificationGui and ReactRoblox.createPortal(notificationGui, playerGui, "NotificationGui") or nil,
 	})
 end
 

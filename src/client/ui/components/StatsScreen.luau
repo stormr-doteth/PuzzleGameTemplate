@@ -54,28 +54,30 @@ local function StatsScreen(props: StatsScreenProps)
 	for i, stat in summaryData do
 		summaryCards["Card_" .. i] = React.createElement("Frame", {
 			LayoutOrder = i,
-			Size = UDim2.new(0, 90, 0, 70),
+			Size = UDim2.new(0.3, -4, 0, 70),
 			BackgroundColor3 = Theme.Colors.bgElevated,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
 			Value = React.createElement("TextLabel", {
 				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.5, 0, 0, 10),
-				Size = UDim2.new(1, -8, 0, 28),
+				Position = UDim2.new(0.5, 0, 0, 8),
+				Size = UDim2.new(1, -8, 0, 22),
 				BackgroundTransparency = 1,
 				Text = stat.value,
 				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.large,
+				TextSize = 22,
+				TextScaled = true,
 				Font = Theme.Font.bold,
 			}),
 			Label = React.createElement("TextLabel", {
 				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.new(0.5, 0, 1, -8),
-				Size = UDim2.new(1, -8, 0, 18),
+				Position = UDim2.new(0.5, 0, 1, -6),
+				Size = UDim2.new(1, -8, 0, 16),
 				BackgroundTransparency = 1,
 				Text = stat.label,
 				TextColor3 = Theme.Colors.textMuted,
-				TextSize = Theme.TextSize.tiny,
+				TextSize = 14,
+				TextScaled = true,
 				Font = Theme.Font.medium,
 			}),
 		})
@@ -89,11 +91,12 @@ local function StatsScreen(props: StatsScreenProps)
 		}),
 		Header = React.createElement("TextLabel", {
 			LayoutOrder = 0,
-			Size = UDim2.new(1, 0, 0, 26),
+			Size = UDim2.new(1, 0, 0, 22),
 			BackgroundTransparency = 1,
 			Text = "Completions by Difficulty",
 			TextColor3 = Theme.Colors.textSecondary,
-			TextSize = Theme.TextSize.body,
+			TextSize = 16,
+			TextScaled = true,
 			Font = Theme.Font.bold,
 			TextXAlignment = Enum.TextXAlignment.Left,
 		}),
@@ -103,7 +106,7 @@ local function StatsScreen(props: StatsScreenProps)
 		local count = byDifficulty[diffId] or 0
 		diffRows["Diff_" .. i] = React.createElement("Frame", {
 			LayoutOrder = i,
-			Size = UDim2.new(1, 0, 0, 30),
+			Size = UDim2.new(1, 0, 0, 32),
 			BackgroundColor3 = Theme.Colors.bgElevated,
 			BackgroundTransparency = Theme.Transparency.hudButton,
 		}, {
@@ -114,7 +117,8 @@ local function StatsScreen(props: StatsScreenProps)
 				BackgroundTransparency = 1,
 				Text = diffId,
 				TextColor3 = Theme.Colors.textSecondary,
-				TextSize = Theme.TextSize.body,
+				TextSize = 16,
+				TextScaled = true,
 				Font = Theme.Font.medium,
 				TextXAlignment = Enum.TextXAlignment.Left,
 			}),
@@ -125,7 +129,8 @@ local function StatsScreen(props: StatsScreenProps)
 				BackgroundTransparency = 1,
 				Text = tostring(count) .. " completed",
 				TextColor3 = if count > 0 then Theme.Colors.accentCyan else Theme.Colors.textDisabled,
-				TextSize = Theme.TextSize.label,
+				TextSize = 16,
+				TextScaled = true,
 				Font = Theme.Font.regular,
 				TextXAlignment = Enum.TextXAlignment.Right,
 			}),
@@ -140,41 +145,43 @@ local function StatsScreen(props: StatsScreenProps)
 		Modal = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.45, 0.55),
+			Size = UDim2.fromScale(0.85, 0.85),
 			BackgroundColor3 = Theme.Colors.bgDeepest,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
 			AspectRatio = React.createElement("UIAspectRatioConstraint", {
-				AspectRatio = 0.85,
+				AspectRatio = 1.15,
 				DominantAxis = Enum.DominantAxis.Height,
 			}),
 			SizeConstraint = React.createElement("UISizeConstraint", {
-				MinSize = Vector2.new(300, 380),
+				MaxSize = Vector2.new(math.huge, 550),
 			}),
 
 			-- Title bar
 			TitleBar = React.createElement("Frame", {
-				Size = UDim2.new(1, 0, 0, 50),
+				Size = UDim2.new(1, 0, 0, 40),
 				BackgroundTransparency = 1,
 			}, {
 				Title = React.createElement("TextLabel", {
 					AnchorPoint = Vector2.new(0.5, 0.5),
 					Position = UDim2.fromScale(0.5, 0.5),
-					Size = UDim2.new(0, 200, 0, 40),
+					Size = UDim2.new(0.5, 0, 0, 30),
 					BackgroundTransparency = 1,
 					Text = "Stats",
 					TextColor3 = Theme.Colors.textPrimary,
-					TextSize = Theme.TextSize.title,
+					TextSize = 24,
+					TextScaled = true,
 					Font = Theme.Font.bold,
 				}),
 				CloseButton = React.createElement("TextButton", {
 					AnchorPoint = Vector2.new(1, 0.5),
-					Position = UDim2.new(1, -16, 0.5, 0),
-					Size = UDim2.fromOffset(36, 36),
+					Position = UDim2.new(1, -8, 0.5, 0),
+					Size = UDim2.fromOffset(30, 30),
 					BackgroundColor3 = Theme.Colors.dangerDark,
 					Text = "X",
 					TextColor3 = Theme.Colors.textPrimary,
-					TextSize = Theme.TextSize.large,
+					TextSize = 16,
+					TextScaled = true,
 					Font = Theme.Font.bold,
 					[React.Event.Activated] = function()
 						props.onClose()
@@ -186,8 +193,8 @@ local function StatsScreen(props: StatsScreenProps)
 
 			-- Content
 			Content = React.createElement("ScrollingFrame", {
-				Position = UDim2.new(0, 16, 0, 56),
-				Size = UDim2.new(1, -32, 1, -72),
+				Position = UDim2.new(0, 12, 0, 44),
+				Size = UDim2.new(1, -24, 1, -52),
 				CanvasSize = UDim2.new(0, 0, 0, 0),
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
 				ScrollBarThickness = 4,
@@ -197,24 +204,25 @@ local function StatsScreen(props: StatsScreenProps)
 			}, {
 				Layout = React.createElement("UIListLayout", {
 					SortOrder = Enum.SortOrder.LayoutOrder,
-					Padding = UDim.new(0, 16),
+					Padding = UDim.new(0, 12),
 				}),
 
 				-- Rank label
 				RankLabel = React.createElement("TextLabel", {
 					LayoutOrder = 1,
-					Size = UDim2.new(1, 0, 0, 32),
+					Size = UDim2.new(1, 0, 0, 24),
 					BackgroundTransparency = 1,
 					Text = "Rank: " .. titleName,
 					TextColor3 = Theme.Colors.headerGold,
-					TextSize = Theme.TextSize.large,
+					TextSize = 20,
+					TextScaled = true,
 					Font = Theme.Font.bold,
 				}),
 
 				-- Summary row
 				SummaryRow = React.createElement("Frame", {
 					LayoutOrder = 2,
-					Size = UDim2.new(1, 0, 0, 78),
+					Size = UDim2.new(1, 0, 0, 60),
 					BackgroundTransparency = 1,
 				}, summaryCards),
 

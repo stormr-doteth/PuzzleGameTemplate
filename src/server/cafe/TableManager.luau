@@ -39,6 +39,13 @@ end
 local function getTableType(tableModel: Model): string
 	local tv = tableModel:FindFirstChild("TableType")
 	if tv and tv:IsA("StringValue") then
+		-- TableType values are generic ("multi"), so extract player count from model name
+		if tv.Value == "multi" then
+			local n = tableModel.Name:match("multi_(%d+)p")
+			if n then
+				return "multi_" .. n .. "p"
+			end
+		end
 		return tv.Value
 	end
 	return "single"
@@ -220,10 +227,35 @@ local function handleUnsit(player: Player, tableId: string, seatIndex: number)
 end
 
 local function setupSeatListener(seat: Seat, tableId: string, seatIndex: number)
+	-- Create ProximityPrompt for discoverability
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Sit Down"
+	prompt.ObjectText = ""
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 8
+	prompt.RequiresLineOfSight = false
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt.Parent = seat
+
+	-- Disable if seat is already occupied
+	if seat.Occupant then
+		prompt.Enabled = false
+	end
+
+	prompt.Triggered:Connect(function(player)
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			seat:Sit(humanoid)
+		end
+	end)
+
 	seat:GetPropertyChangedSignal("Occupant"):Connect(function()
 		if seat.Occupant then
+			prompt.Enabled = false
 			handleSit(seat, tableId, seatIndex)
 		else
+			prompt.Enabled = true
 			-- Need to figure out who was sitting here
 			-- Check our records for this table+seat
 			local occupants = tableOccupancy[tableId]

@@ -80,6 +80,7 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 	end
 
 	local players = roomInfo and roomInfo.players or {}
+	local maxPlayers = roomInfo and roomInfo.maxPlayers or 4
 	local currentConfig = roomInfo and roomInfo.config
 
 	-- === Top Bar: Title + Leave Button ===
@@ -109,7 +110,7 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 			Position = UDim2.fromScale(0.5, 0.5),
 			Size = UDim2.fromScale(0.2, 0.6),
 			BackgroundTransparency = 1,
-			Text = "Players " .. #players .. "/4",
+			Text = "Players " .. #players .. "/" .. maxPlayers,
 			TextColor3 = Theme.Colors.textMuted,
 			TextSize = Theme.TextSize.label,
 			Font = Theme.Font.medium,
@@ -147,7 +148,7 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 		}),
 	}
 
-	for i = 1, 4 do
+	for i = 1, maxPlayers do
 		local p = players[i]
 		local color = PLAYER_COLORS[((i - 1) % #PLAYER_COLORS) + 1]
 
@@ -162,7 +163,7 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 
 			playerBadgeChildren["P" .. i] = React.createElement("Frame", {
 				LayoutOrder = i,
-				Size = UDim2.fromScale(0.235, 0.8),
+				Size = UDim2.fromScale(0.96 / maxPlayers, 0.8),
 				BackgroundColor3 = Theme.Colors.bgCard,
 				BorderSizePixel = 0,
 			}, {
@@ -191,7 +192,7 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 		else
 			playerBadgeChildren["P" .. i] = React.createElement("Frame", {
 				LayoutOrder = i,
-				Size = UDim2.fromScale(0.235, 0.8),
+				Size = UDim2.fromScale(0.96 / maxPlayers, 0.8),
 				BackgroundColor3 = Theme.Colors.bgDark,
 				BackgroundTransparency = 0.5,
 				BorderSizePixel = 0,

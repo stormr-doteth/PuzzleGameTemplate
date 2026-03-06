@@ -13,6 +13,7 @@ export type ShopScreenProps = {
 	onClose: () -> (),
 	playerData: any?,
 	onEquip: ((itemId: string, category: string) -> ())?,
+	onItemPurchased: ((item: any) -> ())?,
 }
 
 -- Build combined cash shop items with category labels
@@ -164,6 +165,13 @@ local function ShopScreen(props: ShopScreenProps)
 							return updated
 						end)
 						equipItem(itemId, category)
+					end
+
+					if props.onItemPurchased then
+						local purchasedItem = ShopItems.getById(itemId)
+						if purchasedItem then
+							props.onItemPurchased(purchasedItem)
+						end
 					end
 				end
 				task.delay(2, function()
@@ -366,11 +374,18 @@ local function ShopScreen(props: ShopScreenProps)
 					Position = UDim2.fromScale(0.02, 0.5),
 					Size = UDim2.fromScale(0.22, 0.8),
 					BackgroundColor3 = swatchColor,
+					ClipsDescendants = true,
 				}, {
 					SwatchCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
 					AspectRatio = React.createElement("UIAspectRatioConstraint", {
 						AspectRatio = 1,
 					}),
+					SwatchImage = if item.backgroundImage then React.createElement("ImageLabel", {
+						Size = UDim2.fromScale(1, 1),
+						BackgroundTransparency = 1,
+						Image = item.backgroundImage,
+						ScaleType = Enum.ScaleType.Crop,
+					}) else nil,
 					Letter = React.createElement("TextLabel", {
 						Size = UDim2.fromScale(1, 1),
 						BackgroundTransparency = 1,
@@ -378,6 +393,7 @@ local function ShopScreen(props: ShopScreenProps)
 						TextColor3 = Theme.Colors.textPrimary,
 						TextScaled = true,
 						Font = Theme.Font.heading,
+						ZIndex = 2,
 					}, {
 						LetterStroke = React.createElement("UIStroke", {
 							Thickness = 1,
@@ -505,19 +521,6 @@ local function ShopScreen(props: ShopScreenProps)
 					}),
 				}),
 			}),
-
-			-- Purchase message (floating)
-			Message = if purchaseMessage ~= "" then React.createElement("TextLabel", {
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromScale(0.5, 0.09),
-				Size = UDim2.fromScale(0.6, 0.04),
-				BackgroundTransparency = 1,
-				Text = purchaseMessage,
-				TextColor3 = Theme.Colors.warning,
-				TextScaled = true,
-				Font = Theme.Font.bold,
-				ZIndex = 151,
-			}) else nil,
 
 			-- Tab bar
 			TabBar = React.createElement("Frame", {

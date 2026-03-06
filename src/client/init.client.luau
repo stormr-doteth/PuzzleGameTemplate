@@ -1,3 +1,6 @@
+local PlayerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+PlayerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

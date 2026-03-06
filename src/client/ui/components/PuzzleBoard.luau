@@ -2,6 +2,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GuiService = game:GetService("GuiService")
+local TweenService = game:GetService("TweenService")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -34,12 +35,16 @@ export type PuzzleBoardProps = {
 	onComplete: (elapsedSeconds: number) -> (),
 	onGiveUp: (() -> ())?,
 	onBackToMenu: ((saveData: any) -> ())?,
+	onSaveContinue: ((saveData: any) -> ())?,
 	savedState: any?,
 	equippedBoardSkin: string?,
 	hintsRemaining: number?,
 	onHintUsed: (() -> ())?,
 	equippedSnapEffect: string?,
+	ownedSnapEffects: { [string]: boolean }?,
+	onEquip: ((itemId: string, category: string) -> ())?,
 	isMultiplayer: boolean?,
+	roomPlayers: { { userId: number, displayName: string, isHost: boolean? } }?,
 	roomPuzzleDef: any?,
 	roomInitialPieces: any?,
 }
@@ -86,6 +91,8 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local showSavePrompt, setShowSavePrompt = React.useState(false)
 	local hintHighlightId, setHintHighlightId = React.useState(nil :: number?)
 	local showArtworkModal, setShowArtworkModal = React.useState(false)
+	local showSnapPicker, setShowSnapPicker = React.useState(false)
+	local showPlayersMenu, setShowPlayersMenu = React.useState(false)
 	local ownsPuzzleAssist, setOwnsPuzzleAssist = React.useState(false)
 	local showAssistOverlay, setShowAssistOverlay = React.useState(false)
 
@@ -120,9 +127,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local zoomActionsRef = React.useRef(zoomActions)
 	local zoomStateRef = React.useRef(zoomState)
 	local actionsRef = React.useRef(actions)
+	local equippedSnapEffectRef = React.useRef(props.equippedSnapEffect)
 
 	-- Update refs each render (cheap, no allocations)
 	stateRef.current = state
+	equippedSnapEffectRef.current = props.equippedSnapEffect
 	puzzleDefRef.current = puzzleDef
 	pieceImagesRef.current = pieceImages
 	pixelScaleRef.current = pixelScale
@@ -549,7 +558,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				)
 				snapEffectCounter.current += 1
 				local effectKey = "snap_" .. snapEffectCounter.current
-				local effectId = props.equippedSnapEffect or ""
+				local effectId = equippedSnapEffectRef.current or ""
 				setSnapEffects(function(prev)
 					local updated = table.clone(prev)
 					table.insert(updated, { positionX = effectX, positionY = effectY, key = effectKey, effectId = effectId })
@@ -580,7 +589,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				)
 				snapEffectCounter.current += 1
 				local effectKey = "snap_" .. snapEffectCounter.current
-				local effectId = props.equippedSnapEffect or ""
+				local effectId = equippedSnapEffectRef.current or ""
 				setSnapEffects(function(prev)
 					local updated = table.clone(prev)
 					table.insert(updated, { positionX = effectX, positionY = effectY, key = effectKey, effectId = effectId })
@@ -661,7 +670,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		end
 	end, { props.isMultiplayer, puzzleDef, pieceImages } :: { any })
 
-	-- Check Puzzle Assist gamepass ownership
+	-- Check Puzzle Assist gamepass ownership + listen for mid-game purchase
 	React.useEffect(function()
 		task.spawn(function()
 			local localPlayer = Players.LocalPlayer
@@ -675,17 +684,34 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				setOwnsPuzzleAssist(true)
 			end
 		end)
+
+		local passConfig = MonetizationConfig.GAME_PASSES.PUZZLE_ASSIST
+		local connection = MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
+			if player == Players.LocalPlayer and gamePassId == passConfig.id and wasPurchased then
+				setOwnsPuzzleAssist(true)
+			end
+		end)
+
+		return function()
+			connection:Disconnect()
+		end
 	end, {})
 
 	-- Compute board colors from equipped skin
 	local boardBgColor = Theme.Colors.bgDark
 	local gridBgColor = Color3.fromRGB(80, 80, 80)
+	local boardBgImage = "rbxassetid://123416350069330" -- default wood grain
 	if props.equippedBoardSkin and props.equippedBoardSkin ~= "" then
 		local skin = ShopItems.getById(props.equippedBoardSkin)
-		if skin and skin.previewColor then
-			boardBgColor = skin.previewColor
-			local h, s, v = boardBgColor:ToHSV()
-			gridBgColor = Color3.fromHSV(h, s, math.min(v + 0.1, 1))
+		if skin then
+			if skin.backgroundImage then
+				boardBgImage = skin.backgroundImage
+			end
+			if skin.previewColor then
+				boardBgColor = skin.previewColor
+				local h, s, v = boardBgColor:ToHSV()
+				gridBgColor = Color3.fromHSV(h, s, math.min(v + 0.1, 1))
+			end
 		end
 	end
 
@@ -741,24 +767,56 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 		})
 
-		children["GiveUpButton"] = React.createElement("TextButton", {
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -scaled(146), 0, 4),
-			Size = UDim2.fromOffset(scaled(80), scaled(36)),
-			BackgroundColor3 = Theme.Colors.dangerDark,
-			Text = "Give Up",
-			TextColor3 = Color3.fromRGB(255, 220, 220),
-			TextSize = scaled(Theme.TextSize.label),
-			Font = Theme.Font.medium,
-			ZIndex = 50,
-			[React.Event.Activated] = function()
-				if props.onGiveUp then
-					props.onGiveUp()
-				end
-			end,
-		}, {
-			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-		})
+		if not props.isMultiplayer then
+			children["SavePuzzleButton"] = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -scaled(146), 0, 4),
+				Size = UDim2.fromOffset(scaled(100), scaled(36)),
+				BackgroundColor3 = Theme.Colors.accentBlue,
+				Text = "Save Puzzle",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.label),
+				Font = Theme.Font.medium,
+				ZIndex = 50,
+				[React.Event.Activated] = function()
+					if puzzleDef then
+						timer.stop()
+						setShowSavePrompt(true)
+					end
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
+			})
+		end
+
+		-- Snap effects picker button (when player owns effects)
+		if props.ownedSnapEffects then
+			local hasAnyEffect = false
+			for _ in props.ownedSnapEffects do
+				hasAnyEffect = true
+				break
+			end
+			if hasAnyEffect then
+				children["SnapEffectsButton"] = React.createElement("TextButton", {
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(0.5, -scaled(68), 0, 4),
+					Size = UDim2.fromOffset(scaled(100), scaled(36)),
+					BackgroundColor3 = Theme.Colors.bgButtonContrast,
+					Text = "\xE2\x9C\xA8 Effects",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = scaled(Theme.TextSize.label),
+					Font = Theme.Font.medium,
+					ZIndex = 50,
+					[React.Event.Activated] = function()
+						setShowSnapPicker(function(prev) return not prev end)
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+					Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
+				})
+			end
+		end
 
 		-- Hint button (disabled in multiplayer)
 		if not props.isMultiplayer and localHints > 0 and puzzleDef and pieceImages then
@@ -818,6 +876,27 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			})
+		end
+
+		-- Players button (multiplayer only, right of timer)
+		if props.isMultiplayer and props.roomPlayers and #props.roomPlayers > 0 then
+			children["PlayersButton"] = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(0, 0),
+				Position = UDim2.new(0.5, scaled(68), 0, 4),
+				Size = UDim2.fromOffset(scaled(100), scaled(36)),
+				BackgroundColor3 = Theme.Colors.bgButtonContrast,
+				Text = "\xF0\x9F\x91\xA5 " .. #props.roomPlayers,
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.label),
+				Font = Theme.Font.medium,
+				ZIndex = 50,
+				[React.Event.Activated] = function()
+					setShowPlayersMenu(function(prev) return not prev end)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 			})
 		end
 
@@ -1091,25 +1170,48 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 		})
 
-		-- Guide toggle button (gamepass owners only)
-		if ownsPuzzleAssist then
-			bottomControlChildren["GuideToggleButton"] = React.createElement("TextButton", {
-				LayoutOrder = 5,
-				Size = UDim2.fromOffset(scaled(100), scaled(36)),
-				BackgroundColor3 = if showAssistOverlay then Theme.Colors.accentCyan else Theme.Colors.bgButtonContrast,
-				Text = if showAssistOverlay then "Guide ON" else "Guide OFF",
-				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = scaled(Theme.TextSize.label),
-				Font = Theme.Font.medium,
-				ZIndex = 50,
-				[React.Event.Activated] = function()
+		-- Guide toggle button (visible to all players)
+		bottomControlChildren["GuideToggleButton"] = React.createElement("TextButton", {
+			LayoutOrder = 5,
+			Size = UDim2.fromOffset(scaled(100), scaled(36)),
+			BackgroundColor3 = if showAssistOverlay then Theme.Colors.accentCyan else Theme.Colors.bgButtonContrast,
+			Text = if showAssistOverlay then "Guide ON" else "Guide OFF",
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = scaled(Theme.TextSize.label),
+			Font = Theme.Font.medium,
+			ZIndex = 50,
+			[React.Event.Activated] = function()
+				if ownsPuzzleAssist then
 					setShowAssistOverlay(function(prev) return not prev end)
-				end,
+				else
+					local passConfig = MonetizationConfig.GAME_PASSES.PUZZLE_ASSIST
+					pcall(function()
+						MarketplaceService:PromptGamePassPurchase(Players.LocalPlayer, passConfig.id)
+					end)
+				end
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
+			RobuxBadge = if not ownsPuzzleAssist then React.createElement("Frame", {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, scaled(4), 0, scaled(-4)),
+				Size = UDim2.fromOffset(scaled(18), scaled(18)),
+				BackgroundColor3 = Theme.Colors.gold,
+				ZIndex = 51,
 			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-				Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
-			})
-		end
+				BadgeCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
+				RobuxLabel = React.createElement("TextLabel", {
+					Size = UDim2.fromScale(1, 1),
+					BackgroundTransparency = 1,
+					Text = "R$",
+					TextColor3 = Color3.new(1, 1, 1),
+					TextSize = scaled(10),
+					Font = Theme.Font.bold,
+					ZIndex = 52,
+				}),
+			}) else nil,
+		})
 
 		children["BottomControls"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 1),
@@ -1293,6 +1395,322 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		})
 	end
 
+	-- Players menu overlay (multiplayer)
+	if showPlayersMenu and props.isMultiplayer and props.roomPlayers then
+		children["PlayersMenuBackdrop"] = React.createElement("TextButton", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Theme.Colors.black,
+			BackgroundTransparency = Theme.Transparency.overlay,
+			Text = "",
+			ZIndex = 100,
+			[React.Event.Activated] = function()
+				setShowPlayersMenu(false)
+			end,
+		})
+
+		local playerRows = {}
+		playerRows["Layout"] = React.createElement("UIListLayout", {
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 6),
+		})
+		playerRows["Padding"] = React.createElement("UIPadding", {
+			PaddingLeft = UDim.new(0, 12),
+			PaddingRight = UDim.new(0, 12),
+			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 8),
+		})
+
+		for i, p in props.roomPlayers do
+			local color = PLAYER_COLORS[((p.userId % #PLAYER_COLORS)) + 1]
+			local nameText = p.displayName
+			if p.isHost then
+				nameText = nameText .. " (Host)"
+			end
+			if p.userId == localUserId then
+				nameText = nameText .. " (You)"
+			end
+
+			playerRows["Player_" .. i] = React.createElement("Frame", {
+				LayoutOrder = i,
+				Size = UDim2.new(1, 0, 0, 32),
+				BackgroundColor3 = Theme.Colors.bgElevated,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Stroke = React.createElement("UIStroke", { Thickness = 1, Color = Theme.Colors.border }),
+				ColorDot = React.createElement("Frame", {
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.new(0, 10, 0.5, 0),
+					Size = UDim2.fromOffset(14, 14),
+					BackgroundColor3 = color,
+					ZIndex = 102,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(1, 0) }),
+				}),
+				Name = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.new(0, 32, 0.5, 0),
+					Size = UDim2.new(1, -40, 1, 0),
+					BackgroundTransparency = 1,
+					Text = nameText,
+					TextColor3 = Theme.Colors.textPrimary,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextSize = scaled(Theme.TextSize.label),
+					Font = Theme.Font.medium,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					ZIndex = 102,
+				}),
+			})
+		end
+
+		local playerCount = #props.roomPlayers
+		local listHeight = playerCount * 32 + (playerCount - 1) * 6 + 16
+		local cardHeight = math.min(40 + listHeight, 280)
+
+		children["PlayersMenuCard"] = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(0, 0),
+			Position = UDim2.new(0.5, scaled(68), 0, 46),
+			Size = UDim2.fromOffset(scaled(200), 0),
+			BackgroundColor3 = Theme.Colors.bgCard,
+			ClipsDescendants = true,
+			ZIndex = 101,
+			ref = function(frame)
+				if frame then
+					TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+						Size = UDim2.fromOffset(scaled(200), cardHeight),
+					}):Play()
+				end
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			CardStroke = React.createElement("UIStroke", { Thickness = 1.5, Color = Theme.Colors.border }),
+			Title = React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, 10),
+				Size = UDim2.new(1, -20, 0, 24),
+				BackgroundTransparency = 1,
+				Text = "Players",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.body),
+				Font = Theme.Font.bold,
+				ZIndex = 102,
+			}),
+			CloseBtn = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -6, 0, 6),
+				Size = UDim2.fromOffset(24, 24),
+				BackgroundTransparency = 1,
+				Text = "X",
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = scaled(Theme.TextSize.label),
+				Font = Theme.Font.bold,
+				ZIndex = 102,
+				[React.Event.Activated] = function()
+					setShowPlayersMenu(false)
+				end,
+			}),
+			List = React.createElement("ScrollingFrame", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, 38),
+				Size = UDim2.new(1, 0, 1, -42),
+				BackgroundTransparency = 1,
+				ScrollBarThickness = 4,
+				ScrollBarImageColor3 = Theme.Colors.border,
+				CanvasSize = UDim2.new(0, 0, 0, listHeight),
+				ZIndex = 101,
+				BorderSizePixel = 0,
+			}, playerRows),
+		})
+	end
+
+	-- Snap effect picker overlay
+	if showSnapPicker then
+		children["SnapPickerBackdrop"] = React.createElement("TextButton", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Theme.Colors.black,
+			BackgroundTransparency = Theme.Transparency.overlay,
+			Text = "",
+			ZIndex = 100,
+			[React.Event.Activated] = function()
+				setShowSnapPicker(false)
+			end,
+		})
+
+		local pickerRows = {}
+		pickerRows["Layout"] = React.createElement("UIListLayout", {
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 6),
+		})
+		pickerRows["Padding"] = React.createElement("UIPadding", {
+			PaddingLeft = UDim.new(0, 12),
+			PaddingRight = UDim.new(0, 12),
+			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 8),
+		})
+
+		-- "None" option
+		local isNoneEquipped = (props.equippedSnapEffect == nil or props.equippedSnapEffect == "")
+		pickerRows["EffectNone"] = React.createElement("Frame", {
+			LayoutOrder = 0,
+			Size = UDim2.new(1, 0, 0, 36),
+			BackgroundColor3 = Theme.Colors.bgElevated,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", { Thickness = 1, Color = Theme.Colors.border }),
+			Label = React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, 12, 0.5, 0),
+				Size = UDim2.new(0.5, -12, 1, 0),
+				BackgroundTransparency = 1,
+				Text = "None",
+				TextColor3 = Theme.Colors.textSecondary,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextSize = scaled(Theme.TextSize.label),
+				Font = Theme.Font.medium,
+				ZIndex = 102,
+			}),
+			EquipBtn = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -8, 0.5, 0),
+				Size = UDim2.fromOffset(scaled(70), scaled(26)),
+				BackgroundColor3 = if isNoneEquipped then Theme.Colors.bgButtonContrast else Theme.Colors.accentBlue,
+				Text = if isNoneEquipped then "Equipped" else "Equip",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.small),
+				Font = Theme.Font.medium,
+				ZIndex = 102,
+				[React.Event.Activated] = function()
+					if props.onEquip and not isNoneEquipped then
+						props.onEquip("", "snap_effects")
+					end
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+			}),
+		})
+
+		-- Owned snap effects
+		local order = 1
+		for _, effectDef in ShopItems.SNAP_EFFECTS do
+			if props.ownedSnapEffects and props.ownedSnapEffects[effectDef.id] then
+				order += 1
+				local isEquipped = (props.equippedSnapEffect == effectDef.id)
+				pickerRows["Effect_" .. effectDef.id] = React.createElement("Frame", {
+					LayoutOrder = order,
+					Size = UDim2.new(1, 0, 0, 36),
+					BackgroundColor3 = Theme.Colors.bgElevated,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+					Stroke = React.createElement("UIStroke", { Thickness = 1, Color = Theme.Colors.border }),
+					Swatch = React.createElement("Frame", {
+						AnchorPoint = Vector2.new(0, 0.5),
+						Position = UDim2.new(0, 10, 0.5, 0),
+						Size = UDim2.fromOffset(16, 16),
+						BackgroundColor3 = effectDef.previewColor or Theme.Colors.textSecondary,
+						ZIndex = 102,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(1, 0) }),
+					}),
+					Label = React.createElement("TextLabel", {
+						AnchorPoint = Vector2.new(0, 0.5),
+						Position = UDim2.new(0, 34, 0.5, 0),
+						Size = UDim2.new(0.5, -34, 1, 0),
+						BackgroundTransparency = 1,
+						Text = effectDef.name,
+						TextColor3 = Theme.Colors.textPrimary,
+						TextXAlignment = Enum.TextXAlignment.Left,
+						TextSize = scaled(Theme.TextSize.label),
+						Font = Theme.Font.medium,
+						ZIndex = 102,
+					}),
+					EquipBtn = React.createElement("TextButton", {
+						AnchorPoint = Vector2.new(1, 0.5),
+						Position = UDim2.new(1, -8, 0.5, 0),
+						Size = UDim2.fromOffset(scaled(70), scaled(26)),
+						BackgroundColor3 = if isEquipped then Theme.Colors.bgButtonContrast else Theme.Colors.accentBlue,
+						Text = if isEquipped then "Equipped" else "Equip",
+						TextColor3 = Theme.Colors.textPrimary,
+						TextSize = scaled(Theme.TextSize.small),
+						Font = Theme.Font.medium,
+						ZIndex = 102,
+						[React.Event.Activated] = function()
+							if props.onEquip and not isEquipped then
+								props.onEquip(effectDef.id, "snap_effects")
+							end
+						end,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+					}),
+				})
+			end
+		end
+
+		-- Count owned effects for sizing
+		local ownedCount = 1 -- "None" row
+		if props.ownedSnapEffects then
+			for _ in props.ownedSnapEffects do
+				ownedCount += 1
+			end
+		end
+		local listHeight = ownedCount * 36 + (ownedCount - 1) * 6 + 16 -- rows + gaps + padding
+		local cardHeight = math.min(40 + listHeight, 340) -- title + list, capped
+
+		local targetCardHeight = cardHeight
+		children["SnapPickerCard"] = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(0.5, -scaled(68), 0, 46),
+			Size = UDim2.fromOffset(scaled(240), 0),
+			BackgroundColor3 = Theme.Colors.bgCard,
+			ClipsDescendants = true,
+			ZIndex = 101,
+			ref = function(frame)
+				if frame then
+					TweenService:Create(frame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+						Size = UDim2.fromOffset(scaled(240), targetCardHeight),
+					}):Play()
+				end
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			CardStroke = React.createElement("UIStroke", { Thickness = 1.5, Color = Theme.Colors.border }),
+			Title = React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, 10),
+				Size = UDim2.new(1, -20, 0, 24),
+				BackgroundTransparency = 1,
+				Text = "Snap Effects",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.body),
+				Font = Theme.Font.bold,
+				ZIndex = 102,
+			}),
+			CloseBtn = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(1, -6, 0, 6),
+				Size = UDim2.fromOffset(24, 24),
+				BackgroundTransparency = 1,
+				Text = "X",
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = scaled(Theme.TextSize.label),
+				Font = Theme.Font.bold,
+				ZIndex = 102,
+				[React.Event.Activated] = function()
+					setShowSnapPicker(false)
+				end,
+			}),
+			List = React.createElement("ScrollingFrame", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, 38),
+				Size = UDim2.new(1, 0, 1, -42),
+				BackgroundTransparency = 1,
+				ScrollBarThickness = 4,
+				ScrollBarImageColor3 = Theme.Colors.border,
+				CanvasSize = UDim2.new(0, 0, 0, listHeight),
+				ZIndex = 101,
+				BorderSizePixel = 0,
+			}, pickerRows),
+		})
+	end
+
 	-- Save confirmation prompt overlay
 	if showSavePrompt then
 		children["SavePromptBackdrop"] = React.createElement("TextButton", {
@@ -1303,91 +1721,125 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			ZIndex = 100,
 			[React.Event.Activated] = function() end,
 		})
+		local function buildSaveData()
+			local savePieces = {}
+			for id, p in state.pieces do
+				table.insert(savePieces, {
+					id = id, x = p.x, y = p.y,
+					zIndex = p.zIndex, locked = p.locked,
+					groupId = p.groupId,
+				})
+			end
+			local saveGroups = {}
+			for gid, memberIds in state.groups do
+				table.insert(saveGroups, { id = gid, pieceIds = memberIds })
+			end
+			return {
+				imageId = props.imageId,
+				imageAssetId = props.imageAssetId,
+				difficultyId = props.difficultyId,
+				rows = props.rows,
+				cols = props.cols,
+				elapsedSeconds = timer.elapsedSeconds,
+				savedAt = os.time(),
+				puzzleDef = puzzleDef,
+				pieces = savePieces,
+				groups = saveGroups,
+			}
+		end
+
 		children["SavePromptCard"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(300, 160),
+			Size = UDim2.fromOffset(300, 210),
 			BackgroundColor3 = Theme.Colors.bgCard,
 			ZIndex = 101,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
 			PromptText = React.createElement("TextLabel", {
 				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.5, 0, 0, 20),
-				Size = UDim2.new(1, -30, 0, 50),
+				Position = UDim2.new(0.5, 0, 0, 16),
+				Size = UDim2.new(1, -30, 0, 40),
 				BackgroundTransparency = 1,
-				Text = "Would you like to save\nyour progress?",
+				Text = "Save your progress?",
 				TextColor3 = Theme.Colors.textSecondary,
 				TextSize = Theme.TextSize.body,
 				Font = Theme.Font.medium,
 				TextWrapped = true,
 				ZIndex = 101,
 			}),
-			SaveExitBtn = React.createElement("TextButton", {
+			ButtonLayout = React.createElement("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.3, 0, 0, 90),
-				Size = UDim2.fromOffset(120, 40),
-				BackgroundColor3 = Theme.Colors.success,
-				Text = "Save & Exit",
-				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.body,
-				Font = Theme.Font.medium,
+				Position = UDim2.new(0.5, 0, 0, 62),
+				Size = UDim2.new(1, -30, 0, 130),
+				BackgroundTransparency = 1,
 				ZIndex = 101,
-				[React.Event.Activated] = function()
-					if props.onBackToMenu and puzzleDef then
-						local savePieces = {}
-						for id, p in state.pieces do
-							table.insert(savePieces, {
-								id = id, x = p.x, y = p.y,
-								zIndex = p.zIndex, locked = p.locked,
-								groupId = p.groupId,
-							})
-						end
-						local saveGroups = {}
-						for gid, memberIds in state.groups do
-							table.insert(saveGroups, { id = gid, pieceIds = memberIds })
-						end
-						props.onBackToMenu({
-							imageId = props.imageId,
-							imageAssetId = props.imageAssetId,
-							difficultyId = props.difficultyId,
-							rows = props.rows,
-							cols = props.cols,
-							elapsedSeconds = timer.elapsedSeconds,
-							savedAt = os.time(),
-							puzzleDef = puzzleDef,
-							pieces = savePieces,
-							groups = saveGroups,
-						})
-					end
-				end,
 			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-			}),
-			ExitNoSaveBtn = React.createElement("TextButton", {
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.7, 0, 0, 90),
-				Size = UDim2.fromOffset(120, 40),
-				BackgroundColor3 = Theme.Colors.dangerDark,
-				Text = "Exit Without Saving",
-				TextColor3 = Color3.fromRGB(255, 220, 220),
-				TextSize = Theme.TextSize.small,
-				Font = Theme.Font.medium,
-				ZIndex = 101,
-				[React.Event.Activated] = function()
-					if props.onGiveUp then
-						props.onGiveUp()
-					end
-				end,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Layout = React.createElement("UIListLayout", {
+					SortOrder = Enum.SortOrder.LayoutOrder,
+					HorizontalAlignment = Enum.HorizontalAlignment.Center,
+					Padding = UDim.new(0, 8),
+				}),
+				SaveContinueBtn = React.createElement("TextButton", {
+					LayoutOrder = 1,
+					Size = UDim2.new(1, 0, 0, 36),
+					BackgroundColor3 = Theme.Colors.accentBlue,
+					Text = "Save & Continue",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.body,
+					Font = Theme.Font.medium,
+					ZIndex = 101,
+					[React.Event.Activated] = function()
+						if props.onSaveContinue and puzzleDef then
+							props.onSaveContinue(buildSaveData())
+						end
+						setShowSavePrompt(false)
+						timer.start()
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				}),
+				SaveExitBtn = React.createElement("TextButton", {
+					LayoutOrder = 2,
+					Size = UDim2.new(1, 0, 0, 36),
+					BackgroundColor3 = Theme.Colors.success,
+					Text = "Save & Exit",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.body,
+					Font = Theme.Font.medium,
+					ZIndex = 101,
+					[React.Event.Activated] = function()
+						if props.onBackToMenu and puzzleDef then
+							props.onBackToMenu(buildSaveData())
+						end
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				}),
+				ExitNoSaveBtn = React.createElement("TextButton", {
+					LayoutOrder = 3,
+					Size = UDim2.new(1, 0, 0, 36),
+					BackgroundColor3 = Theme.Colors.dangerDark,
+					Text = "Exit Without Saving",
+					TextColor3 = Color3.fromRGB(255, 220, 220),
+					TextSize = Theme.TextSize.small,
+					Font = Theme.Font.medium,
+					ZIndex = 101,
+					[React.Event.Activated] = function()
+						if props.onGiveUp then
+							props.onGiveUp()
+						end
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				}),
 			}),
 		})
 	end
 
 	return React.createElement("ImageLabel", {
 		Size = UDim2.fromScale(1, 1),
-		Image = "rbxassetid://123416350069330",
+		Image = boardBgImage,
 		ScaleType = Enum.ScaleType.Crop,
 		BackgroundColor3 = boardBgColor,
 		BackgroundTransparency = 0,

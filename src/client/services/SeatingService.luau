@@ -9,6 +9,7 @@ local localPlayer = Players.LocalPlayer
 
 local isSeated = false
 local savedJumpHeight: number? = nil
+local disabledPrompts: { ProximityPrompt } = {}
 local currentSeating: {
 	tableId: string,
 	tableType: string,
@@ -69,9 +70,26 @@ function SeatingService.SetSeated(seatingInfo: any)
 			humanoid.JumpHeight = 0
 		end
 	end
+
+	-- Disable all proximity prompts so nearby tables can't be triggered
+	disabledPrompts = {}
+	for _, desc in Workspace:GetDescendants() do
+		if desc:IsA("ProximityPrompt") and desc.Enabled then
+			desc.Enabled = false
+			table.insert(disabledPrompts, desc)
+		end
+	end
 end
 
 function SeatingService.ClearSeated()
+	-- Re-enable proximity prompts that we disabled
+	for _, prompt in disabledPrompts do
+		if prompt and prompt.Parent then
+			prompt.Enabled = true
+		end
+	end
+	disabledPrompts = {}
+
 	isSeated = false
 	currentSeating = nil
 

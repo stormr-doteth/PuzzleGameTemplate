@@ -25,7 +25,7 @@ local function formatTime(seconds: number): string
 end
 
 local function LeaderboardScreen(props: LeaderboardScreenProps)
-	local selectedTab, setSelectedTab = React.useState(3) -- default 4x4
+	local selectedTab, setSelectedTab = React.useState(3) -- default 9x9
 	local leaderboardData, setLeaderboardData = React.useState({} :: { any })
 	local isLoading, setIsLoading = React.useState(false)
 	local localUserId = Players.LocalPlayer and Players.LocalPlayer.UserId or 0
@@ -73,13 +73,14 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 		local isSelected = i == selectedTab
 		tabChildren["Tab_" .. i] = React.createElement("TextButton", {
 			LayoutOrder = i,
-			Size = UDim2.new(0, 56, 0, 32),
+			Size = UDim2.new(0, 64, 0, 32),
 			BackgroundColor3 = if isSelected
 				then Theme.Colors.accentBlue
 				else Theme.Colors.bgInput,
 			Text = diff.label,
 			TextColor3 = Theme.Colors.textPrimary,
-			TextSize = Theme.TextSize.label,
+			TextSize = 16,
+			TextScaled = true,
 			Font = Theme.Font.medium,
 			[React.Event.Activated] = function()
 				setSelectedTab(i)
@@ -105,21 +106,23 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 	if isLoading then
 		listChildren["Loading"] = React.createElement("TextLabel", {
 			LayoutOrder = 1,
-			Size = UDim2.new(1, 0, 0, 40),
+			Size = UDim2.new(1, 0, 0, 36),
 			BackgroundTransparency = 1,
 			Text = "Loading...",
 			TextColor3 = Theme.Colors.textMuted,
-			TextSize = Theme.TextSize.button,
+			TextSize = 18,
+			TextScaled = true,
 			Font = Theme.Font.regular,
 		})
 	elseif #leaderboardData == 0 then
 		listChildren["Empty"] = React.createElement("TextLabel", {
 			LayoutOrder = 1,
-			Size = UDim2.new(1, 0, 0, 40),
+			Size = UDim2.new(1, 0, 0, 36),
 			BackgroundTransparency = 1,
 			Text = "No times recorded yet!",
 			TextColor3 = Theme.Colors.textMuted,
-			TextSize = Theme.TextSize.button,
+			TextSize = 18,
+			TextScaled = true,
 			Font = Theme.Font.regular,
 		})
 	else
@@ -140,53 +143,43 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 			if rank == 3 then rankColor = Theme.Colors.rank3 end
 
 			local hasTitle = entry.title and entry.title ~= ""
-			local nameXOffset = if hasTitle then 88 else 56
+			local nameColor = if entry.isVIP then Theme.Colors.rank1 else Theme.Colors.textSecondary
 
-			local rowChildren: { [string]: any } = {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
+			-- Build left-side children using horizontal UIListLayout
+			local leftChildren: { [string]: any } = {
+				Layout = React.createElement("UIListLayout", {
+					FillDirection = Enum.FillDirection.Horizontal,
+					VerticalAlignment = Enum.VerticalAlignment.Center,
+					SortOrder = Enum.SortOrder.LayoutOrder,
+					Padding = UDim.new(0, 6),
+				}),
+				Padding = React.createElement("UIPadding", {
+					PaddingLeft = UDim.new(0, 8),
+				}),
 				Rank = React.createElement("TextLabel", {
-					Position = UDim2.new(0, 8, 0, 0),
-					Size = UDim2.new(0, 42, 1, 0),
+					LayoutOrder = 1,
+					AutomaticSize = Enum.AutomaticSize.X,
+					Size = UDim2.new(0, 0, 1, 0),
 					BackgroundTransparency = 1,
 					Text = "#" .. rank,
 					TextColor3 = rankColor,
-					TextSize = Theme.TextSize.label,
+					TextSize = 16,
+					TextScaled = true,
 					Font = Theme.Font.bold,
 					TextXAlignment = Enum.TextXAlignment.Left,
-				}),
-				Name = React.createElement("TextLabel", {
-					Position = UDim2.new(0, nameXOffset, 0, 0),
-					Size = UDim2.new(1, -(nameXOffset + 86), 1, 0),
-					BackgroundTransparency = 1,
-					Text = entry.displayName,
-					TextColor3 = Theme.Colors.textSecondary,
-					TextSize = Theme.TextSize.label,
-					Font = Theme.Font.regular,
-					TextXAlignment = Enum.TextXAlignment.Left,
-					TextTruncate = Enum.TextTruncate.AtEnd,
-				}),
-				Time = React.createElement("TextLabel", {
-					AnchorPoint = Vector2.new(1, 0),
-					Position = UDim2.new(1, -8, 0, 0),
-					Size = UDim2.new(0, 80, 1, 0),
-					BackgroundTransparency = 1,
-					Text = formatTime(entry.time),
-					TextColor3 = Theme.Colors.accentCyan,
-					TextSize = Theme.TextSize.label,
-					Font = Theme.Font.medium,
-					TextXAlignment = Enum.TextXAlignment.Right,
 				}),
 			}
 
 			if hasTitle then
-				rowChildren["Title"] = React.createElement("TextLabel", {
-					Position = UDim2.new(0, 54, 0, 4),
+				leftChildren["Title"] = React.createElement("TextLabel", {
+					LayoutOrder = 2,
 					AutomaticSize = Enum.AutomaticSize.X,
-					Size = UDim2.fromOffset(0, 24),
+					Size = UDim2.new(0, 0, 0, 24),
 					BackgroundColor3 = Theme.Colors.headerGold,
 					Text = entry.title,
 					TextColor3 = Color3.fromRGB(40, 20, 0),
 					TextSize = Theme.TextSize.tiny,
+					TextScaled = true,
 					Font = Theme.Font.bold,
 				}, {
 					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
@@ -197,9 +190,46 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 				})
 			end
 
+			leftChildren["Name"] = React.createElement("TextLabel", {
+				LayoutOrder = 3,
+				Size = UDim2.new(1, 0, 1, 0),
+				BackgroundTransparency = 1,
+				Text = entry.displayName,
+				TextColor3 = nameColor,
+				TextSize = 16,
+				TextScaled = true,
+				Font = Theme.Font.regular,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+			}, {
+				Flex = React.createElement("UIFlexItem", {
+					FlexMode = Enum.UIFlexMode.Fill,
+				}),
+			})
+
+			local rowChildren: { [string]: any } = {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
+				LeftContainer = React.createElement("Frame", {
+					Size = UDim2.new(1, -88, 1, 0),
+					BackgroundTransparency = 1,
+				}, leftChildren),
+				Time = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(1, -8, 0, 0),
+					Size = UDim2.new(0, 80, 1, 0),
+					BackgroundTransparency = 1,
+					Text = formatTime(entry.time),
+					TextColor3 = Theme.Colors.accentCyan,
+					TextSize = 16,
+					TextScaled = true,
+					Font = Theme.Font.medium,
+					TextXAlignment = Enum.TextXAlignment.Right,
+				}),
+			}
+
 			listChildren["Row_" .. rank] = React.createElement("Frame", {
 				LayoutOrder = rank,
-				Size = UDim2.new(1, 0, 0, 32),
+				Size = UDim2.new(1, 0, 0, 38),
 				BackgroundColor3 = bgColor,
 				BackgroundTransparency = Theme.Transparency.hudButton,
 			}, rowChildren)
@@ -209,11 +239,12 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 		if playerRank then
 			listChildren["YourRank"] = React.createElement("TextLabel", {
 				LayoutOrder = #leaderboardData + 1,
-				Size = UDim2.new(1, 0, 0, 28),
+				Size = UDim2.new(1, 0, 0, 24),
 				BackgroundTransparency = 1,
 				Text = "Your rank: #" .. playerRank,
 				TextColor3 = Theme.Colors.warning,
-				TextSize = Theme.TextSize.body,
+				TextSize = 16,
+				TextScaled = true,
 				Font = Theme.Font.bold,
 			})
 		end
@@ -227,68 +258,71 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 		Modal = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.5, 0.6),
+			Size = UDim2.fromScale(0.85, 0.85),
 			BackgroundColor3 = Theme.Colors.bgDeepest,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
 			AspectRatio = React.createElement("UIAspectRatioConstraint", {
-				AspectRatio = 0.85,
+				AspectRatio = 1.15,
 				DominantAxis = Enum.DominantAxis.Height,
 			}),
 			SizeConstraint = React.createElement("UISizeConstraint", {
-				MinSize = Vector2.new(320, 400),
+				MaxSize = Vector2.new(math.huge, 550),
 			}),
 
 			-- Title bar
 			TitleBar = React.createElement("Frame", {
-			Size = UDim2.new(1, 0, 0, 50),
-			BackgroundTransparency = 1,
-		}, {
-			Title = React.createElement("TextLabel", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
-				Size = UDim2.new(0, 300, 0, 40),
+				Size = UDim2.new(1, 0, 0, 40),
 				BackgroundTransparency = 1,
-				Text = "Leaderboards",
-				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.title,
-				Font = Theme.Font.bold,
-			}),
-			CloseButton = React.createElement("TextButton", {
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, -16, 0.5, 0),
-				Size = UDim2.fromOffset(36, 36),
-				BackgroundColor3 = Theme.Colors.dangerDark,
-				Text = "X",
-				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.large,
-				Font = Theme.Font.bold,
-				[React.Event.Activated] = function()
-					props.onClose()
-				end,
 			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Title = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.new(0.6, 0, 0, 30),
+					BackgroundTransparency = 1,
+					Text = "Leaderboards",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = 24,
+					TextScaled = true,
+					Font = Theme.Font.bold,
+				}),
+				CloseButton = React.createElement("TextButton", {
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -8, 0.5, 0),
+					Size = UDim2.fromOffset(30, 30),
+					BackgroundColor3 = Theme.Colors.dangerDark,
+					Text = "X",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = 16,
+					TextScaled = true,
+					Font = Theme.Font.bold,
+					[React.Event.Activated] = function()
+						props.onClose()
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				}),
 			}),
-		}),
 
-		-- Tab bar
-		TabBar = React.createElement("Frame", {
-			Position = UDim2.new(0, 0, 0, 50),
-			Size = UDim2.new(1, 0, 0, 40),
-			BackgroundTransparency = 1,
-		}, tabChildren),
+			-- Tab bar
+			TabBar = React.createElement("Frame", {
+				Position = UDim2.new(0, 0, 0, 40),
+				Size = UDim2.new(1, 0, 0, 34),
+				BackgroundTransparency = 1,
+			}, tabChildren),
 
-		-- Scrolling list
-		LeaderboardList = React.createElement("ScrollingFrame", {
-			Position = UDim2.new(0, 16, 0, 96),
-			Size = UDim2.new(1, -32, 1, -112),
-			CanvasSize = UDim2.new(0, 0, 0, math.max(#leaderboardData * 34 + 40, 50)),
-			ScrollBarThickness = 4,
-			ScrollBarImageColor3 = Theme.Colors.scrollbar,
-			BackgroundColor3 = Theme.Colors.bgDark,
-			BackgroundTransparency = 0.5,
-			BorderSizePixel = 0,
-		}, listChildren),
+			-- Scrolling list
+			LeaderboardList = React.createElement("ScrollingFrame", {
+				Position = UDim2.new(0, 0, 0, 78),
+				Size = UDim2.new(1, 0, 1, -78),
+				CanvasSize = UDim2.new(0, 0, 0, 0),
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				ScrollBarThickness = 4,
+				ScrollBarImageColor3 = Theme.Colors.scrollbar,
+				BackgroundColor3 = Theme.Colors.bgDark,
+				BackgroundTransparency = 0.5,
+				BorderSizePixel = 0,
+			}, listChildren),
 		}),
 	})
 end

@@ -6,7 +6,7 @@ local MonetizationConfig = {}
 -- GamePass IDs (replace with actual IDs from Roblox after creating them)
 MonetizationConfig.GAME_PASSES = {
 	VIP = {
-		id = 0, -- Replace with actual GamePass ID
+		id = 1736558592,
 		name = "VIP Pass",
 		description = "2x Cash permanently + gold name on leaderboard",
 		robuxPrice = 199,
@@ -14,7 +14,7 @@ MonetizationConfig.GAME_PASSES = {
 		iconText = "\u{1F451}",
 	},
 	ALL_IMAGES = {
-		id = 0, -- Replace with actual GamePass ID
+		id = 1735906515,
 		name = "All Images Pack",
 		description = "Unlock every puzzle image immediately",
 		robuxPrice = 149,
@@ -22,7 +22,7 @@ MonetizationConfig.GAME_PASSES = {
 		iconText = "\u{1F5BC}",
 	},
 	EXPERT = {
-		id = 0, -- Replace with actual GamePass ID
+		id = 1735358932,
 		name = "Expert Mode",
 		description = "Unlock Expert (25x25) difficulty",
 		robuxPrice = 199,
@@ -30,7 +30,7 @@ MonetizationConfig.GAME_PASSES = {
 		iconText = "\u{1F9E9}",
 	},
 	PUZZLE_ASSIST = {
-		id = 0, -- Replace with actual GamePass ID
+		id = 1735734804,
 		name = "Puzzle Assist",
 		description = "Shows the original image behind your puzzle as a guide",
 		robuxPrice = 99,
@@ -42,7 +42,7 @@ MonetizationConfig.GAME_PASSES = {
 -- DevProduct IDs (replace with actual IDs from Roblox after creating them)
 MonetizationConfig.DEV_PRODUCTS = {
 	CASH_100 = {
-		id = 0, -- Replace with actual DevProduct ID
+		id = 3548790391,
 		name = "100 Cash",
 		description = "A small stack of coins to get started",
 		cashAmount = 100,
@@ -51,7 +51,7 @@ MonetizationConfig.DEV_PRODUCTS = {
 		iconText = "\u{1FA99}",
 	},
 	CASH_500 = {
-		id = 0, -- Replace with actual DevProduct ID
+		id = 3548800999,
 		name = "500 Cash",
 		description = "A solid pile of coins for unlocks",
 		cashAmount = 500,
@@ -60,7 +60,7 @@ MonetizationConfig.DEV_PRODUCTS = {
 		iconText = "\u{1F4B0}",
 	},
 	CASH_1500 = {
-		id = 0, -- Replace with actual DevProduct ID
+		id = 3548801093,
 		name = "1,500 Cash",
 		description = "A big bag of coins — great value!",
 		cashAmount = 1500,
@@ -69,7 +69,7 @@ MonetizationConfig.DEV_PRODUCTS = {
 		iconText = "\u{1F4B5}",
 	},
 	CASH_5000 = {
-		id = 0, -- Replace with actual DevProduct ID
+		id = 3548801164,
 		name = "5,000 Cash",
 		description = "The mega bundle — best deal!",
 		cashAmount = 5000,

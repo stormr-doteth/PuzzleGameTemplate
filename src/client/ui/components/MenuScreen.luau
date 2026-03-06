@@ -619,13 +619,13 @@ local function MenuScreen(props: MenuScreenProps)
 		saveEntries["Layout"] = React.createElement("UIListLayout", {
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			SortOrder = Enum.SortOrder.LayoutOrder,
-			Padding = UDim.new(0, 8),
+			Padding = UDim.new(0.02, 0),
 		})
 		saveEntries["Padding"] = React.createElement("UIPadding", {
-			PaddingLeft = UDim.new(0, 12),
-			PaddingRight = UDim.new(0, 12),
-			PaddingTop = UDim.new(0, 8),
-			PaddingBottom = UDim.new(0, 8),
+			PaddingLeft = UDim.new(0.03, 0),
+			PaddingRight = UDim.new(0.03, 0),
+			PaddingTop = UDim.new(0.02, 0),
+			PaddingBottom = UDim.new(0.02, 0),
 		})
 
 		if savedPuzzles and #savedPuzzles > 0 then
@@ -637,30 +637,32 @@ local function MenuScreen(props: MenuScreenProps)
 
 				saveEntries["Save_" .. i] = React.createElement("Frame", {
 					LayoutOrder = i,
-					Size = UDim2.new(1, 0, 0, 50),
+					Size = UDim2.fromScale(1, 0.18),
 					BackgroundColor3 = Theme.Colors.bgInput,
 					BorderSizePixel = 0,
 				}, {
 					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 					Label = React.createElement("TextLabel", {
-						Position = UDim2.new(0, 10, 0, 4),
-						Size = UDim2.new(1, -20, 0, 18),
+						Position = UDim2.fromScale(0.03, 0.05),
+						Size = UDim2.fromScale(0.94, 0.4),
 						BackgroundTransparency = 1,
 						Text = label,
 						TextColor3 = Theme.Colors.textSecondary,
-						TextSize = Theme.TextSize.small,
+						TextSize = Theme.TextSize.body,
 						Font = Theme.Font.medium,
 						TextXAlignment = Enum.TextXAlignment.Left,
+						TextScaled = true,
 						TextTruncate = Enum.TextTruncate.AtEnd,
 					}),
 					ResumeBtn = React.createElement("TextButton", {
-						Position = UDim2.new(0, 10, 0, 25),
-						Size = UDim2.fromOffset(80, 22),
+						Position = UDim2.fromScale(0.03, 0.5),
+						Size = UDim2.fromScale(0.35, 0.4),
 						BackgroundColor3 = Theme.Colors.success,
 						Text = "Resume",
 						TextColor3 = Theme.Colors.textPrimary,
-						TextSize = Theme.TextSize.tiny,
+						TextSize = Theme.TextSize.body,
 						Font = Theme.Font.medium,
+						TextScaled = true,
 						[React.Event.Activated] = function()
 							if props.onResume then
 								setShowSavedPuzzles(false)
@@ -671,13 +673,14 @@ local function MenuScreen(props: MenuScreenProps)
 						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
 					}),
 					DeleteBtn = React.createElement("TextButton", {
-						Position = UDim2.new(0, 100, 0, 25),
-						Size = UDim2.fromOffset(60, 22),
+						Position = UDim2.fromScale(0.4, 0.5),
+						Size = UDim2.fromScale(0.25, 0.4),
 						BackgroundColor3 = Theme.Colors.dangerDark,
 						Text = "Delete",
 						TextColor3 = Color3.fromRGB(255, 220, 220),
-						TextSize = Theme.TextSize.tiny,
+						TextSize = Theme.TextSize.body,
 						Font = Theme.Font.medium,
+						TextScaled = true,
 						[React.Event.Activated] = function()
 							if props.onDeleteSave then
 								props.onDeleteSave(i)
@@ -691,12 +694,13 @@ local function MenuScreen(props: MenuScreenProps)
 		else
 			saveEntries["Empty"] = React.createElement("TextLabel", {
 				LayoutOrder = 1,
-				Size = UDim2.new(1, 0, 0, 40),
+				Size = UDim2.fromScale(1, 0.12),
 				BackgroundTransparency = 1,
 				Text = "No saved puzzles",
 				TextColor3 = Theme.Colors.textDisabled,
 				TextSize = Theme.TextSize.body,
 				Font = Theme.Font.medium,
+				TextScaled = true,
 				TextXAlignment = Enum.TextXAlignment.Center,
 			})
 		end
@@ -714,7 +718,7 @@ local function MenuScreen(props: MenuScreenProps)
 		rootChildren["SavedPuzzlesModal"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.5, 0.7),
+			Size = UDim2.fromScale(0.32, 0.7),
 			BackgroundColor3 = Theme.Colors.bgMedium,
 			ZIndex = 11,
 		}, {
@@ -734,7 +738,7 @@ local function MenuScreen(props: MenuScreenProps)
 			CloseBtn = React.createElement("TextButton", {
 				AnchorPoint = Vector2.new(1, 0),
 				Position = UDim2.fromScale(0.97, 0.02),
-				Size = UDim2.fromScale(0.08, 0.1),
+				Size = UDim2.fromScale(0.1, 0.1),
 				BackgroundColor3 = Theme.Colors.border,
 				Text = "X",
 				TextColor3 = Theme.Colors.textSecondary,

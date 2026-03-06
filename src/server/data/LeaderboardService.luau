@@ -1,9 +1,11 @@
 local DataStoreService = game:GetService("DataStoreService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local MonetizationConfig = require(Shared.MonetizationConfig)
 local TitleConfig = require(Shared.TitleConfig)
 
 local ProfileService = require(script.Parent.ProfileService)
@@ -75,13 +77,20 @@ function LeaderboardService.getTopTimes(difficultyId: string, count: number): { 
 			displayName = Players:GetNameFromUserIdAsync(userId)
 		end)
 
-		-- Try to get title from profile (online players only)
+		-- Try to get title and VIP status from profile (online players only)
 		local title = ""
+		local isVIP = false
 		local player = Players:GetPlayerByUserId(userId)
 		if player then
 			local profileData = ProfileService.GetData(player)
 			if profileData then
 				title = TitleConfig.getTitleFromCompletions(profileData.PuzzlesCompletedByDifficulty or {})
+			end
+			local vipOk, vipOwns = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(userId, MonetizationConfig.GAME_PASSES.VIP.id)
+			end)
+			if vipOk and vipOwns then
+				isVIP = true
 			end
 		end
 
@@ -90,6 +99,7 @@ function LeaderboardService.getTopTimes(difficultyId: string, count: number): { 
 			displayName = displayName,
 			time = timeSeconds,
 			title = title,
+			isVIP = isVIP,
 		})
 	end
 
