@@ -34,6 +34,9 @@ local REMOTE_EVENTS = {
 	"PlayerSeated",           -- server → client: { tableId, tableType, seatIndex, roomId? }
 	"PlayerUnseated",         -- server → client: {}
 	"TableOccupancyChanged",  -- server → all: { tableId, occupants }
+
+	-- Daily puzzle events
+	"DailyPuzzleCompleted",   -- client → server: { imageId, difficultyId, completionTime }
 }
 
 local REMOTE_FUNCTIONS = {
@@ -56,6 +59,14 @@ local REMOTE_FUNCTIONS = {
 
 	-- Cafe table functions
 	"GetTableInfo",     -- (tableId) → { tableType, occupants, roomId? }
+
+	-- Daily features
+	"ClaimDailyReward",       -- returns { success, reward }
+	"GetDailyRewardStatus",   -- returns { streak, canClaim, rewards }
+	"GetDailyPuzzle",         -- returns { puzzle, completed, leaderboard }
+	"GetDailyPuzzleLeaderboard", -- returns top 20 times
+	"SpinWheel",              -- returns { success, segmentIndex, reward }
+	"GetSpinWheelStatus",     -- returns { canFreeSpin, extraSpinCost }
 }
 
 local Remotes = {}

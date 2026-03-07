@@ -20,6 +20,8 @@ local PuzzleBoard = require(script.Parent.components.PuzzleBoard)
 local CompleteScreen = require(script.Parent.components.CompleteScreen)
 local NewItemNotification = require(script.Parent.components.NewItemNotification)
 local RoomLobbyScreen = require(script.Parent.components.RoomLobbyScreen)
+local DailyRewardModal = require(script.Parent.components.DailyRewardModal)
+local SpinWheelModal = require(script.Parent.components.SpinWheelModal)
 
 -- SeatingService loaded optionally
 local SeatingService = nil
@@ -68,6 +70,18 @@ local function App(props)
 
 	-- Loading state for initial data fetch
 	local isDataLoading, setIsDataLoading = React.useState(true)
+
+	-- Daily reward state
+	local showDailyReward, setShowDailyReward = React.useState(false)
+	local dailyRewardStatus, setDailyRewardStatus = React.useState(nil :: any)
+	local dailyRewardClaimResult, setDailyRewardClaimResult = React.useState(nil :: any)
+
+	-- Daily puzzle state
+	local dailyPuzzle, setDailyPuzzle = React.useState(nil :: any)
+	local dailyPuzzleCompleted, setDailyPuzzleCompleted = React.useState(false)
+
+	-- Spin wheel state
+	local spinWheelCanFree, setSpinWheelCanFree = React.useState(false)
 
 	-- NPC overlay state (only one open at a time)
 	local activeOverlay, setActiveOverlay = React.useState(nil :: string?)
@@ -256,6 +270,37 @@ local function App(props)
 				local ok2, saves = pcall(function() return loadSaved:InvokeServer() end)
 				if ok2 and saves then
 					setSavedPuzzles(saves)
+				end
+			end
+
+			-- Fetch daily reward status
+			local getDailyStatus = remotes:FindFirstChild("GetDailyRewardStatus")
+			if getDailyStatus and getDailyStatus:IsA("RemoteFunction") then
+				local ok3, status = pcall(function() return getDailyStatus:InvokeServer() end)
+				if ok3 and status then
+					setDailyRewardStatus(status)
+					if status.canClaim then
+						setShowDailyReward(true)
+					end
+				end
+			end
+
+			-- Fetch daily puzzle
+			local getDailyPuzzleRemote = remotes:FindFirstChild("GetDailyPuzzle")
+			if getDailyPuzzleRemote and getDailyPuzzleRemote:IsA("RemoteFunction") then
+				local ok4, result = pcall(function() return getDailyPuzzleRemote:InvokeServer() end)
+				if ok4 and result then
+					setDailyPuzzle(result.puzzle)
+					setDailyPuzzleCompleted(result.completed == true)
+				end
+			end
+
+			-- Fetch spin wheel status
+			local getSpinStatus = remotes:FindFirstChild("GetSpinWheelStatus")
+			if getSpinStatus and getSpinStatus:IsA("RemoteFunction") then
+				local ok5, spinStatus = pcall(function() return getSpinStatus:InvokeServer() end)
+				if ok5 and spinStatus then
+					setSpinWheelCanFree(spinStatus.canFreeSpin == true)
 				end
 			end
 
@@ -459,6 +504,19 @@ local function App(props)
 				difficultyId = difficultyId,
 				completionTime = elapsedSeconds,
 			})
+
+			-- Also fire DailyPuzzleCompleted if this matches the daily puzzle
+			if dailyPuzzle and imageId == dailyPuzzle.imageId and difficultyId == dailyPuzzle.difficultyId then
+				local dailyEvent = remotes:FindFirstChild("DailyPuzzleCompleted")
+				if dailyEvent and dailyEvent:IsA("RemoteEvent") then
+					dailyEvent:FireServer({
+						imageId = imageId,
+						difficultyId = difficultyId,
+						completionTime = elapsedSeconds,
+					})
+					setDailyPuzzleCompleted(true)
+				end
+			end
 		end)
 	end
 
@@ -1128,6 +1186,69 @@ local function App(props)
 					}),
 				}),
 			}),
+			SpinBtn = React.createElement("Frame", {
+				LayoutOrder = 5,
+				Size = UDim2.fromScale(1, 0.23),
+				BackgroundTransparency = 1,
+				ZIndex = 10,
+			}, {
+				Icon = React.createElement("ImageButton", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.fromScale(0.5, 0),
+					Size = UDim2.fromScale(0.85, 0.72),
+					BackgroundColor3 = Theme.Colors.gold,
+					BackgroundTransparency = 0,
+					Image = "",
+					ZIndex = 10,
+					[React.Event.Activated] = function()
+						openOverlay("spin")
+					end,
+					[React.Event.MouseEnter] = function(rbx)
+						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 5 }):Play()
+					end,
+					[React.Event.MouseLeave] = function(rbx)
+						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 0 }):Play()
+					end,
+				}, {
+					Aspect = React.createElement("UIAspectRatioConstraint", {
+						AspectRatio = 1,
+					}),
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+					SpinIcon = React.createElement("TextLabel", {
+						Size = UDim2.fromScale(1, 1),
+						BackgroundTransparency = 1,
+						Text = "\u{1F3B0}",
+						TextSize = 24,
+						TextScaled = true,
+						ZIndex = 10,
+					}),
+					FreeDot = if spinWheelCanFree then React.createElement("Frame", {
+						AnchorPoint = Vector2.new(1, 0),
+						Position = UDim2.new(1, 4, 0, -4),
+						Size = UDim2.fromOffset(12, 12),
+						BackgroundColor3 = Theme.Colors.danger,
+						ZIndex = 12,
+					}, {
+						DotCorner = React.createElement("UICorner", { CornerRadius = UDim.new(1, 0) }),
+					}) else nil,
+				}),
+				Label = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.72),
+					Size = UDim2.fromScale(1.1, 0.3),
+					BackgroundTransparency = 1,
+					ZIndex = 11,
+					Text = "Spin",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextScaled = true,
+					Font = Theme.Font.heading,
+				}, {
+					LabelStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.black,
+					}),
+				}),
+			}),
 		})
 
 		-- NPC overlay (animated wrapper)
@@ -1189,6 +1310,27 @@ local function App(props)
 				else
 					setActiveOverlay(nil)
 				end
+			elseif activeOverlay == "spin" then
+				overlayContent = React.createElement(SpinWheelModal, {
+					onClose = closeOverlay,
+					playerCash = if playerData then playerData.cash else 0,
+					canFreeSpin = spinWheelCanFree,
+					onSpinComplete = function(reward)
+						setSpinWheelCanFree(false)
+						-- Refresh player data after spin
+						task.spawn(function()
+							local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+							if not remotes then return end
+							local getPlayerData = remotes:FindFirstChild("GetPlayerData")
+							if getPlayerData and getPlayerData:IsA("RemoteFunction") then
+								local ok2, data = pcall(function() return getPlayerData:InvokeServer() end)
+								if ok2 and data then
+									setPlayerData(data)
+								end
+							end
+						end)
+					end,
+				})
 			end
 
 			if overlayContent then
@@ -1257,6 +1399,48 @@ local function App(props)
 		end)
 	end
 
+	-- Daily reward claim handler
+	local function onClaimDailyReward()
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local claimRemote = remotes:FindFirstChild("ClaimDailyReward")
+			if not claimRemote or not claimRemote:IsA("RemoteFunction") then return end
+
+			local ok, result = pcall(function() return claimRemote:InvokeServer() end)
+			if ok and result then
+				setDailyRewardClaimResult(result)
+				if result.success and result.newCash then
+					setPlayerData(function(prev)
+						if not prev then return prev end
+						local updated = table.clone(prev)
+						updated.cash = result.newCash
+						if result.bonusReward and result.bonusReward.type == "snap_effect" then
+							updated.ownedSnapEffects = table.clone(updated.ownedSnapEffects or {})
+							updated.ownedSnapEffects[result.bonusReward.id] = true
+						end
+						if result.bonusReward and result.bonusReward.type == "hints" then
+							updated.hintsRemaining = (updated.hintsRemaining or 0) + result.bonusReward.count
+						end
+						return updated
+					end)
+				end
+			end
+		end)
+	end
+
+	-- Daily reward modal (auto-show on login when claimable, in walking state)
+	if showDailyReward and gameState == "walking" then
+		safeChildren["DailyRewardModal"] = React.createElement(DailyRewardModal, {
+			onClose = function()
+				setShowDailyReward(false)
+			end,
+			rewardStatus = dailyRewardStatus,
+			onClaim = onClaimDailyReward,
+			claimResult = dailyRewardClaimResult,
+		})
+	end
+
 	if gameState == "menu" then
 		safeChildren["Menu"] = React.createElement(MenuScreen, {
 			onStart = onStart,
@@ -1272,6 +1456,8 @@ local function App(props)
 			onUnlockImage = onUnlockImage,
 			onUnlockImageRobux = onUnlockImageRobux,
 			onPromptExpertPass = onPromptExpertPass,
+			dailyPuzzle = dailyPuzzle,
+			dailyPuzzleCompleted = dailyPuzzleCompleted,
 		})
 
 		-- Leave Table button
@@ -1347,6 +1533,7 @@ local function App(props)
 				equippedSnapEffect = if playerData then playerData.equippedSnapEffect else nil,
 				ownedSnapEffects = if playerData then playerData.ownedSnapEffects else nil,
 				onEquip = onEquip,
+				playerData = playerData,
 				hintsRemaining = if playerData then playerData.hintsRemaining else 0,
 				onHintUsed = onHintUsed,
 				isMultiplayer = isMultiplayerBoard,

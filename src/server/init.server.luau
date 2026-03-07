@@ -48,3 +48,21 @@ pcall(function()
 	local MonetizationHandler = require(script:WaitForChild("handlers"):WaitForChild("MonetizationHandler"))
 	MonetizationHandler.Init()
 end)
+
+-- Initialize DailyRewardsHandler
+pcall(function()
+	local DailyRewardsHandler = require(script:WaitForChild("handlers"):WaitForChild("DailyRewardsHandler"))
+	DailyRewardsHandler.Init()
+end)
+
+-- Initialize DailyPuzzleHandler
+pcall(function()
+	local DailyPuzzleHandler = require(script:WaitForChild("handlers"):WaitForChild("DailyPuzzleHandler"))
+	DailyPuzzleHandler.Init()
+end)
+
+-- Initialize SpinWheelHandler
+pcall(function()
+	local SpinWheelHandler = require(script:WaitForChild("handlers"):WaitForChild("SpinWheelHandler"))
+	SpinWheelHandler.Init()
+end)

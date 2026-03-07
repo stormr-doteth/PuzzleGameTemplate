@@ -241,6 +241,10 @@ function PuzzleHandler.Init()
 			totalPlayTime = profileData.TotalPlayTime or 0,
 			totalPiecesPlaced = profileData.TotalPiecesPlaced or 0,
 			puzzlesCompletedByDifficulty = completions,
+			dailyReward_lastClaimTime = profileData.DailyReward_LastClaimTime or 0,
+			dailyReward_streak = profileData.DailyReward_Streak or 0,
+			dailyPuzzle_lastCompletionDate = profileData.DailyPuzzle_LastCompletionDate or "",
+			spinWheel_lastFreeSpinDate = profileData.SpinWheel_LastFreeSpinDate or "",
 		}
 	end
 

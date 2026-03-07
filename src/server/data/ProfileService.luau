@@ -5,7 +5,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Packages = ServerScriptService:WaitForChild("Packages")
 local ProfileStore = require(Packages.ProfileStore)
 
-local CURRENT_SCHEMA_VERSION = 2
+local CURRENT_SCHEMA_VERSION = 3
 
 local PROFILE_TEMPLATE = {
 	SchemaVersion = CURRENT_SCHEMA_VERSION,
@@ -26,6 +26,10 @@ local PROFILE_TEMPLATE = {
 	EquippedConfettiStyle = "",
 	EquippedSnapEffect = "",
 	SavedPuzzles = {},  -- { SavedPuzzleData }, max 3 entries
+	DailyReward_LastClaimTime = 0,       -- Unix timestamp
+	DailyReward_Streak = 0,              -- 0-7
+	DailyPuzzle_LastCompletionDate = "",  -- "YYYY-MM-DD"
+	SpinWheel_LastFreeSpinDate = "",      -- "YYYY-MM-DD"
 }
 
 -- Cap PurchaseHistory to prevent unbounded growth toward DataStore limits
@@ -55,6 +59,23 @@ local function migrateProfile(data)
 		data.OwnedBadges = nil
 		data.EquippedBadge = nil
 		data.SchemaVersion = 2
+	end
+
+	-- Migration from v2 to v3: add daily rewards, daily puzzle, spin wheel fields
+	if version < 3 then
+		if data.DailyReward_LastClaimTime == nil then
+			data.DailyReward_LastClaimTime = 0
+		end
+		if data.DailyReward_Streak == nil then
+			data.DailyReward_Streak = 0
+		end
+		if data.DailyPuzzle_LastCompletionDate == nil then
+			data.DailyPuzzle_LastCompletionDate = ""
+		end
+		if data.SpinWheel_LastFreeSpinDate == nil then
+			data.SpinWheel_LastFreeSpinDate = ""
+		end
+		data.SchemaVersion = 3
 	end
 end
 

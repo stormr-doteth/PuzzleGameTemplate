@@ -43,6 +43,7 @@ export type PuzzleBoardProps = {
 	equippedSnapEffect: string?,
 	ownedSnapEffects: { [string]: boolean }?,
 	onEquip: ((itemId: string, category: string) -> ())?,
+	playerData: any?,
 	isMultiplayer: boolean?,
 	roomPlayers: { { userId: number, displayName: string, isHost: boolean? } }?,
 	roomPuzzleDef: any?,
@@ -95,6 +96,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local showPlayersMenu, setShowPlayersMenu = React.useState(false)
 	local ownsPuzzleAssist, setOwnsPuzzleAssist = React.useState(false)
 	local showAssistOverlay, setShowAssistOverlay = React.useState(false)
+	local showShop, setShowShop = React.useState(false)
 
 	-- Dynamic top inset to clear Roblox top bar in full-screen ScreenGui
 	local topInset = React.useMemo(function()
@@ -790,6 +792,26 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			})
 		end
 
+		-- Shop button (top-right, to the left of Save/Back)
+		local shopOffset = if props.isMultiplayer then scaled(146) else scaled(254)
+		children["ShopButton"] = React.createElement("TextButton", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -shopOffset, 0, 4),
+			Size = UDim2.fromOffset(scaled(80), scaled(36)),
+			BackgroundColor3 = Theme.Colors.bgButtonContrast,
+			Text = "Shop",
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = scaled(Theme.TextSize.label),
+			Font = Theme.Font.medium,
+			ZIndex = 50,
+			[React.Event.Activated] = function()
+				setShowShop(true)
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
+		})
+
 		-- Snap effects picker button (when player owns effects)
 		if props.ownedSnapEffects then
 			local hasAnyEffect = false
@@ -857,7 +879,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 
 		-- Robux hint purchase button (disabled in multiplayer, always visible when puzzle is loaded)
 		if not props.isMultiplayer and puzzleDef and pieceImages and not state.isComplete then
-			local robuxOffsetY = if localHints > 0 then 24 else 0
+			local robuxOffsetY = if localHints > 0 then 44 else 0
 			children["RobuxHintButton"] = React.createElement("TextButton", {
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.new(1, -8, 0.5, robuxOffsetY),
@@ -1835,6 +1857,25 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				}),
 			}),
 		})
+	end
+
+	-- Shop overlay
+	if showShop then
+		local ShopScreen = nil
+		local ok = pcall(function()
+			ShopScreen = require(script.Parent.ShopScreen)
+		end)
+		if ok and ShopScreen then
+			children["ShopOverlay"] = React.createElement(ShopScreen, {
+				onClose = function()
+					setShowShop(false)
+				end,
+				playerData = props.playerData,
+				onEquip = props.onEquip,
+			})
+		else
+			setShowShop(false)
+		end
 	end
 
 	return React.createElement("ImageLabel", {

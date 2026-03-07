@@ -11,6 +11,7 @@ local ProgressionConfig = require(Shared.ProgressionConfig)
 local ImagePicker = require(script.Parent.ImagePicker)
 
 local PackPicker = require(script.Parent.PackPicker)
+local DailyPuzzleCard = require(script.Parent.DailyPuzzleCard)
 local Theme = require(Shared.Theme)
 export type MenuScreenProps = {
 	onStart: (rows: number, cols: number, imageAssetId: string, imageId: string, difficultyId: string) -> (),
@@ -26,6 +27,8 @@ export type MenuScreenProps = {
 	onUnlockImage: ((imageId: string) -> ())?,
 	onUnlockImageRobux: ((imageId: string) -> ())?,
 	onPromptExpertPass: (() -> ())?,
+	dailyPuzzle: any?,
+	dailyPuzzleCompleted: boolean?,
 }
 
 local DIFFICULTIES = {
@@ -451,6 +454,7 @@ local function MenuScreen(props: MenuScreenProps)
 	end
 
 	-- === Content Area (grid + panel) ===
+	local topInset = GuiService:GetGuiInset().Y
 	local contentArea
 	if selectedPackId then
 		-- Show images within the selected pack + selection panel
@@ -478,6 +482,26 @@ local function MenuScreen(props: MenuScreenProps)
 				}),
 			}),
 			SelectionPanel = selectionPanel,
+			ShopBtnImage = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(0.6, -8, 0, -topInset + 4),
+				Size = UDim2.fromOffset(100, 36),
+				BackgroundColor3 = Theme.Colors.accentBlue,
+				Text = "Shop",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.bold,
+				ZIndex = 10,
+				[React.Event.Activated] = function()
+					setShowShop(true)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Stroke = React.createElement("UIStroke", {
+					Color = Theme.Colors.border,
+					Thickness = 1.5,
+				}),
+			}),
 		})
 	else
 		-- Show pack selector (no selection panel)
@@ -502,29 +526,88 @@ local function MenuScreen(props: MenuScreenProps)
 	local menuChildren: { [string]: any } = {}
 	menuChildren["ContentArea"] = contentArea
 
-	-- Saved Puzzles button (top-center, shown on pack selection screen when saves exist)
-	local topInset = GuiService:GetGuiInset().Y
-	if not selectedPackId and hasSaves then
-		menuChildren["SavedPuzzlesBtn"] = React.createElement("TextButton", {
+	-- Daily Puzzle card (shown when on pack selection screen, above packs)
+	if not selectedPackId and props.dailyPuzzle then
+		menuChildren["DailyPuzzleCard"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, -topInset + 4),
-			Size = UDim2.fromOffset(160, 36),
-			BackgroundColor3 = Theme.Colors.accentBlue,
-			Text = "Saved Puzzles",
-			TextColor3 = Theme.Colors.textPrimary,
-			TextSize = Theme.TextSize.label,
-			Font = Theme.Font.bold,
+			Position = UDim2.new(0.5, 0, 0, -topInset + 44),
+			Size = UDim2.new(0, 320, 0, 80),
+			BackgroundTransparency = 1,
 			ZIndex = 10,
-			[React.Event.Activated] = function()
-				setShowSavedPuzzles(true)
-			end,
 		}, {
-			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-			Stroke = React.createElement("UIStroke", {
-				Color = Theme.Colors.border,
-				Thickness = 1.5,
+			Card = React.createElement(DailyPuzzleCard, {
+				dailyPuzzle = props.dailyPuzzle,
+				completed = props.dailyPuzzleCompleted == true,
+				onStart = props.onStart,
 			}),
 		})
+	end
+
+	-- Saved Puzzles + Shop buttons (top-center, shown on pack selection screen)
+	if not selectedPackId then
+		if hasSaves then
+			menuChildren["SavedPuzzlesBtn"] = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.new(0.5, -4, 0, -topInset + 4),
+				Size = UDim2.fromOffset(160, 36),
+				BackgroundColor3 = Theme.Colors.accentBlue,
+				Text = "Saved Puzzles",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.bold,
+				ZIndex = 10,
+				[React.Event.Activated] = function()
+					setShowSavedPuzzles(true)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Stroke = React.createElement("UIStroke", {
+					Color = Theme.Colors.border,
+					Thickness = 1.5,
+				}),
+			})
+			menuChildren["ShopBtnPack"] = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(0, 0),
+				Position = UDim2.new(0.5, 4, 0, -topInset + 4),
+				Size = UDim2.fromOffset(100, 36),
+				BackgroundColor3 = Theme.Colors.accentBlue,
+				Text = "Shop",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.bold,
+				ZIndex = 10,
+				[React.Event.Activated] = function()
+					setShowShop(true)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Stroke = React.createElement("UIStroke", {
+					Color = Theme.Colors.border,
+					Thickness = 1.5,
+				}),
+			})
+		else
+			menuChildren["ShopBtnPack"] = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, -topInset + 4),
+				Size = UDim2.fromOffset(100, 36),
+				BackgroundColor3 = Theme.Colors.accentBlue,
+				Text = "Shop",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.bold,
+				ZIndex = 10,
+				[React.Event.Activated] = function()
+					setShowShop(true)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Stroke = React.createElement("UIStroke", {
+					Color = Theme.Colors.border,
+					Thickness = 1.5,
+				}),
+			})
+		end
 	end
 
 	menuChildren["Background"] = React.createElement("Frame", {
