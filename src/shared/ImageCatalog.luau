@@ -9,17 +9,6 @@ export type ImageEntry = {
 }
 
 local IMAGES: { ImageEntry } = {
-	-- TEMP: Single puzzle for alt account testing. Uncomment all below when back on main account.
-	{
-		id = "landscapes_temp",
-		assetId = "rbxassetid://135779913190012",
-		name = "Landscape",
-		thumbnailId = "rbxassetid://135779913190012",
-		category = "Nature",
-		packId = "landscapes",
-		defaultUnlocked = true,
-	},
---[[ TEMPORARILY DISABLED - all original puzzles below
 	-- Landscapes pack
 	{
 		id = "landscapes_aurora",
@@ -977,7 +966,6 @@ local IMAGES: { ImageEntry } = {
 		packId = "brainrots",
 		defaultUnlocked = false,
 	},
---]] -- END TEMPORARILY DISABLED
 }
 
 local ImageCatalog = {}
