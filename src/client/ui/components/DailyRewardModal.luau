@@ -198,6 +198,8 @@ local function DailyRewardModal(props: DailyRewardModalProps)
 				resultText = resultText .. " + Snap Effect!"
 			elseif claimResult.bonusReward.type == "hints" then
 				resultText = resultText .. " + " .. claimResult.bonusReward.count .. " Hints!"
+			elseif claimResult.bonusReward.type == "cash_boost" then
+				resultText = resultText .. " + 2x Cash Boost!"
 			end
 		end
 

@@ -23,6 +23,7 @@ DailyRewardsConfig.DAY7_BONUS_POOL = {
 	{ type = "snap_effect", id = "snap_star", name = "Star Snap" },
 	{ type = "hints", count = 3, name = "3 Hints" },
 	{ type = "hints", count = 5, name = "5 Hints" },
+	{ type = "cash_boost", count = 1, name = "2x Cash Boost" },
 }
 
 return DailyRewardsConfig

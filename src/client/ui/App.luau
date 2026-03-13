@@ -82,6 +82,8 @@ local function App(props)
 
 	-- Spin wheel state
 	local spinWheelCanFree, setSpinWheelCanFree = React.useState(false)
+	local spinWheelLastFreeTimestamp, setSpinWheelLastFreeTimestamp = React.useState(0)
+	local spinWheelPaidRestricted, setSpinWheelPaidRestricted = React.useState(false)
 
 	-- NPC overlay state (only one open at a time)
 	local activeOverlay, setActiveOverlay = React.useState(nil :: string?)
@@ -234,6 +236,7 @@ local function App(props)
 		equippedSnapEffect: string?,
 		hasExpertPass: boolean?,
 		hintsRemaining: number?,
+		cashBoostsRemaining: number?,
 		ownedBoardSkins: { [string]: boolean }?,
 		ownedConfettiStyles: { [string]: boolean }?,
 		ownedSnapEffects: { [string]: boolean }?,
@@ -301,6 +304,8 @@ local function App(props)
 				local ok5, spinStatus = pcall(function() return getSpinStatus:InvokeServer() end)
 				if ok5 and spinStatus then
 					setSpinWheelCanFree(spinStatus.canFreeSpin == true)
+					setSpinWheelLastFreeTimestamp(spinStatus.lastFreeSpinTimestamp or 0)
+					setSpinWheelPaidRestricted(spinStatus.paidSpinsRestricted == true)
 				end
 			end
 
@@ -349,6 +354,9 @@ local function App(props)
 						updated.puzzlesCompletedByDifficulty = table.clone(updated.puzzlesCompletedByDifficulty)
 					end
 					updated.puzzlesCompletedByDifficulty[curDifficultyId] = (updated.puzzlesCompletedByDifficulty[curDifficultyId] or 0) + 1
+					if data.boostUsed then
+						updated.cashBoostsRemaining = math.max(0, (updated.cashBoostsRemaining or 0) - 1)
+					end
 					return updated
 				end)
 			end
@@ -996,7 +1004,7 @@ local function App(props)
 		safeChildren["HUDButtons"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -8, 0.5, 0),
-			Size = UDim2.fromScale(0.105, 0.825),
+			Size = UDim2.fromScale(0.105, 0.7),
 			BackgroundTransparency = 1,
 			ZIndex = 10,
 		}, {
@@ -1186,67 +1194,70 @@ local function App(props)
 					}),
 				}),
 			}),
-			SpinBtn = React.createElement("Frame", {
-				LayoutOrder = 5,
-				Size = UDim2.fromScale(1, 0.23),
-				BackgroundTransparency = 1,
+		})
+
+		-- Spin wheel button (top area, between center and right)
+		safeChildren["SpinWheelBtn"] = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.7, 0, 0, 8),
+			Size = UDim2.fromScale(0.105, 0.14),
+			BackgroundTransparency = 1,
+			ZIndex = 10,
+		}, {
+			Icon = React.createElement("ImageButton", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.fromScale(0.5, 0),
+				Size = UDim2.fromScale(0.85, 0.72),
+				BackgroundColor3 = Theme.Colors.gold,
+				BackgroundTransparency = 0,
+				Image = "",
 				ZIndex = 10,
+				[React.Event.Activated] = function()
+					openOverlay("spin")
+				end,
+				[React.Event.MouseEnter] = function(rbx)
+					TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 5 }):Play()
+				end,
+				[React.Event.MouseLeave] = function(rbx)
+					TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 0 }):Play()
+				end,
 			}, {
-				Icon = React.createElement("ImageButton", {
-					AnchorPoint = Vector2.new(0.5, 0),
-					Position = UDim2.fromScale(0.5, 0),
-					Size = UDim2.fromScale(0.85, 0.72),
-					BackgroundColor3 = Theme.Colors.gold,
-					BackgroundTransparency = 0,
-					Image = "",
-					ZIndex = 10,
-					[React.Event.Activated] = function()
-						openOverlay("spin")
-					end,
-					[React.Event.MouseEnter] = function(rbx)
-						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 5 }):Play()
-					end,
-					[React.Event.MouseLeave] = function(rbx)
-						TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 0 }):Play()
-					end,
-				}, {
-					Aspect = React.createElement("UIAspectRatioConstraint", {
-						AspectRatio = 1,
-					}),
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
-					SpinIcon = React.createElement("TextLabel", {
-						Size = UDim2.fromScale(1, 1),
-						BackgroundTransparency = 1,
-						Text = "\u{1F3B0}",
-						TextSize = 24,
-						TextScaled = true,
-						ZIndex = 10,
-					}),
-					FreeDot = if spinWheelCanFree then React.createElement("Frame", {
-						AnchorPoint = Vector2.new(1, 0),
-						Position = UDim2.new(1, 4, 0, -4),
-						Size = UDim2.fromOffset(12, 12),
-						BackgroundColor3 = Theme.Colors.danger,
-						ZIndex = 12,
-					}, {
-						DotCorner = React.createElement("UICorner", { CornerRadius = UDim.new(1, 0) }),
-					}) else nil,
+				Aspect = React.createElement("UIAspectRatioConstraint", {
+					AspectRatio = 1,
 				}),
-				Label = React.createElement("TextLabel", {
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					Position = UDim2.fromScale(0.5, 0.72),
-					Size = UDim2.fromScale(1.1, 0.3),
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+				SpinIcon = React.createElement("TextLabel", {
+					Size = UDim2.fromScale(1, 1),
 					BackgroundTransparency = 1,
-					ZIndex = 11,
-					Text = "Spin",
-					TextColor3 = Theme.Colors.textPrimary,
+					Text = "\u{1F3B0}",
+					TextSize = 24,
 					TextScaled = true,
-					Font = Theme.Font.heading,
+					ZIndex = 10,
+				}),
+				FreeDot = if spinWheelCanFree then React.createElement("Frame", {
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(1, 4, 0, -4),
+					Size = UDim2.fromOffset(12, 12),
+					BackgroundColor3 = Theme.Colors.danger,
+					ZIndex = 12,
 				}, {
-					LabelStroke = React.createElement("UIStroke", {
-						Thickness = 2,
-						Color = Theme.Colors.black,
-					}),
+					DotCorner = React.createElement("UICorner", { CornerRadius = UDim.new(1, 0) }),
+				}) else nil,
+			}),
+			Label = React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.72),
+				Size = UDim2.fromScale(1.1, 0.3),
+				BackgroundTransparency = 1,
+				ZIndex = 11,
+				Text = "Spin",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextScaled = true,
+				Font = Theme.Font.heading,
+			}, {
+				LabelStroke = React.createElement("UIStroke", {
+					Thickness = 2,
+					Color = Theme.Colors.black,
 				}),
 			}),
 		})
@@ -1313,8 +1324,9 @@ local function App(props)
 			elseif activeOverlay == "spin" then
 				overlayContent = React.createElement(SpinWheelModal, {
 					onClose = closeOverlay,
-					playerCash = if playerData then playerData.cash else 0,
 					canFreeSpin = spinWheelCanFree,
+					lastFreeSpinTimestamp = spinWheelLastFreeTimestamp,
+					paidSpinsRestricted = spinWheelPaidRestricted,
 					onSpinComplete = function(reward)
 						setSpinWheelCanFree(false)
 						-- Refresh player data after spin
@@ -1536,6 +1548,7 @@ local function App(props)
 				playerData = playerData,
 				hintsRemaining = if playerData then playerData.hintsRemaining else 0,
 				onHintUsed = onHintUsed,
+				cashBoostsRemaining = if playerData then playerData.cashBoostsRemaining else 0,
 				isMultiplayer = isMultiplayerBoard,
 				roomPlayers = if isMultiplayerBoard and roomInfo then roomInfo.players else nil,
 				roomPuzzleDef = roomPuzzleDef,

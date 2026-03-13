@@ -1,3 +1,5 @@
+local Players = game:GetService("Players")
+local PolicyService = game:GetService("PolicyService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -6,6 +8,24 @@ local SpinWheelConfig = require(Shared.SpinWheelConfig)
 local DailyPuzzleConfig = require(Shared.DailyPuzzleConfig)
 
 local ProfileService = require(script.Parent.Parent.data.ProfileService)
+
+-- Cache PolicyService results per player
+local policyCache: { [number]: boolean } = {}
+
+local function arePaidRandomItemsRestricted(player: Player): boolean
+	if policyCache[player.UserId] ~= nil then
+		return policyCache[player.UserId]
+	end
+	local ok, result = pcall(function()
+		return PolicyService:GetPolicyInfoForPlayerAsync(player)
+	end)
+	local restricted = false
+	if ok and result then
+		restricted = result.ArePaidRandomItemsRestricted == true
+	end
+	policyCache[player.UserId] = restricted
+	return restricted
+end
 
 -- All snap effect IDs for random rewards
 local SNAP_EFFECT_IDS = {
@@ -36,10 +56,15 @@ function SpinWheelHandler.Init()
 	local spinWheel = Remotes.GetFunction("SpinWheel")
 	local getStatus = Remotes.GetFunction("GetSpinWheelStatus")
 
+	-- Clean up policy cache on player leaving
+	Players.PlayerRemoving:Connect(function(player)
+		policyCache[player.UserId] = nil
+	end)
+
 	getStatus.OnServerInvoke = function(player)
 		local data = ProfileService.GetData(player)
 		if not data then
-			return { canFreeSpin = false, extraSpinCost = SpinWheelConfig.EXTRA_SPIN_COST }
+			return { canFreeSpin = false, lastFreeSpinTimestamp = 0, paidSpinsRestricted = false }
 		end
 
 		local today = getTodaysDateString()
@@ -47,7 +72,8 @@ function SpinWheelHandler.Init()
 
 		return {
 			canFreeSpin = canFreeSpin,
-			extraSpinCost = SpinWheelConfig.EXTRA_SPIN_COST,
+			lastFreeSpinTimestamp = data.SpinWheel_LastFreeSpinTimestamp or 0,
+			paidSpinsRestricted = arePaidRandomItemsRestricted(player),
 		}
 	end
 
@@ -60,12 +86,16 @@ function SpinWheelHandler.Init()
 		local today = getTodaysDateString()
 		local isFreeSpin = (data.SpinWheel_LastFreeSpinDate or "") ~= today
 
-		-- If not free, deduct cash
+		-- If not free, consume a spin token (purchased via Robux)
 		if not isFreeSpin then
-			if (data.Cash or 0) < SpinWheelConfig.EXTRA_SPIN_COST then
-				return { success = false, message = "Not enough cash" }
+			-- Block paid spins in restricted regions
+			if arePaidRandomItemsRestricted(player) then
+				return { success = false, message = "Paid random items are not available in your region" }
 			end
-			data.Cash = data.Cash - SpinWheelConfig.EXTRA_SPIN_COST
+			if (data.SpinTokens or 0) < 1 then
+				return { success = false, message = "No spin tokens" }
+			end
+			data.SpinTokens = data.SpinTokens - 1
 		end
 
 		-- Server-authoritative weighted random pick
@@ -98,11 +128,14 @@ function SpinWheelHandler.Init()
 				data.Cash = (data.Cash or 0) + 100
 				rewardDescription = "$100 (all effects owned)"
 			end
+		elseif segment.type == "cash_boost" then
+			data.CashBoostsRemaining = (data.CashBoostsRemaining or 0) + segment.amount
 		end
 
 		-- Mark free spin used
 		if isFreeSpin then
 			data.SpinWheel_LastFreeSpinDate = today
+			data.SpinWheel_LastFreeSpinTimestamp = os.time()
 		end
 
 		return {

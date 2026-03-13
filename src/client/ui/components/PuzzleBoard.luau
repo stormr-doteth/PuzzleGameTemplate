@@ -40,6 +40,7 @@ export type PuzzleBoardProps = {
 	equippedBoardSkin: string?,
 	hintsRemaining: number?,
 	onHintUsed: (() -> ())?,
+	cashBoostsRemaining: number?,
 	equippedSnapEffect: string?,
 	ownedSnapEffects: { [string]: boolean }?,
 	onEquip: ((itemId: string, category: string) -> ())?,
@@ -86,6 +87,8 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local zoomState, zoomActions = useZoomPan()
 	local loadError, setLoadError = React.useState(false)
 	local localHints, setLocalHints = React.useState(props.hintsRemaining or 0)
+	local localBoosts, setLocalBoosts = React.useState(props.cashBoostsRemaining or 0)
+	local boostActive, setBoostActive = React.useState(false)
 	local localUserId = Players.LocalPlayer and Players.LocalPlayer.UserId or 0
 	local snapEffects, setSnapEffects = React.useState({} :: { { positionX: number, positionY: number, key: string, effectId: string } })
 	local snapEffectCounter = React.useRef(0)
@@ -614,6 +617,32 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 
 	-- Helper: snap a random unlocked piece to its correct position and highlight it
 	local function executeHint(): number?
+		if props.isMultiplayer then
+			-- Multiplayer: server handles the snap
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return nil end
+			local useRoomHint = remotes:FindFirstChild("UseRoomHint")
+			if not useRoomHint then return nil end
+
+			local ok, result = pcall(function()
+				return useRoomHint:InvokeServer()
+			end)
+			if not ok or not result or not result.success then return nil end
+
+			-- Server already fired RoomPieceSnapped → useMultiplayerPuzzle updates state
+			-- Just show the gold highlight on this client
+			SoundService.playSnap()
+			setHintHighlightId(result.pieceId)
+			task.delay(5.0, function()
+				setHintHighlightId(function(prev)
+					if prev == result.pieceId then return nil end
+					return prev
+				end)
+			end)
+			return result.pieceId
+		end
+
+		-- Solo mode: existing logic
 		if not puzzleDef or not pieceImages then return nil end
 
 		local unlockedIds = {}
@@ -660,8 +689,6 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 
 	-- Listen for Robux hint purchase confirmation from server
 	React.useEffect(function()
-		if props.isMultiplayer then return end
-
 		local hintPurchasedEvent = Remotes.GetEvent("HintPurchased")
 		local connection = hintPurchasedEvent.OnClientEvent:Connect(function(_data)
 			executeHint()
@@ -840,8 +867,8 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			end
 		end
 
-		-- Hint button (disabled in multiplayer)
-		if not props.isMultiplayer and localHints > 0 and puzzleDef and pieceImages then
+		-- Hint button
+		if localHints > 0 and puzzleDef and pieceImages then
 			children["HintButton"] = React.createElement("TextButton", {
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.new(1, -8, 0.5, 0),
@@ -862,23 +889,25 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 						props.onHintUsed()
 					end
 
-					-- Tell server
-					task.spawn(function()
-						local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
-						if not remotes then return end
-						local useHint = remotes:FindFirstChild("UseHint")
-						if useHint and useHint:IsA("RemoteFunction") then
-							pcall(function() useHint:InvokeServer() end)
-						end
-					end)
+					-- Tell server (solo only — multiplayer hint deduction handled by UseRoomHint)
+					if not props.isMultiplayer then
+						task.spawn(function()
+							local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+							if not remotes then return end
+							local useHint = remotes:FindFirstChild("UseHint")
+							if useHint and useHint:IsA("RemoteFunction") then
+								pcall(function() useHint:InvokeServer() end)
+							end
+						end)
+					end
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 			})
 		end
 
-		-- Robux hint purchase button (disabled in multiplayer, always visible when puzzle is loaded)
-		if not props.isMultiplayer and puzzleDef and pieceImages and not state.isComplete then
+		-- Robux hint purchase button (always visible when puzzle is loaded)
+		if puzzleDef and pieceImages and not state.isComplete then
 			local robuxOffsetY = if localHints > 0 then 44 else 0
 			children["RobuxHintButton"] = React.createElement("TextButton", {
 				AnchorPoint = Vector2.new(1, 0.5),
@@ -898,6 +927,47 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			})
+		end
+
+		-- 2x Cash Boost toggle button (solo only, shown when boosts available)
+		if not props.isMultiplayer and localBoosts > 0 and puzzleDef and pieceImages and not state.isComplete then
+			-- Stack below hint buttons
+			local boostOffsetY = 0
+			if localHints > 0 then
+				boostOffsetY = boostOffsetY + 44
+			end
+			boostOffsetY = boostOffsetY + 44 -- below robux hint button
+
+			children["BoostButton"] = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -8, 0.5, boostOffsetY),
+				Size = UDim2.fromOffset(scaled(110), scaled(36)),
+				BackgroundColor3 = if boostActive then Theme.Colors.gold else Theme.Colors.accentBlue,
+				Text = if boostActive then "2x ON" else "2x (" .. localBoosts .. ")",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.label),
+				Font = Theme.Font.bold,
+				ZIndex = 50,
+				[React.Event.Activated] = function()
+					task.spawn(function()
+						local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+						if not remotes then return end
+						local activateBoost = remotes:FindFirstChild("ActivateCashBoost")
+						if activateBoost and activateBoost:IsA("RemoteFunction") then
+							local ok, result = pcall(function() return activateBoost:InvokeServer() end)
+							if ok and result and result.success then
+								setBoostActive(result.active)
+							end
+						end
+					end)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+				Stroke = if boostActive then React.createElement("UIStroke", {
+					Thickness = 2,
+					Color = Theme.Colors.warning,
+				}) else nil,
 			})
 		end
 

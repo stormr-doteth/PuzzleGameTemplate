@@ -17,6 +17,9 @@ end)
 -- Rate limiting: track last completion time per player
 local lastCompletionTime: { [number]: number } = {}
 
+-- Track which players have activated a cash boost for their current puzzle
+local activatedBoosts: { [number]: boolean } = {}
+
 -- Optional: LeaderboardService (loaded if available)
 local LeaderboardService = nil
 pcall(function()
@@ -66,9 +69,17 @@ local function hasGamePass(player: Player, gamePassId: number): boolean
 end
 
 function PuzzleHandler.Init()
+	local Players = game:GetService("Players")
+
 	local puzzleCompleted = Remotes.GetEvent("PuzzleCompleted")
 	local xpAwarded = Remotes.GetEvent("XPAwarded")
 	local getPlayerData = Remotes.GetFunction("GetPlayerData")
+
+	-- Clean up activated boost flag when player leaves
+	Players.PlayerRemoving:Connect(function(player)
+		activatedBoosts[player.UserId] = nil
+		lastCompletionTime[player.UserId] = nil
+	end)
 
 	-- Handle puzzle completion
 	puzzleCompleted.OnServerEvent:Connect(function(player, data)
@@ -120,6 +131,15 @@ function PuzzleHandler.Init()
 			end
 		end
 
+		-- Check for activated 2x Cash Boost
+		local boostUsed = false
+		if activatedBoosts[player.UserId] then
+			cashGained = cashGained * 2
+			profileData.CashBoostsRemaining = math.max(0, (profileData.CashBoostsRemaining or 0) - 1)
+			activatedBoosts[player.UserId] = nil
+			boostUsed = true
+		end
+
 		-- Update profile
 		profileData.Cash = profileData.Cash + cashGained
 		profileData.TotalPuzzlesCompleted = (profileData.TotalPuzzlesCompleted or 0) + 1
@@ -163,6 +183,7 @@ function PuzzleHandler.Init()
 			isPersonalBest = isPersonalBest,
 			isSpeedBonus = isSpeedBonus,
 			previousBest = previousBest,
+			boostUsed = boostUsed,
 		})
 
 		-- Clear any matching saved puzzle (same imageId + difficultyId)
@@ -234,6 +255,7 @@ function PuzzleHandler.Init()
 			equippedConfettiStyle = profileData.EquippedConfettiStyle or "",
 			equippedSnapEffect = profileData.EquippedSnapEffect or "",
 			hintsRemaining = profileData.HintsRemaining or 0,
+			cashBoostsRemaining = profileData.CashBoostsRemaining or 0,
 			ownedBoardSkins = profileData.OwnedBoardSkins or {},
 			ownedConfettiStyles = profileData.OwnedConfettiStyles or {},
 			ownedSnapEffects = profileData.OwnedSnapEffects or {},
@@ -360,6 +382,29 @@ function PuzzleHandler.Init()
 
 		profileData.HintsRemaining = hints - 1
 		return { success = true, hintsRemaining = profileData.HintsRemaining }
+	end
+
+	-- Handle ActivateCashBoost requests
+	local activateBoost = Remotes.GetFunction("ActivateCashBoost")
+	activateBoost.OnServerInvoke = function(player)
+		local profileData = ProfileService.GetData(player)
+		if not profileData then
+			return { success = false, cashBoostsRemaining = 0 }
+		end
+
+		-- Toggle: if already activated, deactivate
+		if activatedBoosts[player.UserId] then
+			activatedBoosts[player.UserId] = nil
+			return { success = true, active = false, cashBoostsRemaining = profileData.CashBoostsRemaining or 0 }
+		end
+
+		local boosts = profileData.CashBoostsRemaining or 0
+		if boosts <= 0 then
+			return { success = false, cashBoostsRemaining = 0 }
+		end
+
+		activatedBoosts[player.UserId] = true
+		return { success = true, active = true, cashBoostsRemaining = profileData.CashBoostsRemaining or 0 }
 	end
 
 	-- Handle UnlockImage requests (coin purchase)

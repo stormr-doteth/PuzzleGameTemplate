@@ -5,7 +5,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Packages = ServerScriptService:WaitForChild("Packages")
 local ProfileStore = require(Packages.ProfileStore)
 
-local CURRENT_SCHEMA_VERSION = 3
+local CURRENT_SCHEMA_VERSION = 4
 
 local PROFILE_TEMPLATE = {
 	SchemaVersion = CURRENT_SCHEMA_VERSION,
@@ -22,6 +22,7 @@ local PROFILE_TEMPLATE = {
 	OwnedConfettiStyles = {},    -- { [string]: true }
 	OwnedSnapEffects = {},       -- { [string]: true }
 	HintsRemaining = 0,
+	CashBoostsRemaining = 0,
 	EquippedBoardSkin = "",
 	EquippedConfettiStyle = "",
 	EquippedSnapEffect = "",
@@ -77,6 +78,14 @@ local function migrateProfile(data)
 		end
 		data.SchemaVersion = 3
 	end
+
+	-- Migration from v3 to v4: add CashBoostsRemaining
+	if version < 4 then
+		if data.CashBoostsRemaining == nil then
+			data.CashBoostsRemaining = 0
+		end
+		data.SchemaVersion = 4
+	end
 end
 
 local PlayerStore = ProfileStore.New("PlayerData", PROFILE_TEMPLATE)
@@ -125,6 +134,10 @@ local function loadProfile(player)
 		-- Give some hints
 		if data.HintsRemaining < 5 then
 			data.HintsRemaining = 5
+		end
+		-- Give some boosts
+		if data.CashBoostsRemaining < 3 then
+			data.CashBoostsRemaining = 3
 		end
 		-- Seed some puzzle completions for title testing
 		if not data.PuzzlesCompletedByDifficulty or not next(data.PuzzlesCompletedByDifficulty) then

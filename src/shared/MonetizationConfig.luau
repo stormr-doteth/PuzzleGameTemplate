@@ -93,6 +93,14 @@ MonetizationConfig.DEV_PRODUCTS = {
 		iconColor = Color3.fromRGB(100, 200, 255),
 		iconText = "\u{1F513}",
 	},
+	SPIN_WHEEL = {
+		id = 0, -- TODO: create in Roblox Creator Dashboard
+		name = "Spin the Wheel",
+		description = "Extra spin on the prize wheel",
+		robuxPrice = 25,
+		iconColor = Color3.fromRGB(255, 200, 50),
+		iconText = "\u{1F3B0}",
+	},
 }
 
 -- Returns true if all product IDs have been configured (non-zero)

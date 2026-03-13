@@ -86,6 +86,9 @@ function MonetizationHandler.Init()
 			granted = true
 			local hintPurchasedEvent = Remotes.GetEvent("HintPurchased")
 			hintPurchasedEvent:FireClient(player, {})
+		elseif product.name == "Spin the Wheel" then
+			profileData.SpinTokens = (profileData.SpinTokens or 0) + 1
+			granted = true
 		elseif product.name == "Unlock Puzzle" then
 			-- Unlock a specific puzzle image
 			local imageId = pendingUnlockImage[player.UserId]

@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:1foreverhd.github.io)"
+      "WebFetch(domain:1foreverhd.github.io)",
+      "WebSearch",
+      "Bash(grep:*)"
     ]
   }
 }

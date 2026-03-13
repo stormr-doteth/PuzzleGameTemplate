@@ -15,6 +15,7 @@ export type CompleteScreenProps = {
 		cashGained: number?,
 		isPersonalBest: boolean?,
 		isSpeedBonus: boolean?,
+		boostUsed: boolean?,
 	}?,
 	isPersonalBest: boolean?,
 	previousBest: number?,
@@ -255,6 +256,20 @@ local function CompleteScreen(props: CompleteScreenProps)
 				BackgroundTransparency = 1,
 				Text = "SPEED BONUS!",
 				TextColor3 = Theme.Colors.orange,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
+				TextStrokeColor3 = Theme.Colors.black,
+				TextStrokeTransparency = 0.3,
+			})
+		end
+
+		if rewardData.boostUsed then
+			cardChildren["BoostUsed"] = React.createElement("TextLabel", {
+				LayoutOrder = 6,
+				Size = UDim2.new(1, 0, 0, 26),
+				BackgroundTransparency = 1,
+				Text = "2x BOOST!",
+				TextColor3 = Theme.Colors.gold,
 				TextSize = Theme.TextSize.large,
 				Font = Theme.Font.bold,
 				TextStrokeColor3 = Theme.Colors.black,

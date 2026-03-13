@@ -47,6 +47,7 @@ local REMOTE_FUNCTIONS = {
 	"DeleteSavedPuzzle", -- client → server: slotIndex (number), returns { success }
 	"EquipItem",        -- client → server: (itemId, category), returns { success, message }
 	"UseHint",          -- client → server: returns { success, hintsRemaining }
+	"ActivateCashBoost", -- client → server: returns { success, cashBoostsRemaining }
 	"UnlockImage",      -- client → server: (imageId) → { success, newCash }
 
 	-- Multiplayer room functions (client → server)
@@ -66,7 +67,8 @@ local REMOTE_FUNCTIONS = {
 	"GetDailyPuzzle",         -- returns { puzzle, completed, leaderboard }
 	"GetDailyPuzzleLeaderboard", -- returns top 20 times
 	"SpinWheel",              -- returns { success, segmentIndex, reward }
-	"GetSpinWheelStatus",     -- returns { canFreeSpin, extraSpinCost }
+	"GetSpinWheelStatus",     -- returns { canFreeSpin, lastFreeSpinTimestamp, paidSpinsRestricted }
+	"UseRoomHint",            -- client → server: returns { success, hintsRemaining, pieceId } (multiplayer hint)
 }
 
 local Remotes = {}

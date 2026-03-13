@@ -1157,6 +1157,112 @@ function RoomManager.Init()
 		releasePieces(room, allInvolved)
 	end)
 
+	-- UseRoomHint — multiplayer hint: server picks a random unlocked piece, locks it, broadcasts snap
+	local useRoomHint = Remotes.GetFunction("UseRoomHint")
+	useRoomHint.OnServerInvoke = function(player)
+		local data = ProfileService.GetData(player)
+		if not data then
+			return { success = false, message = "Profile not loaded" }
+		end
+
+		local hints = data.HintsRemaining or 0
+		if hints < 1 then
+			return { success = false, message = "No hints remaining" }
+		end
+
+		local userId = player.UserId
+		local roomId = playerRooms[userId]
+		if not roomId then
+			return { success = false, message = "Not in a room" }
+		end
+		local room = rooms[roomId]
+		if not room or room.state ~= "playing" or not room.pieces or not room.puzzleDef then
+			return { success = false, message = "Room not active" }
+		end
+
+		-- Collect unlocked pieces
+		local unlockedIds = {}
+		for id, piece in room.pieces do
+			if not piece.locked then
+				table.insert(unlockedIds, id)
+			end
+		end
+		if #unlockedIds == 0 then
+			return { success = false, message = "No pieces to hint" }
+		end
+
+		-- Pick random unlocked piece and lock it at correct position
+		local targetId = unlockedIds[math.random(1, #unlockedIds)]
+		local pieceDef = nil
+		for _, pd in room.puzzleDef.pieces do
+			if pd.id == targetId then pieceDef = pd break end
+		end
+		if not pieceDef then
+			return { success = false, message = "Piece definition not found" }
+		end
+
+		local correctX, correctY = getCorrectPosition(pieceDef, room.config)
+		local piece = room.pieces[targetId]
+		piece.x = correctX
+		piece.y = correctY
+		piece.locked = true
+		piece.claimedBy = nil
+		piece.claimedAt = nil
+		piece.zIndex = 1
+
+		-- Remove from group if in one
+		if piece.groupId and room.groups[piece.groupId] then
+			local group = room.groups[piece.groupId]
+			local newGroup = {}
+			for _, mid in group do
+				if mid ~= targetId then
+					table.insert(newGroup, mid)
+				end
+			end
+			if #newGroup > 1 then
+				room.groups[piece.groupId] = newGroup
+			else
+				-- Dissolve single-member group
+				if #newGroup == 1 then
+					room.pieces[newGroup[1]].groupId = nil
+				end
+				room.groups[piece.groupId] = nil
+			end
+			piece.groupId = nil
+		end
+
+		-- Fire RoomPieceSnapped to all players in room
+		fireToAll(room, "RoomPieceSnapped", {
+			id = targetId, x = correctX, y = correctY
+		})
+
+		-- Check completion
+		if checkCompletion(room) then
+			room.state = "complete"
+			fireToAll(room, "RoomCompleted", {})
+
+			if stateChangeCallback then
+				local count = 0
+				for _ in room.players do count += 1 end
+				stateChangeCallback(roomId, "complete", count)
+			end
+
+			for pUserId in room.players do
+				local p = Players:GetPlayerByUserId(pUserId)
+				if p then
+					task.spawn(function()
+						awardCompletion(p, room)
+					end)
+				end
+			end
+		end
+
+		-- Deduct hint
+		data.HintsRemaining = hints - 1
+
+		return { success = true, hintsRemaining = data.HintsRemaining, pieceId = targetId }
+	end
+
 	-- Player disconnect handling
 	Players.PlayerRemoving:Connect(function(player)
 		local userId = player.UserId

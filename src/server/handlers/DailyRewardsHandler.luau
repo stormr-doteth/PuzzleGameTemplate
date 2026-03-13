@@ -103,9 +103,9 @@ function DailyRewardsHandler.Init()
 				data.OwnedSnapEffects[pick] = true
 				bonusReward = { type = "snap_effect", id = pick }
 			else
-				-- All snap effects owned, give hints instead
-				data.HintsRemaining = (data.HintsRemaining or 0) + 5
-				bonusReward = { type = "hints", count = 5 }
+				-- All snap effects owned, give a cash boost
+				data.CashBoostsRemaining = (data.CashBoostsRemaining or 0) + 1
+				bonusReward = { type = "cash_boost", count = 1 }
 			end
 		end
 

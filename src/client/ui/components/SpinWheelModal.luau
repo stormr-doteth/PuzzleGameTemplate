@@ -1,3 +1,5 @@
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
@@ -7,15 +9,18 @@ local React = require(Packages.React)
 
 local Theme = require(Shared.Theme)
 local SpinWheelConfig = require(Shared.SpinWheelConfig)
+local MonetizationConfig = require(Shared.MonetizationConfig)
 
 export type SpinWheelModalProps = {
 	onClose: () -> (),
-	playerCash: number,
 	canFreeSpin: boolean,
+	lastFreeSpinTimestamp: number?,
 	onSpinComplete: ((reward: string) -> ())?,
+	paidSpinsRestricted: boolean?,
 }
 
 local NUM_SEGMENTS = #SpinWheelConfig.SEGMENTS
+local SPIN_WHEEL_PRODUCT_ID = MonetizationConfig.DEV_PRODUCTS.SPIN_WHEEL.id
 
 -- Strip layout constants
 local CELL_WIDTH = 100
@@ -31,13 +36,67 @@ local function getSegmentColor(colorKey: string): Color3
 	return Theme.Colors[colorKey] or Theme.Colors.bgElevated
 end
 
+local function formatCountdown(seconds: number): string
+	if seconds <= 0 then
+		return "Ready!"
+	end
+	local hours = math.floor(seconds / 3600)
+	local minutes = math.floor((seconds % 3600) / 60)
+	if hours > 0 then
+		return hours .. "h " .. minutes .. "m"
+	elseif minutes > 0 then
+		return minutes .. "m"
+	else
+		return "< 1m"
+	end
+end
+
 local function SpinWheelModal(props: SpinWheelModalProps)
 	local spinning, setSpinning = React.useState(false)
 	local resultText, setResultText = React.useState(nil :: string?)
 	local canFreeSpin, setCanFreeSpin = React.useState(props.canFreeSpin)
-	local playerCash, setPlayerCash = React.useState(props.playerCash)
 	local stripRef = React.useRef(nil :: Frame?)
 	local showOdds, setShowOdds = React.useState(false)
+
+	-- Countdown timer state
+	local countdownSeconds, setCountdownSeconds = React.useState(function()
+		if props.canFreeSpin then
+			return 0
+		end
+		local ts = props.lastFreeSpinTimestamp or 0
+		if ts == 0 then
+			return 0
+		end
+		local remaining = (ts + SpinWheelConfig.FREE_SPIN_COOLDOWN_HOURS * 3600) - os.time()
+		return math.max(0, remaining)
+	end)
+
+	-- Tick countdown every second
+	React.useEffect(function()
+		if canFreeSpin then
+			return
+		end
+
+		local running = true
+		task.spawn(function()
+			while running do
+				task.wait(1)
+				if not running then break end
+				setCountdownSeconds(function(prev)
+					local newVal = prev - 1
+					if newVal <= 0 then
+						setCanFreeSpin(true)
+						return 0
+					end
+					return newVal
+				end)
+			end
+		end)
+
+		return function()
+			running = false
+		end
+	end, { canFreeSpin })
 
 	-- Start strip at a neutral position (centered on a middle cell)
 	local startCell = NUM_SEGMENTS * 3
@@ -76,7 +135,6 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 			local targetIndex = result.segmentIndex
 
 			-- Pick a target cell in the later repeats so the strip scrolls a good distance
-			-- Use repeat 6-7 range for visual scroll length
 			local targetRepeat = 6 + math.random(0, 1)
 			local targetCellIndex = targetRepeat * NUM_SEGMENTS + (targetIndex - 1)
 
@@ -102,15 +160,67 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 
 			-- Update state
 			setCanFreeSpin(false)
-			if result.newCash then
-				setPlayerCash(result.newCash)
-			end
+			-- Reset countdown for next free spin
+			local cooldownSecs = SpinWheelConfig.FREE_SPIN_COOLDOWN_HOURS * 3600
+			setCountdownSeconds(cooldownSecs)
 			setResultText(result.reward)
 			setSpinning(false)
 
 			if props.onSpinComplete then
 				props.onSpinComplete(result.reward)
 			end
+		end)
+	end
+
+	local function doPaidSpin()
+		if spinning then return end
+		setSpinning(true)
+		setResultText(nil)
+
+		task.spawn(function()
+			local player = Players.LocalPlayer
+			if not player then
+				setSpinning(false)
+				return
+			end
+
+			-- Prompt Robux purchase
+			MarketplaceService:PromptProductPurchase(player, SPIN_WHEEL_PRODUCT_ID)
+
+			-- Wait for purchase result
+			local purchaseConnection
+			local purchased = false
+
+			purchaseConnection = MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId, productId, isPurchased)
+				if userId == player.UserId and productId == SPIN_WHEEL_PRODUCT_ID then
+					purchased = isPurchased
+					if purchaseConnection then
+						purchaseConnection:Disconnect()
+						purchaseConnection = nil
+					end
+				end
+			end)
+
+			-- Wait for callback (with timeout)
+			local waited = 0
+			while purchaseConnection and waited < 120 do
+				task.wait(0.1)
+				waited = waited + 0.1
+			end
+			if purchaseConnection then
+				purchaseConnection:Disconnect()
+			end
+
+			if not purchased then
+				setSpinning(false)
+				return
+			end
+
+			-- Small delay to ensure ProcessReceipt completes server-side
+			task.wait(0.3)
+
+			-- Now spin using the token
+			doSpin()
 		end)
 	end
 
@@ -166,15 +276,18 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 	local canSpin = not spinning
 	local buttonText = "FREE SPIN!"
 	local buttonColor = Theme.Colors.success
+	local isPaidSpin = false
+	local paidRestricted = props.paidSpinsRestricted == true
 
 	if not canFreeSpin then
-		if playerCash >= SpinWheelConfig.EXTRA_SPIN_COST then
-			buttonText = "Spin ($" .. SpinWheelConfig.EXTRA_SPIN_COST .. ")"
-			buttonColor = Theme.Colors.gold
-		else
-			buttonText = "Not enough cash"
-			canSpin = false
+		if paidRestricted then
+			buttonText = "Paid spins unavailable"
 			buttonColor = Theme.Colors.bgElevated
+			canSpin = false
+		else
+			buttonText = "Spin (R$25)"
+			buttonColor = Theme.Colors.gold
+			isPaidSpin = true
 		end
 	end
 
@@ -390,6 +503,32 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 		})
 	end
 
+	-- Countdown timer (shown when free spin is not available)
+	if not canFreeSpin and not spinning and countdownSeconds > 0 then
+		modalChildren["Countdown"] = React.createElement("TextLabel", {
+			LayoutOrder = 4.5,
+			Size = UDim2.new(1, 0, 0, 20),
+			BackgroundTransparency = 1,
+			Text = "Next free spin: " .. formatCountdown(countdownSeconds),
+			TextColor3 = Theme.Colors.textMuted,
+			TextSize = Theme.TextSize.body,
+			Font = Theme.Font.medium,
+		})
+	end
+
+	-- Region restriction notice
+	if not canFreeSpin and paidRestricted and not spinning then
+		modalChildren["RegionNotice"] = React.createElement("TextLabel", {
+			LayoutOrder = 4.8,
+			Size = UDim2.new(1, 0, 0, 20),
+			BackgroundTransparency = 1,
+			Text = "Paid spins unavailable in your region",
+			TextColor3 = Theme.Colors.textMuted,
+			TextSize = Theme.TextSize.small,
+			Font = Theme.Font.medium,
+		})
+	end
+
 	-- Spin button
 	modalChildren["SpinBtn"] = React.createElement("TextButton", {
 		LayoutOrder = 5,
@@ -401,7 +540,11 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 		Font = Theme.Font.bold,
 		[React.Event.Activated] = function()
 			if canSpin then
-				doSpin()
+				if isPaidSpin then
+					doPaidSpin()
+				else
+					doSpin()
+				end
 			end
 		end,
 	}, {
@@ -444,7 +587,7 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 		Modal = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(370, if showOdds then 560 else 340),
+			Size = UDim2.fromOffset(370, if showOdds then 580 else 360),
 			BackgroundColor3 = Theme.Colors.bgDark,
 			ZIndex = 2,
 		}, {
