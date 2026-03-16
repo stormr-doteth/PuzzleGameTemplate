@@ -79,12 +79,14 @@ local CATEGORY_LABELS = {
 	board_skins = "Board Skin",
 	confetti_styles = "Confetti Style",
 	snap_effects = "Snap Effect",
+	cash_purchase = "Cash Purchase",
 }
 
 local CATEGORY_COLORS = {
 	board_skins = Theme.Colors.accentBlue,
 	confetti_styles = Color3.fromRGB(200, 100, 220),
 	snap_effects = Theme.Colors.orange,
+	cash_purchase = Theme.Colors.cashGreen,
 }
 
 local function ConfettiPiece(props: { delay: number, index: number, styleConfig: ConfettiStyleConfig? })
@@ -277,7 +279,7 @@ local function NewItemNotification(props: NewItemNotificationProps)
 					Position = UDim2.fromScale(0.5, 0.5),
 					Size = UDim2.fromScale(0.8, 0.7),
 					BackgroundTransparency = 1,
-					Text = "NEW ITEM UNLOCKED!",
+					Text = if item.category == "cash_purchase" then "CASH RECEIVED!" else "NEW ITEM UNLOCKED!",
 					TextColor3 = Theme.Colors.textPrimary,
 					TextScaled = true,
 					Font = Theme.Font.heading,

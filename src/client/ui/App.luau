@@ -82,7 +82,7 @@ local function App(props)
 
 	-- Spin wheel state
 	local spinWheelCanFree, setSpinWheelCanFree = React.useState(false)
-	local spinWheelLastFreeTimestamp, setSpinWheelLastFreeTimestamp = React.useState(0)
+	local spinWheelSecsUntilFree, setSpinWheelSecsUntilFree = React.useState(0)
 	local spinWheelPaidRestricted, setSpinWheelPaidRestricted = React.useState(false)
 
 	-- NPC overlay state (only one open at a time)
@@ -304,7 +304,7 @@ local function App(props)
 				local ok5, spinStatus = pcall(function() return getSpinStatus:InvokeServer() end)
 				if ok5 and spinStatus then
 					setSpinWheelCanFree(spinStatus.canFreeSpin == true)
-					setSpinWheelLastFreeTimestamp(spinStatus.lastFreeSpinTimestamp or 0)
+					setSpinWheelSecsUntilFree(spinStatus.secondsUntilFreeSpin or 0)
 					setSpinWheelPaidRestricted(spinStatus.paidSpinsRestricted == true)
 				end
 			end
@@ -359,6 +359,15 @@ local function App(props)
 					end
 					return updated
 				end)
+
+				if data.cashPurchased then
+					setNewItemNotification({
+						category = "cash_purchase",
+						name = data.cashProductName or ("+" .. tostring(data.cashGained) .. " Cash"),
+						description = "Added to your balance!",
+						previewColor = Theme.Colors.cashGreen,
+					})
+				end
 			end
 		end)
 
@@ -1325,7 +1334,7 @@ local function App(props)
 				overlayContent = React.createElement(SpinWheelModal, {
 					onClose = closeOverlay,
 					canFreeSpin = spinWheelCanFree,
-					lastFreeSpinTimestamp = spinWheelLastFreeTimestamp,
+					secondsUntilFreeSpin = spinWheelSecsUntilFree,
 					paidSpinsRestricted = spinWheelPaidRestricted,
 					onSpinComplete = function(reward)
 						setSpinWheelCanFree(false)

@@ -130,6 +130,8 @@ function MonetizationHandler.Init()
 			local xpAwarded = Remotes.GetEvent("XPAwarded")
 			xpAwarded:FireClient(player, {
 				cashGained = product.cashAmount or 0,
+				cashPurchased = if product.cashAmount then true else nil,
+				cashProductName = if product.cashAmount then product.name else nil,
 			})
 
 			return Enum.ProductPurchaseDecision.PurchaseGranted

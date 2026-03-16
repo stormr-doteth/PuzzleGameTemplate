@@ -64,15 +64,22 @@ function SpinWheelHandler.Init()
 	getStatus.OnServerInvoke = function(player)
 		local data = ProfileService.GetData(player)
 		if not data then
-			return { canFreeSpin = false, lastFreeSpinTimestamp = 0, paidSpinsRestricted = false }
+			return { canFreeSpin = false, secondsUntilFreeSpin = 0, paidSpinsRestricted = false }
 		end
 
 		local today = getTodaysDateString()
 		local canFreeSpin = (data.SpinWheel_LastFreeSpinDate or "") ~= today
 
+		-- Compute seconds until UTC midnight (when the date changes and free spin resets)
+		local secondsUntilFreeSpin = 0
+		if not canFreeSpin then
+			local utcNow = os.date("!*t", os.time())
+			secondsUntilFreeSpin = (24 - utcNow.hour - 1) * 3600 + (60 - utcNow.min - 1) * 60 + (60 - utcNow.sec)
+		end
+
 		return {
 			canFreeSpin = canFreeSpin,
-			lastFreeSpinTimestamp = data.SpinWheel_LastFreeSpinTimestamp or 0,
+			secondsUntilFreeSpin = secondsUntilFreeSpin,
 			paidSpinsRestricted = arePaidRandomItemsRestricted(player),
 		}
 	end

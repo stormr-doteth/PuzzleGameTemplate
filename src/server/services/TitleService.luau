@@ -139,6 +139,9 @@ function TitleService.Init(profileService)
 	end
 
 	local function onPlayerAdded(player: Player)
+		-- Set VIP attribute (auto-replicates to all clients for chat tags)
+		player:SetAttribute("IsVIP", hasVIP(player))
+
 		if player.Character then
 			onCharacterAdded(player)
 		end
@@ -155,6 +158,24 @@ function TitleService.Init(profileService)
 	end
 
 	Players.PlayerAdded:Connect(onPlayerAdded)
+
+	-- Update VIP attribute and billboard if someone buys VIP mid-session
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
+		if wasPurchased and gamePassId == MonetizationConfig.GAME_PASSES.VIP.id then
+			player:SetAttribute("IsVIP", true)
+			-- Refresh overhead name billboard
+			local character = player.Character
+			local head = character and character:FindFirstChild("Head")
+			local nameBillboard = head and head:FindFirstChild("NameBillboard")
+			if nameBillboard then
+				local nameLabel = nameBillboard:FindFirstChild("NameLabel")
+				if nameLabel then
+					nameLabel.Text = "[VIP] " .. player.DisplayName
+					nameLabel.TextColor3 = VIP_GOLD
+				end
+			end
+		end
+	end)
 
 	-- Clean up on leave
 	Players.PlayerRemoving:Connect(function(player)

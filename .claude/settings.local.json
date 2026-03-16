@@ -3,7 +3,10 @@
     "allow": [
       "WebFetch(domain:1foreverhd.github.io)",
       "WebSearch",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(cd \"C:\\\\Users\\\\Storm\\\\Documents\\\\_2026_claudecode_projects\\\\PuzzleGame\" && sed -i 's/\\\\t\\\\t\\\\t\\\\tcashGained = product.cashAmount or 0,/\\\\t\\\\t\\\\t\\\\tcashGained = product.cashAmount or 0,\\\\r\\\\n\\\\t\\\\t\\\\t\\\\tcashPurchased = if product.cashAmount then true else nil,\\\\r\\\\n\\\\t\\\\t\\\\t\\\\tcashProductName = if product.cashAmount then product.name else nil,/' src/server/handlers/MonetizationHandler.luau)",
+      "Bash(cd \"C:\\\\Users\\\\Storm\\\\Documents\\\\_2026_claudecode_projects\\\\PuzzleGame\" && sed -i 's/snap_effects = Theme.Colors.orange,/snap_effects = Theme.Colors.orange,\\\\r\\\\n\\\\tcash_purchase = Theme.Colors.cashGreen,/' src/client/ui/components/NewItemNotification.luau && sed -i 's/snap_effects = \"Snap Effect\",/snap_effects = \"Snap Effect\",\\\\r\\\\n\\\\tcash_purchase = \"Cash Purchase\",/' src/client/ui/components/NewItemNotification.luau)",
+      "mcp__Roblox_Studio__run_code"
     ]
   }
 }

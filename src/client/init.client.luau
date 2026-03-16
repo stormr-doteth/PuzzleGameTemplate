@@ -19,6 +19,8 @@ SeatingService.Init()
 local MusicService = require(script:WaitForChild("services"):WaitForChild("MusicService"))
 MusicService.Init()
 
+local ChatTags = require(script:WaitForChild("services"):WaitForChild("ChatTags"))
+ChatTags.Init()
 
 local App = require(script:WaitForChild("ui"):WaitForChild("App"))
 

@@ -137,13 +137,8 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 				then Theme.Colors.accentBlue
 				else Theme.Colors.bgCard
 
-			local rankColor = Theme.Colors.textMuted
-			if rank == 1 then rankColor = Theme.Colors.rank1 end
-			if rank == 2 then rankColor = Theme.Colors.rank2 end
-			if rank == 3 then rankColor = Theme.Colors.rank3 end
-
 			local hasTitle = entry.title and entry.title ~= ""
-			local nameColor = if entry.isVIP then Theme.Colors.rank1 else Theme.Colors.textSecondary
+			local nameColor = if entry.isVIP then Theme.Colors.gold else Theme.Colors.textSecondary
 
 			-- Build left-side children using horizontal UIListLayout
 			local leftChildren: { [string]: any } = {
@@ -155,18 +150,6 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 				}),
 				Padding = React.createElement("UIPadding", {
 					PaddingLeft = UDim.new(0, 8),
-				}),
-				Rank = React.createElement("TextLabel", {
-					LayoutOrder = 1,
-					AutomaticSize = Enum.AutomaticSize.X,
-					Size = UDim2.new(0, 0, 1, 0),
-					BackgroundTransparency = 1,
-					Text = "#" .. rank,
-					TextColor3 = rankColor,
-					TextSize = 16,
-					TextScaled = true,
-					Font = Theme.Font.bold,
-					TextXAlignment = Enum.TextXAlignment.Left,
 				}),
 			}
 

@@ -538,6 +538,7 @@ local function ShopScreen(props: ShopScreenProps)
 			local isOwned = ownedGamePasses[key] == true
 			local iconColor = pass.iconColor or Theme.Colors.warning
 			local iconText = pass.iconText or "R"
+			local iconImage = pass.iconImage
 
 			local actionElement
 			if isOwned then
@@ -589,22 +590,31 @@ local function ShopScreen(props: ShopScreenProps)
 					Color = Theme.Colors.border,
 				}),
 				Icon = React.createElement("Frame", {
-					Position = UDim2.fromScale(0.05, 0.1),
-					Size = UDim2.fromScale(0.3, 0.5),
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.fromScale(0.05, 0.5),
+					Size = UDim2.fromScale(0.3, 0.9),
 					BackgroundColor3 = iconColor,
+					BackgroundTransparency = if iconImage then 1 else 0,
 				}, {
 					IconCorner = React.createElement("UICorner", { CornerRadius = UDim.new(1, 0) }),
 					AspectRatio = React.createElement("UIAspectRatioConstraint", {
 						AspectRatio = 1,
 					}),
-					Emoji = React.createElement("TextLabel", {
-						Size = UDim2.fromScale(1, 1),
-						BackgroundTransparency = 1,
-						Text = iconText,
-						TextScaled = true,
-						Font = Theme.Font.heading,
-						TextColor3 = Theme.Colors.textPrimary,
-					}),
+					IconContent = if iconImage
+						then React.createElement("ImageLabel", {
+							Size = UDim2.fromScale(1, 1),
+							BackgroundTransparency = 1,
+							Image = iconImage,
+							ScaleType = Enum.ScaleType.Fit,
+						})
+						else React.createElement("TextLabel", {
+							Size = UDim2.fromScale(1, 1),
+							BackgroundTransparency = 1,
+							Text = iconText,
+							TextScaled = true,
+							Font = Theme.Font.heading,
+							TextColor3 = Theme.Colors.textPrimary,
+						}),
 				}),
 				Name = React.createElement("TextLabel", {
 					Position = UDim2.fromScale(0.4, 0.08),

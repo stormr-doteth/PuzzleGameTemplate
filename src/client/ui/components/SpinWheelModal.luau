@@ -14,7 +14,7 @@ local MonetizationConfig = require(Shared.MonetizationConfig)
 export type SpinWheelModalProps = {
 	onClose: () -> (),
 	canFreeSpin: boolean,
-	lastFreeSpinTimestamp: number?,
+	secondsUntilFreeSpin: number?,
 	onSpinComplete: ((reward: string) -> ())?,
 	paidSpinsRestricted: boolean?,
 }
@@ -58,20 +58,15 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 	local stripRef = React.useRef(nil :: Frame?)
 	local showOdds, setShowOdds = React.useState(false)
 
-	-- Countdown timer state
+	-- Countdown timer state (server-provided seconds until UTC midnight)
 	local countdownSeconds, setCountdownSeconds = React.useState(function()
 		if props.canFreeSpin then
 			return 0
 		end
-		local ts = props.lastFreeSpinTimestamp or 0
-		if ts == 0 then
-			return 0
-		end
-		local remaining = (ts + SpinWheelConfig.FREE_SPIN_COOLDOWN_HOURS * 3600) - os.time()
-		return math.max(0, remaining)
+		return math.max(0, props.secondsUntilFreeSpin or 0)
 	end)
 
-	-- Tick countdown every second
+	-- Tick countdown every second; re-query server when it reaches 0
 	React.useEffect(function()
 		if canFreeSpin then
 			return
@@ -85,8 +80,25 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 				setCountdownSeconds(function(prev)
 					local newVal = prev - 1
 					if newVal <= 0 then
-						setCanFreeSpin(true)
-						return 0
+						-- Re-query server to verify free spin is actually available
+						task.spawn(function()
+							local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+							local statusRemote = remotes and remotes:FindFirstChild("GetSpinWheelStatus")
+							if statusRemote and statusRemote:IsA("RemoteFunction") then
+								local ok, status = pcall(function()
+									return statusRemote:InvokeServer()
+								end)
+								if ok and status then
+									if status.canFreeSpin then
+										setCanFreeSpin(true)
+									else
+										-- Server says not yet — update countdown with fresh value
+										setCountdownSeconds(math.max(1, status.secondsUntilFreeSpin or 60))
+									end
+								end
+							end
+						end)
+						return 1 -- keep countdown alive until server responds
 					end
 					return newVal
 				end)
@@ -127,7 +139,7 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 			if not ok or not result or not result.success then
 				setSpinning(false)
 				if result and result.message then
-					setResultText(result.message)
+					setResultText({ isError = true, text = result.message })
 				end
 				return
 			end
@@ -160,10 +172,11 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 
 			-- Update state
 			setCanFreeSpin(false)
-			-- Reset countdown for next free spin
-			local cooldownSecs = SpinWheelConfig.FREE_SPIN_COOLDOWN_HOURS * 3600
-			setCountdownSeconds(cooldownSecs)
-			setResultText(result.reward)
+			-- Reset countdown — compute seconds until next UTC midnight
+			local utcNow = os.date("!*t", os.time())
+			local secsUntilMidnight = (24 - utcNow.hour - 1) * 3600 + (60 - utcNow.min - 1) * 60 + (60 - utcNow.sec)
+			setCountdownSeconds(secsUntilMidnight)
+			setResultText({ isError = false, text = result.reward })
 			setSpinning(false)
 
 			if props.onSpinComplete then
@@ -487,12 +500,14 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 
 	-- Result text
 	if resultText then
+		local displayText = if resultText.isError then resultText.text else "You won: " .. resultText.text
+		local displayColor = if resultText.isError then Theme.Colors.danger else Theme.Colors.cashGreen
 		modalChildren["Result"] = React.createElement("TextLabel", {
 			LayoutOrder = 4,
 			Size = UDim2.new(1, 0, 0, 30),
 			BackgroundTransparency = 1,
-			Text = "You won: " .. resultText,
-			TextColor3 = Theme.Colors.cashGreen,
+			Text = displayText,
+			TextColor3 = displayColor,
 			TextSize = Theme.TextSize.large,
 			Font = Theme.Font.bold,
 		}, {

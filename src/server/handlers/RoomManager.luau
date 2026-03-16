@@ -1,8 +1,10 @@
+local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ImageCatalog = require(Shared.ImageCatalog)
+local MonetizationConfig = require(Shared.MonetizationConfig)
 local Remotes = require(Shared.Remotes)
 local PuzzleGenerator = require(Shared.PuzzleGenerator)
 local ProgressionConfig = require(Shared.ProgressionConfig)
@@ -600,7 +602,15 @@ function RoomManager.Init()
 			local entry = ImageCatalog.getById(imageId)
 			if entry and not entry.defaultUnlocked then
 				local profileData = ProfileService.GetData(player)
-				if not profileData or not profileData.UnlockedImages or not profileData.UnlockedImages[imageId] then
+				local unlockedViaProfile = profileData and profileData.UnlockedImages and profileData.UnlockedImages[imageId]
+				local unlockedViaGamePass = false
+				if MonetizationConfig.GAME_PASSES and MonetizationConfig.GAME_PASSES.ALL_IMAGES then
+					local ok, result = pcall(function()
+						return MarketplaceService:UserOwnsGamePassAsync(player.UserId, MonetizationConfig.GAME_PASSES.ALL_IMAGES.id)
+					end)
+					unlockedViaGamePass = ok and result == true
+				end
+				if not unlockedViaProfile and not unlockedViaGamePass then
 					return { error = "Image is locked" }
 				end
 			end
