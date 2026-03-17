@@ -53,4 +53,10 @@ ProgressionConfig.DIFFICULTY_GRID = {
 	["25x25"] = { rows = 25, cols = 25 },
 }
 
+-- Friend bonus multiplier per friend in multiplayer room (+25% per friend)
+ProgressionConfig.FRIEND_BONUS_MULTIPLIER = 0.25
+
+-- Maximum friend bonus cap (+75% with 3 friends)
+ProgressionConfig.FRIEND_BONUS_MAX = 0.75
+
 return ProgressionConfig

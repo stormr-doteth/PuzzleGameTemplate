@@ -32,14 +32,14 @@
       }
     },
     "ReplicatedStorage": {
+      "DialogModule": {
+        "$path": "src/dialog/DialogModule.luau"
+      },
       "Packages": {
         "$path": "Packages"
       },
       "Shared": {
         "$path": "src/shared"
-      },
-      "DialogModule": {
-        "$path": "src/dialog/DialogModule.luau"
       }
     },
     "ServerScriptService": {
@@ -59,6 +59,9 @@
     "StarterGui": {
       "dialog": {
         "$path": "src/gui/dialog"
+      },
+      "$properties": {
+        "ScreenOrientation": "Sensor"
       }
     },
     "StarterPlayer": {
@@ -73,57 +76,68 @@
       }
     },
     "Workspace": {
-      "Baseplate": {
-        "$className": "Part",
-        "$properties": {
-          "Anchored": true,
-          "CFrame": [
-            0.0,
-            -10.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0
-          ],
-          "Color": {
-            "Color3uint8": [
-              177,
-              132,
-              71
-            ]
-          },
-          "Locked": true,
-          "Position": [
-            0.0,
-            -10.0,
-            0.0
-          ],
-          "Size": [
-            512.0,
-            20.0,
-            512.0
-          ]
-        }
-      },
       "CafeTables": {
         "$path": "src/workspace/CafeTables"
       },
       "Nerd": {
+        "$properties": {
+          "ModelMeshCFrame": [
+            -4.795513153076172,
+            -27.299724578857422,
+            -38.03099822998047,
+            1.0000026226043701,
+            -2.0851985027547926e-8,
+            -1.5473924577236176e-6,
+            -2.1068435884785686e-8,
+            0.9999995827674866,
+            -2.5364558950968785e-6,
+            -1.5473907524210517e-6,
+            -2.536222154958523e-6,
+            1.0000015497207642
+          ],
+          "SourceAssetId": 9500836525.0,
+          "WorldPivotData": {
+            "OptionalCFrame": {
+              "position": [
+                -181.0,
+                3.3,
+                40.5
+              ],
+              "orientation": [
+                [
+                  1.0,
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  1.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  0.0,
+                  1.0
+                ]
+              ]
+            }
+          }
+        },
         "$path": "src/workspace/Nerd"
       },
       "$properties": {
+        "EnableSLIMAvatars": {
+          "Enum": 0
+        },
         "FilteringEnabled": true,
+        "LayeredClothingCacheOptimizations": {
+          "Enum": 0
+        },
         "NextGenerationReplication": {
           "Enum": 0
         },
         "PlayerScriptsUseInputActionSystem": {
-          "Enum": 2
+          "Enum": 0
         },
         "SignalBehavior": "Deferred",
         "StreamOutBehavior": "Opportunistic",
@@ -160,7 +174,7 @@
         }
       },
       "$attributes": {
-        "Rojo_Target_CurrentCamera": "7da6e47f3746420a09a2a5ef000003a1"
+        "Rojo_Target_CurrentCamera": "77c1d94a5da01f9c09c5fc9100002b27"
       }
     }
   }

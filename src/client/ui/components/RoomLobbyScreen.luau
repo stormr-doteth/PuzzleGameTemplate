@@ -1,5 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local SocialService = game:GetService("SocialService")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -50,6 +51,36 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 	local selectedPackId, setSelectedPackId = React.useState(nil :: string?)
 
 	local localUserId = Players.LocalPlayer and Players.LocalPlayer.UserId or 0
+
+	-- Friend detection: check if any player in room is a friend
+	local friendsInRoom, setFriendsInRoom = React.useState(0)
+
+	React.useEffect(function()
+		local cancelled = false
+		local players = roomInfo and roomInfo.players or {}
+
+		task.spawn(function()
+			local count = 0
+			for _, p in players do
+				if cancelled then return end
+				if p.userId and p.userId ~= localUserId then
+					local ok, isFriend = pcall(function()
+						return Players.LocalPlayer:IsFriendsWith(p.userId)
+					end)
+					if ok and isFriend then
+						count += 1
+					end
+				end
+			end
+			if not cancelled then
+				setFriendsInRoom(count)
+			end
+		end)
+
+		return function()
+			cancelled = true
+		end
+	end, { roomInfo and roomInfo.players })
 
 	local function onSelectImage(imageId: string, assetId: string)
 		setSelectedImageId(imageId)
@@ -117,6 +148,28 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 			TextSize = Theme.TextSize.label,
 			Font = Theme.Font.medium,
 			TextScaled = true,
+		}),
+		InviteButton = React.createElement("TextButton", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.fromScale(0.83, 0.5),
+			Size = UDim2.fromScale(0.18, 0.7),
+			BackgroundColor3 = Theme.Colors.success,
+			Text = "Invite Friends",
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.label,
+			Font = Theme.Font.bold,
+			TextScaled = true,
+			[React.Event.Activated] = function()
+				pcall(function()
+					SocialService:PromptGameInvite(Players.LocalPlayer)
+				end)
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			TextPadding = React.createElement("UIPadding", {
+				PaddingLeft = UDim.new(0.05, 0),
+				PaddingRight = UDim.new(0.05, 0),
+			}),
 		}),
 		LeaveButton = React.createElement("TextButton", {
 			AnchorPoint = Vector2.new(1, 0.5),
@@ -653,6 +706,20 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 		TopBar = topBar,
 		PlayerStrip = playerStrip,
 		ContentArea = contentArea,
+		FriendBoost = if friendsInRoom > 0 then React.createElement("TextLabel", {
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.fromScale(0.02, 0.98),
+			Size = UDim2.fromScale(0.3, 0.05),
+			BackgroundTransparency = 1,
+			Text = "Friend Boost: +" .. math.floor(friendsInRoom * 25) .. "%",
+			TextColor3 = Theme.Colors.gold,
+			TextSize = Theme.TextSize.label,
+			Font = Theme.Font.bold,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextStrokeColor3 = Theme.Colors.black,
+			TextStrokeTransparency = 0.3,
+			ZIndex = 2,
+		}) else nil,
 	})
 end
 

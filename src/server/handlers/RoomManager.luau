@@ -235,6 +235,29 @@ local function awardCompletion(player: Player, room: any)
 		cashGained = math.floor(baseCash * ProgressionConfig.SPEED_BONUS_MULTIPLIER)
 	end
 
+	-- Friend bonus: count friends in room
+	local friendCount = 0
+	local friendBonusPct = 0
+	local friendBonus = false
+	for otherUserId in room.players do
+		if otherUserId ~= player.UserId then
+			local ok, isFriend = pcall(function()
+				return player:IsFriendsWith(otherUserId)
+			end)
+			if ok and isFriend then
+				friendCount += 1
+			end
+		end
+	end
+	if friendCount > 0 then
+		friendBonusPct = math.min(
+			friendCount * ProgressionConfig.FRIEND_BONUS_MULTIPLIER,
+			ProgressionConfig.FRIEND_BONUS_MAX
+		)
+		cashGained = math.floor(cashGained * (1 + friendBonusPct))
+		friendBonus = true
+	end
+
 	profileData.Cash = profileData.Cash + cashGained
 	profileData.TotalPuzzlesCompleted = (profileData.TotalPuzzlesCompleted or 0) + 1
 	profileData.TotalPlayTime = (profileData.TotalPlayTime or 0) + completionTime
@@ -273,6 +296,9 @@ local function awardCompletion(player: Player, room: any)
 		isPersonalBest = isPersonalBest,
 		isSpeedBonus = isSpeedBonus,
 		completionTime = completionTime,
+		friendBonus = friendBonus,
+		friendCount = friendCount,
+		friendBonusPct = friendBonusPct,
 	})
 end
 

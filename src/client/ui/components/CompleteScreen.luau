@@ -16,6 +16,8 @@ export type CompleteScreenProps = {
 		isPersonalBest: boolean?,
 		isSpeedBonus: boolean?,
 		boostUsed: boolean?,
+		friendBonus: boolean?,
+		friendBonusPct: number?,
 	}?,
 	isPersonalBest: boolean?,
 	previousBest: number?,
@@ -269,6 +271,21 @@ local function CompleteScreen(props: CompleteScreenProps)
 				Size = UDim2.new(1, 0, 0, 26),
 				BackgroundTransparency = 1,
 				Text = "2x BOOST!",
+				TextColor3 = Theme.Colors.gold,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
+				TextStrokeColor3 = Theme.Colors.black,
+				TextStrokeTransparency = 0.3,
+			})
+		end
+
+		if rewardData.friendBonus then
+			local pct = math.floor((rewardData.friendBonusPct or 0) * 100)
+			cardChildren["FriendBoost"] = React.createElement("TextLabel", {
+				LayoutOrder = 7,
+				Size = UDim2.new(1, 0, 0, 26),
+				BackgroundTransparency = 1,
+				Text = "FRIEND BOOST +" .. pct .. "%",
 				TextColor3 = Theme.Colors.gold,
 				TextSize = Theme.TextSize.large,
 				Font = Theme.Font.bold,
