@@ -324,6 +324,15 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 		PaddingRight = UDim.new(0, 16),
 	})
 
+	-- Banner image
+	modalChildren["BannerImage"] = React.createElement("ImageLabel", {
+		LayoutOrder = 0,
+		Size = UDim2.new(1, 0, 0, 80),
+		BackgroundTransparency = 1,
+		Image = "rbxassetid://124221102367378",
+		ScaleType = Enum.ScaleType.Fit,
+	})
+
 	-- Header row (title + info button)
 	modalChildren["HeaderRow"] = React.createElement("Frame", {
 		LayoutOrder = 1,

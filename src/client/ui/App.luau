@@ -1218,7 +1218,7 @@ local function App(props)
 				Position = UDim2.fromScale(0.5, 0),
 				Size = UDim2.fromScale(0.85, 0.72),
 				BackgroundColor3 = Theme.Colors.gold,
-				BackgroundTransparency = 0,
+				BackgroundTransparency = 1,
 				Image = "",
 				ZIndex = 10,
 				[React.Event.Activated] = function()
@@ -1235,18 +1235,17 @@ local function App(props)
 					AspectRatio = 1,
 				}),
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
-				SpinIcon = React.createElement("TextLabel", {
+				SpinIcon = React.createElement("ImageLabel", {
 					Size = UDim2.fromScale(1, 1),
 					BackgroundTransparency = 1,
-					Text = "\u{1F3B0}",
-					TextSize = 24,
-					TextScaled = true,
+					Image = "rbxassetid://124221102367378",
+					ScaleType = Enum.ScaleType.Fit,
 					ZIndex = 10,
 				}),
 				FreeDot = if spinWheelCanFree then React.createElement("Frame", {
 					AnchorPoint = Vector2.new(1, 0),
-					Position = UDim2.new(1, 4, 0, -4),
-					Size = UDim2.fromOffset(12, 12),
+					Position = UDim2.new(1, 6, 0, -6),
+					Size = UDim2.fromOffset(18, 18),
 					BackgroundColor3 = Theme.Colors.danger,
 					ZIndex = 12,
 				}, {

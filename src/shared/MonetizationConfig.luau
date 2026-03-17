@@ -104,6 +104,7 @@ MonetizationConfig.DEV_PRODUCTS = {
 		robuxPrice = 25,
 		iconColor = Color3.fromRGB(255, 200, 50),
 		iconText = "\u{1F3B0}",
+		iconImage = "rbxassetid://124221102367378",
 	},
 }
 
