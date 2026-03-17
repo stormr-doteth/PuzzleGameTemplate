@@ -1,7 +1,65 @@
 # Project Notes
 
+## Tech Stack
+- **Runtime**: Roblox Luau (type-annotated Lua)
+- **UI Framework**: React (Roact-like, v17.2.1 from `Packages.React`)
+- **Rendering**: ReactRoblox (maps React components to Roblox Instances)
+- **Data**: ProfileStore (community library wrapping DataStore)
+- **Monetization**: MarketplaceService (GamePasses + DevProducts)
+- **Remotes**: RemoteEvent/RemoteFunction via `Shared.Remotes`
+
+## Project Structure
+```
+src/
+├── client/
+│   ├── init.client.luau          # Entry point
+│   ├── services/                 # ChatTags, DialogService, ImageService, MusicService, etc.
+│   └── ui/
+│       ├── App.luau              # Root React component, all state management
+│       ├── components/           # 25+ UI screens/modals (MenuScreen, PuzzleBoard, RoomLobbyScreen, etc.)
+│       └── hooks/                # usePuzzleState, useDrag, useTimer, etc.
+├── server/
+│   ├── init.server.luau          # Initializes all handlers
+│   ├── data/                     # ProfileService (DataStore wrapper), LeaderboardService
+│   ├── handlers/                 # PuzzleHandler, MonetizationHandler, RoomManager, DailyRewardsHandler, etc.
+│   ├── services/                 # TitleService, TableStatusService
+│   └── cafe/                     # TableManager (multiplayer seating)
+├── shared/                       # Config & types used by both client and server
+│   ├── Theme.luau                # Design tokens (colors, fonts, sizes, spacing, radii, z-index)
+│   ├── Remotes.luau              # Remote creation & lookup helpers
+│   ├── MonetizationConfig.luau   # GamePass & DevProduct catalog (VIP, AllImages, Expert, PuzzleAssist)
+│   ├── ProgressionConfig.luau    # XP rewards, par times, min times, difficulty config
+│   ├── PuzzleGenerator.luau      # Procedural puzzle edge generation
+│   ├── ImageCatalog.luau         # 500+ images across 10 packs; getById(), getAll()
+│   ├── PuzzlePacks.luau          # Pack metadata (Landscapes, Animals, Brainrots, etc.)
+│   ├── ShopItems.luau            # Cosmetics (board skins, confetti, snap effects)
+│   └── RoomTypes.luau            # Multiplayer room types & constants
+└── workspace/                    # In-game objects, cafe tables, NPCs
+```
+
+## Key Patterns
+
+### State Flow
+- `App.luau` owns all state (`gameState`: "walking" → "menu" → "playing" → "complete" / multiplayer equivalents)
+- State passed to child components as props; callbacks bubble actions up
+- Exported `ComponentNameProps` types define all props for each component
+
+### Server Handlers
+- Each handler has an `Init()` function called from `init.server.luau`
+- Access remotes via `Remotes.GetEvent("Name")` / `Remotes.GetFunction("Name")`
+- Access player data via `ProfileService.GetData(player)` — returns mutable table
+- GamePass checks: `pcall(function() return MarketplaceService:UserOwnsGamePassAsync(userId, passId) end)`
+
+### Multiplayer Rooms
+- Rooms stored in-memory on server (not persisted)
+- States: "lobby" → "playing" → "complete"
+- Virtual canvas: 1200x800 for viewport-independent coordinates
+- Snap threshold: 25 units; claims expire after 10 seconds
+
 ## Editor Rules
-- Never use Bash to check whitespace/indentation in files. Just edit the code directly using the Edit tool. If an edit fails due to whitespace mismatch, re-read the file and retry the edit.
+- **Indentation**: All `.luau` files use **tabs** for indentation (not spaces). The Read tool displays tabs as spaces, so never trust the visual indentation from Read output when constructing Edit strings.
+- **Edit tool tab workaround**: When the Edit tool fails to match due to tab/space confusion, use Python (`open/read/replace/write`) via Bash instead — it handles raw bytes correctly.
+- **Unicode escapes**: Luau files use `\u{XXXX}` syntax for unicode (e.g., `\u{2713}` for checkmark, `\u{1F512}` for lock). These are literal backslash sequences in the source, not the rendered characters.
 
 ## UI Style Guide
 

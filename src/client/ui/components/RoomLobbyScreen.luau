@@ -31,6 +31,8 @@ export type RoomLobbyScreenProps = {
 	cash: number?,
 	onUnlockImage: ((imageId: string) -> ())?,
 	onUnlockImageRobux: ((imageId: string) -> ())?,
+	hasExpertPass: boolean?,
+	onPromptExpertPass: (() -> ())?,
 }
 
 local PLAYER_COLORS = {
@@ -332,43 +334,70 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 					local hasCompleted = selectedImageId and personalBests and personalBests[selectedImageId .. "_" .. diff.difficultyId] ~= nil
 					local buttonText = if hasCompleted then diff.label .. " \u{2713}" else diff.label
 					local textColor = if hasCompleted then Theme.Colors.warning else Theme.Colors.textPrimary
+					local isExpert = diff.difficultyId == "25x25"
+					local expertLocked = isExpert and not props.hasExpertPass
 
-					panelChildren["Diff_" .. i] = React.createElement("TextButton", {
-						LayoutOrder = 3 + i,
-						Size = UDim2.fromScale(1, 0.09),
-						BackgroundColor3 = if isSelected
-							then Theme.Colors.accentBlue
-							else Theme.Colors.bgInput,
-						Text = "",
-						[React.Event.Activated] = function()
-							onSelectDifficulty(i)
-						end,
-					}, {
-						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-						Label = React.createElement("TextLabel", {
-							Position = UDim2.fromScale(0.04, 0),
-							Size = UDim2.fromScale(0.7, 1),
-							BackgroundTransparency = 1,
-							Text = buttonText,
-							TextColor3 = textColor,
-							TextSize = Theme.TextSize.body,
-							Font = Theme.Font.medium,
-							TextXAlignment = Enum.TextXAlignment.Left,
-							TextScaled = true,
-						}),
-						CoinReward = React.createElement("TextLabel", {
-							AnchorPoint = Vector2.new(1, 0.5),
-							Position = UDim2.fromScale(0.96, 0.5),
-							Size = UDim2.fromScale(0.22, 0.7),
-							BackgroundTransparency = 1,
-							Text = "+$" .. coinReward,
-							TextColor3 = Theme.Colors.cashGreen,
-							TextSize = Theme.TextSize.small,
-							Font = Theme.Font.bold,
-							TextXAlignment = Enum.TextXAlignment.Right,
-							TextScaled = true,
-						}),
-					})
+					if expertLocked then
+						panelChildren["Diff_" .. i] = React.createElement("TextButton", {
+							LayoutOrder = 3 + i,
+							Size = UDim2.fromScale(1, 0.09),
+							BackgroundColor3 = Theme.Colors.bgElevated,
+							Text = "",
+							[React.Event.Activated] = function()
+								if props.onPromptExpertPass then
+									props.onPromptExpertPass()
+								end
+							end,
+						}, {
+							Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+							Label = React.createElement("TextLabel", {
+								Size = UDim2.fromScale(1, 1),
+								BackgroundTransparency = 1,
+								Text = "\u{1F512} Expert Pass Required",
+								TextColor3 = Theme.Colors.textDisabled,
+								TextSize = Theme.TextSize.body,
+								Font = Theme.Font.medium,
+								TextScaled = true,
+							}),
+						})
+					else
+						panelChildren["Diff_" .. i] = React.createElement("TextButton", {
+							LayoutOrder = 3 + i,
+							Size = UDim2.fromScale(1, 0.09),
+							BackgroundColor3 = if isSelected
+								then Theme.Colors.accentBlue
+								else Theme.Colors.bgInput,
+							Text = "",
+							[React.Event.Activated] = function()
+								onSelectDifficulty(i)
+							end,
+						}, {
+							Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+							Label = React.createElement("TextLabel", {
+								Position = UDim2.fromScale(0.04, 0),
+								Size = UDim2.fromScale(0.7, 1),
+								BackgroundTransparency = 1,
+								Text = buttonText,
+								TextColor3 = textColor,
+								TextSize = Theme.TextSize.body,
+								Font = Theme.Font.medium,
+								TextXAlignment = Enum.TextXAlignment.Left,
+								TextScaled = true,
+							}),
+							CoinReward = React.createElement("TextLabel", {
+								AnchorPoint = Vector2.new(1, 0.5),
+								Position = UDim2.fromScale(0.96, 0.5),
+								Size = UDim2.fromScale(0.22, 0.7),
+								BackgroundTransparency = 1,
+								Text = "+$" .. coinReward,
+								TextColor3 = Theme.Colors.cashGreen,
+								TextSize = Theme.TextSize.small,
+								Font = Theme.Font.bold,
+								TextXAlignment = Enum.TextXAlignment.Right,
+								TextScaled = true,
+							}),
+						})
+					end
 				end
 
 				-- Start button

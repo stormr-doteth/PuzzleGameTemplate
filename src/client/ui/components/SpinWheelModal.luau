@@ -315,11 +315,11 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 	modalChildren["Layout"] = React.createElement("UIListLayout", {
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 12),
+		Padding = UDim.new(0, 8),
 	})
 	modalChildren["Padding"] = React.createElement("UIPadding", {
-		PaddingTop = UDim.new(0, 16),
-		PaddingBottom = UDim.new(0, 16),
+		PaddingTop = UDim.new(0, 10),
+		PaddingBottom = UDim.new(0, 10),
 		PaddingLeft = UDim.new(0, 16),
 		PaddingRight = UDim.new(0, 16),
 	})
@@ -327,7 +327,7 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 	-- Banner image
 	modalChildren["BannerImage"] = React.createElement("ImageLabel", {
 		LayoutOrder = 0,
-		Size = UDim2.new(1, 0, 0, 80),
+		Size = UDim2.new(1, 0, 0, 50),
 		BackgroundTransparency = 1,
 		Image = "rbxassetid://124221102367378",
 		ScaleType = Enum.ScaleType.Fit,
@@ -336,7 +336,7 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 	-- Header row (title + info button)
 	modalChildren["HeaderRow"] = React.createElement("Frame", {
 		LayoutOrder = 1,
-		Size = UDim2.new(1, 0, 0, 34),
+		Size = UDim2.new(1, 0, 0, 26),
 		BackgroundTransparency = 1,
 	}, {
 		Title = React.createElement("TextLabel", {
@@ -344,7 +344,7 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 			BackgroundTransparency = 1,
 			Text = "Spin the Wheel!",
 			TextColor3 = Theme.Colors.gold,
-			TextSize = Theme.TextSize.heading,
+			TextSize = Theme.TextSize.large,
 			Font = Theme.Font.heading,
 		}, {
 			TextStroke = React.createElement("UIStroke", {
@@ -438,8 +438,13 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 				Thickness = 1,
 				Color = Theme.Colors.border,
 			}),
-			Content = React.createElement("Frame", {
+			Content = React.createElement("ScrollingFrame", {
 				Size = UDim2.fromScale(1, 1),
+				CanvasSize = UDim2.new(0, 0, 0, 0),
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				ScrollBarThickness = 3,
+				ScrollBarImageColor3 = Theme.Colors.border,
+				BorderSizePixel = 0,
 				BackgroundTransparency = 1,
 			}, oddsRows),
 		})
@@ -448,7 +453,7 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 	-- Spinner window (clips the strip, shows ~3 cells)
 	modalChildren["SpinnerWindow"] = React.createElement("Frame", {
 		LayoutOrder = 3,
-		Size = UDim2.fromOffset(WINDOW_WIDTH, CELL_HEIGHT + 16),
+		Size = UDim2.fromOffset(WINDOW_WIDTH, CELL_HEIGHT + 8),
 		BackgroundColor3 = Theme.Colors.bgMedium,
 		ClipsDescendants = true,
 	}, {
@@ -461,7 +466,7 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 		-- The scrolling strip
 		Strip = React.createElement("Frame", {
 			ref = stripRef,
-			Position = UDim2.fromOffset(initialX, 8),
+			Position = UDim2.fromOffset(initialX, 4),
 			Size = UDim2.fromOffset(TOTAL_CELLS * CELL_STEP, CELL_HEIGHT),
 			BackgroundTransparency = 1,
 		}, stripChildren),
@@ -513,7 +518,7 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 		local displayColor = if resultText.isError then Theme.Colors.danger else Theme.Colors.cashGreen
 		modalChildren["Result"] = React.createElement("TextLabel", {
 			LayoutOrder = 4,
-			Size = UDim2.new(1, 0, 0, 30),
+			Size = UDim2.new(1, 0, 0, 24),
 			BackgroundTransparency = 1,
 			Text = displayText,
 			TextColor3 = displayColor,
@@ -531,7 +536,7 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 	if not canFreeSpin and not spinning and countdownSeconds > 0 then
 		modalChildren["Countdown"] = React.createElement("TextLabel", {
 			LayoutOrder = 4.5,
-			Size = UDim2.new(1, 0, 0, 20),
+			Size = UDim2.new(1, 0, 0, 16),
 			BackgroundTransparency = 1,
 			Text = "Next free spin: " .. formatCountdown(countdownSeconds),
 			TextColor3 = Theme.Colors.textMuted,
@@ -556,7 +561,7 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 	-- Spin button
 	modalChildren["SpinBtn"] = React.createElement("TextButton", {
 		LayoutOrder = 5,
-		Size = UDim2.new(0.7, 0, 0, 48),
+		Size = UDim2.new(0.7, 0, 0, 38),
 		BackgroundColor3 = buttonColor,
 		Text = buttonText,
 		TextColor3 = Theme.Colors.textPrimary,
@@ -582,7 +587,7 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 	-- Close button
 	modalChildren["CloseBtn"] = React.createElement("TextButton", {
 		LayoutOrder = 6,
-		Size = UDim2.new(0.4, 0, 0, 32),
+		Size = UDim2.new(0.4, 0, 0, 28),
 		BackgroundColor3 = Theme.Colors.bgElevated,
 		Text = "Close",
 		TextColor3 = Theme.Colors.textSecondary,
@@ -611,19 +616,27 @@ local function SpinWheelModal(props: SpinWheelModalProps)
 		Modal = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(370, if showOdds then 580 else 360),
+			Size = UDim2.fromScale(0.88, 0.85),
 			BackgroundColor3 = Theme.Colors.bgDark,
 			ZIndex = 2,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = Theme.Radius.modal }),
+			SizeConstraint = React.createElement("UISizeConstraint", {
+				MaxSize = Vector2.new(400, 600),
+			}),
 			Stroke = React.createElement("UIStroke", {
 				Thickness = 2,
 				Color = Theme.Colors.border,
 			}),
-			Content = React.createElement("Frame", {
+			Content = React.createElement("ScrollingFrame", {
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
 				ZIndex = 2,
+				CanvasSize = UDim2.new(0, 0, 0, 0),
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				ScrollBarThickness = 3,
+				ScrollBarImageColor3 = Theme.Colors.border,
+				BorderSizePixel = 0,
 			}, modalChildren),
 		}),
 	})

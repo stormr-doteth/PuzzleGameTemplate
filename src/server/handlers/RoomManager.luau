@@ -572,6 +572,20 @@ function RoomManager.Init()
 			return { success = false }
 		end
 
+		-- Verify Expert gamepass for 25x25 difficulty
+		if config.difficultyId == "25x25" then
+			local hasPass = false
+			if MonetizationConfig.GAME_PASSES and MonetizationConfig.GAME_PASSES.EXPERT then
+				local ok, result = pcall(function()
+					return MarketplaceService:UserOwnsGamePassAsync(player.UserId, MonetizationConfig.GAME_PASSES.EXPERT.id)
+				end)
+				hasPass = ok and result == true
+			end
+			if not hasPass then
+				return { success = false, error = "Expert Pass required" }
+			end
+		end
+
 		room.config = {
 			imageAssetId = config.imageAssetId,
 			imageId = config.imageId,
@@ -613,6 +627,20 @@ function RoomManager.Init()
 				if not unlockedViaProfile and not unlockedViaGamePass then
 					return { error = "Image is locked" }
 				end
+			end
+		end
+
+		-- Verify Expert gamepass for 25x25 difficulty
+		if room.config.difficultyId == "25x25" then
+			local hasPass = false
+			if MonetizationConfig.GAME_PASSES and MonetizationConfig.GAME_PASSES.EXPERT then
+				local ok, result = pcall(function()
+					return MarketplaceService:UserOwnsGamePassAsync(player.UserId, MonetizationConfig.GAME_PASSES.EXPERT.id)
+				end)
+				hasPass = ok and result == true
+			end
+			if not hasPass then
+				return { error = "Expert Pass required" }
 			end
 		end
 

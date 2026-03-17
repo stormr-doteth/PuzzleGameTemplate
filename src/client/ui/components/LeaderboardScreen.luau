@@ -137,7 +137,6 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 				then Theme.Colors.accentBlue
 				else Theme.Colors.bgCard
 
-			local hasTitle = entry.title and entry.title ~= ""
 			local nameColor = if entry.isVIP then Theme.Colors.gold else Theme.Colors.textSecondary
 
 			-- Build left-side children using horizontal UIListLayout
@@ -153,25 +152,17 @@ local function LeaderboardScreen(props: LeaderboardScreenProps)
 				}),
 			}
 
-			if hasTitle then
-				leftChildren["Title"] = React.createElement("TextLabel", {
-					LayoutOrder = 2,
-					AutomaticSize = Enum.AutomaticSize.X,
-					Size = UDim2.new(0, 0, 0, 24),
-					BackgroundColor3 = Theme.Colors.headerGold,
-					Text = entry.title,
-					TextColor3 = Color3.fromRGB(40, 20, 0),
-					TextSize = Theme.TextSize.tiny,
-					TextScaled = true,
-					Font = Theme.Font.bold,
-				}, {
-					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 4) }),
-					Pad = React.createElement("UIPadding", {
-						PaddingLeft = UDim.new(0, 4),
-						PaddingRight = UDim.new(0, 4),
-					}),
-				})
-			end
+			leftChildren["Rank"] = React.createElement("TextLabel", {
+				LayoutOrder = 1,
+				Size = UDim2.new(0, 24, 1, 0),
+				BackgroundTransparency = 1,
+				Text = rank .. ".",
+				TextColor3 = Theme.Colors.textMuted,
+				TextSize = 16,
+				TextScaled = true,
+				Font = Theme.Font.bold,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			})
 
 			leftChildren["Name"] = React.createElement("TextLabel", {
 				LayoutOrder = 3,

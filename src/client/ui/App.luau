@@ -946,6 +946,7 @@ local function App(props)
 		})
 	end
 
+	local spinWheelElement = nil
 	if gameState == "walking" then
 		-- Only show hint for players who haven't sat at a table yet
 		if not hasEverSat and not (playerData and (playerData.totalPuzzlesCompleted or 0) > 0) then
@@ -1206,9 +1207,9 @@ local function App(props)
 		})
 
 		-- Spin wheel button (top area, between center and right)
-		safeChildren["SpinWheelBtn"] = React.createElement("Frame", {
+		spinWheelElement = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.7, 0, 0, 8),
+			Position = UDim2.new(0.7, 0, 0, 4),
 			Size = UDim2.fromScale(0.105, 0.14),
 			BackgroundTransparency = 1,
 			ZIndex = 10,
@@ -1521,10 +1522,27 @@ local function App(props)
 			cash = if playerData then playerData.cash else 0,
 			onUnlockImage = onUnlockImage,
 			onUnlockImageRobux = onUnlockImageRobux,
+			hasExpertPass = if playerData then playerData.hasExpertPass else nil,
+			onPromptExpertPass = onPromptExpertPass,
 		})
 	end
 
 	-- Board ScreenGui: full screen for piece dragging (rendered below safe UI)
+	-- Spin wheel ScreenGui: ignores top bar so it sits at the very top
+	local spinGui = nil
+	if spinWheelElement then
+		spinGui = React.createElement("ScreenGui", {
+			Name = "PuzzleAppSpin",
+			ResetOnSpawn = false,
+			IgnoreGuiInset = true,
+			ScreenInsets = Enum.ScreenInsets.None,
+			DisplayOrder = 2,
+			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		}, {
+			SpinWheelBtn = spinWheelElement,
+		})
+	end
+
 	local boardGui = nil
 	local isMultiplayerBoard = gameState == "room_playing" or gameState == "room_complete"
 	if gameState == "playing" or gameState == "complete" or gameState == "admiring" or isMultiplayerBoard then
@@ -1675,6 +1693,7 @@ local function App(props)
 	-- directly (which would destroy Roblox's TouchGui, Freecam, etc.)
 	return React.createElement(React.Fragment, nil, {
 		SafeGui = ReactRoblox.createPortal(safeGui, playerGui, "SafeGui"),
+		SpinGui = spinGui and ReactRoblox.createPortal(spinGui, playerGui, "SpinGui") or nil,
 		BoardGui = boardGui and ReactRoblox.createPortal(boardGui, playerGui, "BoardGui") or nil,
 		CompleteGui = completeGui and ReactRoblox.createPortal(completeGui, playerGui, "CompleteGui") or nil,
 		AdmireGui = admireGui and ReactRoblox.createPortal(admireGui, playerGui, "AdmireGui") or nil,
