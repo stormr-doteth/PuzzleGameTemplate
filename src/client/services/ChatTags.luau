@@ -25,6 +25,21 @@ function ChatTags.Init()
 
 		return props
 	end
+
+	TextChatService.OnBubbleAdded = function(message: TextChatMessage, adornee: Instance)
+		local bubbleProps = Instance.new("BubbleChatMessageProperties")
+
+		local source = message.TextSource
+		if source then
+			local player = Players:GetPlayerByUserId(source.UserId)
+			if player and player:GetAttribute("IsVIP") then
+				bubbleProps.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+				bubbleProps.TextColor3 = Color3.fromRGB(255, 215, 0)
+			end
+		end
+
+		return bubbleProps
+	end
 end
 
 return ChatTags
