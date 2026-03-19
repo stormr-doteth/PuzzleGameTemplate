@@ -3,7 +3,9 @@ local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
+local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
+local AvatarEditorService = game:GetService("AvatarEditorService")
 local UserInputService = game:GetService("UserInputService")
 
 local Packages = ReplicatedStorage:WaitForChild("Packages")
@@ -22,6 +24,8 @@ local NewItemNotification = require(script.Parent.components.NewItemNotification
 local RoomLobbyScreen = require(script.Parent.components.RoomLobbyScreen)
 local DailyRewardModal = require(script.Parent.components.DailyRewardModal)
 local SpinWheelModal = require(script.Parent.components.SpinWheelModal)
+local LikeFavoriteModal = require(script.Parent.components.LikeFavoriteModal)
+local DevToolPanel = require(script.Parent.components.DevToolPanel)
 
 -- SeatingService loaded optionally
 local SeatingService = nil
@@ -73,6 +77,9 @@ local function App(props)
 
 	-- Daily reward state
 	local showDailyReward, setShowDailyReward = React.useState(false)
+	local showLikeFavoriteModal, setShowLikeFavoriteModal = React.useState(false)
+	local favoriteChecking, setFavoriteChecking = React.useState(false)
+	local favoriteError, setFavoriteError = React.useState(nil :: string?)
 	local dailyRewardStatus, setDailyRewardStatus = React.useState(nil :: any)
 	local dailyRewardClaimResult, setDailyRewardClaimResult = React.useState(nil :: any)
 
@@ -84,6 +91,10 @@ local function App(props)
 	local spinWheelCanFree, setSpinWheelCanFree = React.useState(false)
 	local spinWheelSecsUntilFree, setSpinWheelSecsUntilFree = React.useState(0)
 	local spinWheelPaidRestricted, setSpinWheelPaidRestricted = React.useState(false)
+
+	-- Dev tool panel state (admin only)
+	local isAdmin = Players.LocalPlayer.UserId == 3401001
+	local showDevToolPanel, setShowDevToolPanel = React.useState(false)
 
 	-- NPC overlay state (only one open at a time)
 	local activeOverlay, setActiveOverlay = React.useState(nil :: string?)
@@ -236,6 +247,7 @@ local function App(props)
 		equippedSnapEffect: string?,
 		hasExpertPass: boolean?,
 		hintsRemaining: number?,
+		hasClaimedFavoriteReward: boolean?,
 		cashBoostsRemaining: number?,
 		ownedBoardSkins: { [string]: boolean }?,
 		ownedConfettiStyles: { [string]: boolean }?,
@@ -1010,10 +1022,10 @@ local function App(props)
 			})
 		end
 
-		-- Persistent HUD buttons (right side, vertically centered)
+		-- Persistent HUD buttons (left side, vertically centered)
 		safeChildren["HUDButtons"] = React.createElement("Frame", {
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -8, 0.5, 0),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 8, 0.5, 0),
 			Size = UDim2.fromScale(0.105, 0.7),
 			BackgroundTransparency = 1,
 			ZIndex = 10,
@@ -1450,6 +1462,73 @@ local function App(props)
 		end)
 	end
 
+	-- Favorite reward: show custom modal
+	local function onClaimFavoriteReward()
+		setShowLikeFavoriteModal(true)
+	end
+
+	-- Favorite reward: confirm from modal → prompt favorite → verify → claim
+	local function onConfirmLikeFavorite()
+		setFavoriteChecking(true)
+		setFavoriteError(nil)
+		task.spawn(function()
+			-- Prompt the native Roblox favorite dialog with correct args
+			local promptOk, promptErr = pcall(function()
+				AvatarEditorService:PromptSetFavorite(game.PlaceId, Enum.AvatarItemType.Asset, true)
+			end)
+			if not promptOk then
+				warn("[FavoriteReward] PromptSetFavorite failed:", promptErr)
+				setFavoriteError("Something went wrong \u{2014} please try again.")
+				setFavoriteChecking(false)
+				return
+			end
+
+			-- Wait for the user to respond to the native prompt
+			local result = AvatarEditorService.PromptSetFavoriteCompleted:Wait()
+
+			if result ~= Enum.AvatarPromptResult.Success then
+				setFavoriteError("You need to favorite the game to claim the free pack!")
+				setFavoriteChecking(false)
+				return
+			end
+
+			-- User favorited successfully — claim the reward from server
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then
+				setFavoriteError("Something went wrong \u{2014} please try again.")
+				setFavoriteChecking(false)
+				return
+			end
+			local claimRemote = remotes:FindFirstChild("ClaimFavoriteReward")
+			if not claimRemote or not claimRemote:IsA("RemoteFunction") then
+				setFavoriteError("Something went wrong \u{2014} please try again.")
+				setFavoriteChecking(false)
+				return
+			end
+
+			local ok, claimResult = pcall(function() return claimRemote:InvokeServer() end)
+			if ok and claimResult and claimResult.success then
+				setFavoriteChecking(false)
+				setFavoriteError(nil)
+				setShowLikeFavoriteModal(false)
+				setPlayerData(function(prev)
+					if not prev then return prev end
+					local updated = table.clone(prev)
+					updated.hasClaimedFavoriteReward = true
+					local imgs = table.clone(updated.unlockedImages or {})
+					for _, imgId in claimResult.unlockedIds do
+						imgs[imgId] = true
+					end
+					updated.unlockedImages = imgs
+					return updated
+				end)
+			else
+				setFavoriteError("Something went wrong \u{2014} please try again.")
+				setFavoriteChecking(false)
+			end
+		end)
+	end
+
 	-- Daily reward modal (auto-show on login when claimable, in walking state)
 	if showDailyReward and gameState == "walking" then
 		safeChildren["DailyRewardModal"] = React.createElement(DailyRewardModal, {
@@ -1459,6 +1538,52 @@ local function App(props)
 			rewardStatus = dailyRewardStatus,
 			onClaim = onClaimDailyReward,
 			claimResult = dailyRewardClaimResult,
+		})
+	end
+
+	-- Like & Favorite modal
+	if showLikeFavoriteModal then
+		safeChildren["LikeFavoriteModal"] = React.createElement(LikeFavoriteModal, {
+			onConfirm = onConfirmLikeFavorite,
+			onClose = function()
+				setShowLikeFavoriteModal(false)
+				setFavoriteChecking(false)
+				setFavoriteError(nil)
+			end,
+			isChecking = favoriteChecking,
+			errorMessage = favoriteError,
+		})
+	end
+
+	-- Dev tool panel (admin only)
+	if isAdmin and (gameState == "walking" or gameState == "menu") then
+		safeChildren["DevToolBtn"] = React.createElement("TextButton", {
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 8, 1, -8),
+			Size = UDim2.new(0, 48, 0, 28),
+			BackgroundColor3 = Theme.Colors.bgElevated,
+			Text = "DEV",
+			TextColor3 = Theme.Colors.headerGold,
+			TextSize = 13,
+			Font = Theme.Font.bold,
+			ZIndex = 40,
+			[React.Event.Activated] = function()
+				setShowDevToolPanel(true)
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", {
+				Color = Theme.Colors.border,
+				Thickness = 1.5,
+			}),
+		})
+	end
+
+	if isAdmin and showDevToolPanel then
+		safeChildren["DevToolPanel"] = React.createElement(DevToolPanel, {
+			onClose = function()
+				setShowDevToolPanel(false)
+			end,
 		})
 	end
 
@@ -1479,6 +1604,8 @@ local function App(props)
 			onPromptExpertPass = onPromptExpertPass,
 			dailyPuzzle = dailyPuzzle,
 			dailyPuzzleCompleted = dailyPuzzleCompleted,
+			onClaimFavoriteReward = onClaimFavoriteReward,
+			hasClaimedFavoriteReward = if playerData then playerData.hasClaimedFavoriteReward else false,
 		})
 
 		-- Leave Table button
@@ -1545,6 +1672,7 @@ local function App(props)
 
 	local boardGui = nil
 	local isMultiplayerBoard = gameState == "room_playing" or gameState == "room_complete"
+		or (gameState == "admiring" and admireIsMultiplayer)
 	if gameState == "playing" or gameState == "complete" or gameState == "admiring" or isMultiplayerBoard then
 		boardGui = React.createElement("ScreenGui", {
 			Name = "PuzzleAppBoard",
@@ -1624,7 +1752,7 @@ local function App(props)
 			Buttons = React.createElement("Frame", {
 				AnchorPoint = Vector2.new(0.5, 1),
 				Position = UDim2.new(0.5, 0, 1, -20),
-				Size = UDim2.new(0, 240, 0, 110),
+				Size = UDim2.new(0, 240, 0, if admireIsMultiplayer then 168 else 110),
 				BackgroundTransparency = 1,
 			}, {
 				Layout = React.createElement("UIListLayout", {
@@ -1650,6 +1778,24 @@ local function App(props)
 				}, {
 					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
 				}),
+				LeaveTableButton = if admireIsMultiplayer then React.createElement("TextButton", {
+					LayoutOrder = 2,
+					Size = UDim2.new(0, 220, 0, 48),
+					BackgroundColor3 = Theme.Colors.danger,
+					Text = "Leave Table",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextSize = Theme.TextSize.large,
+					Font = Theme.Font.bold,
+					[React.Event.Activated] = function()
+						onLeaveRoom()
+					end,
+				}, {
+					Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+					Stroke = React.createElement("UIStroke", {
+						Color = Theme.Colors.dangerDark,
+						Thickness = 2,
+					}),
+				}) else nil,
 			}),
 		})
 	end

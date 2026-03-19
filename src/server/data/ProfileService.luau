@@ -5,7 +5,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Packages = ServerScriptService:WaitForChild("Packages")
 local ProfileStore = require(Packages.ProfileStore)
 
-local CURRENT_SCHEMA_VERSION = 4
+local CURRENT_SCHEMA_VERSION = 5
 
 local PROFILE_TEMPLATE = {
 	SchemaVersion = CURRENT_SCHEMA_VERSION,
@@ -31,6 +31,7 @@ local PROFILE_TEMPLATE = {
 	DailyReward_Streak = 0,              -- 0-7
 	DailyPuzzle_LastCompletionDate = "",  -- "YYYY-MM-DD"
 	SpinWheel_LastFreeSpinDate = "",      -- "YYYY-MM-DD"
+	HasClaimedFavoriteReward = false,
 }
 
 -- Cap PurchaseHistory to prevent unbounded growth toward DataStore limits
@@ -85,6 +86,14 @@ local function migrateProfile(data)
 			data.CashBoostsRemaining = 0
 		end
 		data.SchemaVersion = 4
+	end
+
+	-- Migration from v4 to v5: add HasClaimedFavoriteReward
+	if version < 5 then
+		if data.HasClaimedFavoriteReward == nil then
+			data.HasClaimedFavoriteReward = false
+		end
+		data.SchemaVersion = 5
 	end
 end
 

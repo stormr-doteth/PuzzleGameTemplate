@@ -29,6 +29,8 @@ export type MenuScreenProps = {
 	onPromptExpertPass: (() -> ())?,
 	dailyPuzzle: any?,
 	dailyPuzzleCompleted: boolean?,
+	onClaimFavoriteReward: (() -> ())?,
+	hasClaimedFavoriteReward: boolean?,
 }
 
 local DIFFICULTIES = {
@@ -518,6 +520,8 @@ local function MenuScreen(props: MenuScreenProps)
 					setWarningText("")
 				end,
 				unlockedImages = props.unlockedImages,
+				onClaimFavoriteReward = props.onClaimFavoriteReward,
+				hasClaimedFavoriteReward = props.hasClaimedFavoriteReward,
 			}),
 		})
 	end
@@ -543,12 +547,167 @@ local function MenuScreen(props: MenuScreenProps)
 		})
 	end
 
-	-- Saved Puzzles + Shop buttons (top-center, shown on pack selection screen)
+	-- HUD icon buttons (left-aligned, only on pack selection screen)
 	if not selectedPackId then
+		menuChildren["HUDIconRow"] = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 8, 0.5, 0),
+			Size = UDim2.fromScale(0.105, 0.7),
+			BackgroundTransparency = 1,
+			ZIndex = 10,
+		}, {
+			Layout = React.createElement("UIListLayout", {
+				FillDirection = Enum.FillDirection.Vertical,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				Padding = UDim.new(0.01, 0),
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			}),
+			ShopBtn = React.createElement("Frame", {
+				LayoutOrder = 1,
+				Size = UDim2.fromScale(1, 0.23),
+				BackgroundTransparency = 1,
+				ZIndex = 10,
+			}, {
+				Icon = React.createElement("ImageButton", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.fromScale(0.5, 0),
+					Size = UDim2.fromScale(0.85, 0.72),
+					BackgroundTransparency = 1,
+					Image = "rbxassetid://135280767376471",
+					ScaleType = Enum.ScaleType.Fit,
+					ZIndex = 10,
+					[React.Event.Activated] = function()
+						setShowShop(true)
+					end,
+				}),
+				Label = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.new(0.5, 0, 0.72, 0),
+					Size = UDim2.new(1, 0, 0.25, 0),
+					BackgroundTransparency = 1,
+					ZIndex = 11,
+					Text = "Shop",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextScaled = true,
+					Font = Theme.Font.heading,
+				}, {
+					LabelStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.black,
+					}),
+				}),
+			}),
+			RobuxShopBtn = React.createElement("Frame", {
+				LayoutOrder = 2,
+				Size = UDim2.fromScale(1, 0.23),
+				BackgroundTransparency = 1,
+				ZIndex = 10,
+			}, {
+				Icon = React.createElement("ImageButton", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.fromScale(0.5, 0),
+					Size = UDim2.fromScale(0.85, 0.72),
+					BackgroundTransparency = 1,
+					Image = "rbxassetid://136485331602074",
+					ScaleType = Enum.ScaleType.Fit,
+					ZIndex = 10,
+					[React.Event.Activated] = function()
+						setShowRobuxShop(true)
+					end,
+				}),
+				Label = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.new(0.5, 0, 0.72, 0),
+					Size = UDim2.new(1, 0, 0.25, 0),
+					BackgroundTransparency = 1,
+					ZIndex = 11,
+					Text = "R$ Shop",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextScaled = true,
+					Font = Theme.Font.heading,
+				}, {
+					LabelStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.black,
+					}),
+				}),
+			}),
+			LeaderBtn = React.createElement("Frame", {
+				LayoutOrder = 3,
+				Size = UDim2.fromScale(1, 0.23),
+				BackgroundTransparency = 1,
+				ZIndex = 10,
+			}, {
+				Icon = React.createElement("ImageButton", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.fromScale(0.5, 0),
+					Size = UDim2.fromScale(0.85, 0.72),
+					BackgroundTransparency = 1,
+					Image = "rbxassetid://87104752122465",
+					ScaleType = Enum.ScaleType.Fit,
+					ZIndex = 10,
+					[React.Event.Activated] = function()
+						setShowLeaderboards(true)
+					end,
+				}),
+				Label = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.new(0.5, 0, 0.72, 0),
+					Size = UDim2.new(1, 0, 0.25, 0),
+					BackgroundTransparency = 1,
+					ZIndex = 11,
+					Text = "Ranks",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextScaled = true,
+					Font = Theme.Font.heading,
+				}, {
+					LabelStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.black,
+					}),
+				}),
+			}),
+			StatsBtn = React.createElement("Frame", {
+				LayoutOrder = 4,
+				Size = UDim2.fromScale(1, 0.23),
+				BackgroundTransparency = 1,
+				ZIndex = 10,
+			}, {
+				Icon = React.createElement("ImageButton", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.fromScale(0.5, 0),
+					Size = UDim2.fromScale(0.85, 0.72),
+					BackgroundTransparency = 1,
+					Image = "rbxassetid://80087999124116",
+					ScaleType = Enum.ScaleType.Fit,
+					ZIndex = 10,
+					[React.Event.Activated] = function()
+						setShowStats(true)
+					end,
+				}),
+				Label = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.new(0.5, 0, 0.72, 0),
+					Size = UDim2.new(1, 0, 0.25, 0),
+					BackgroundTransparency = 1,
+					ZIndex = 11,
+					Text = "Stats",
+					TextColor3 = Theme.Colors.textPrimary,
+					TextScaled = true,
+					Font = Theme.Font.heading,
+				}, {
+					LabelStroke = React.createElement("UIStroke", {
+						Thickness = 2,
+						Color = Theme.Colors.black,
+					}),
+				}),
+			}),
+		})
+
 		if hasSaves then
 			menuChildren["SavedPuzzlesBtn"] = React.createElement("TextButton", {
 				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.new(0.5, -4, 0, -topInset + 4),
+				Position = UDim2.new(1, -12, 0, -topInset + 4),
 				Size = UDim2.fromOffset(160, 36),
 				BackgroundColor3 = Theme.Colors.accentBlue,
 				Text = "Saved Puzzles",
@@ -558,47 +717,6 @@ local function MenuScreen(props: MenuScreenProps)
 				ZIndex = 10,
 				[React.Event.Activated] = function()
 					setShowSavedPuzzles(true)
-				end,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-				Stroke = React.createElement("UIStroke", {
-					Color = Theme.Colors.border,
-					Thickness = 1.5,
-				}),
-			})
-			menuChildren["ShopBtnPack"] = React.createElement("TextButton", {
-				AnchorPoint = Vector2.new(0, 0),
-				Position = UDim2.new(0.5, 4, 0, -topInset + 4),
-				Size = UDim2.fromOffset(100, 36),
-				BackgroundColor3 = Theme.Colors.accentBlue,
-				Text = "Shop",
-				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.label,
-				Font = Theme.Font.bold,
-				ZIndex = 10,
-				[React.Event.Activated] = function()
-					setShowShop(true)
-				end,
-			}, {
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
-				Stroke = React.createElement("UIStroke", {
-					Color = Theme.Colors.border,
-					Thickness = 1.5,
-				}),
-			})
-		else
-			menuChildren["ShopBtnPack"] = React.createElement("TextButton", {
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.5, 0, 0, -topInset + 4),
-				Size = UDim2.fromOffset(100, 36),
-				BackgroundColor3 = Theme.Colors.accentBlue,
-				Text = "Shop",
-				TextColor3 = Theme.Colors.textPrimary,
-				TextSize = Theme.TextSize.label,
-				Font = Theme.Font.bold,
-				ZIndex = 10,
-				[React.Event.Activated] = function()
-					setShowShop(true)
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),

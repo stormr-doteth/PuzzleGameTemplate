@@ -267,6 +267,7 @@ function PuzzleHandler.Init()
 			dailyReward_streak = profileData.DailyReward_Streak or 0,
 			dailyPuzzle_lastCompletionDate = profileData.DailyPuzzle_LastCompletionDate or "",
 			spinWheel_lastFreeSpinDate = profileData.SpinWheel_LastFreeSpinDate or "",
+			hasClaimedFavoriteReward = profileData.HasClaimedFavoriteReward == true,
 		}
 	end
 

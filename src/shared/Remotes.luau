@@ -67,8 +67,11 @@ local REMOTE_FUNCTIONS = {
 	"GetDailyPuzzle",         -- returns { puzzle, completed, leaderboard }
 	"GetDailyPuzzleLeaderboard", -- returns top 20 times
 	"SpinWheel",              -- returns { success, segmentIndex, reward }
+	"ClaimFavoriteReward",    -- returns { success, unlockedIds, packId }
 	"GetSpinWheelStatus",     -- returns { canFreeSpin, lastFreeSpinTimestamp, paidSpinsRestricted }
 	"UseRoomHint",            -- client → server: returns { success, hintsRemaining, pieceId } (multiplayer hint)
+	"AdminResetData",         -- client → server: admin-only data reset, returns { success }
+	"AdminGetSessionTimes",   -- client → server: admin-only, returns { { name, userId, sessionSeconds } }
 }
 
 local Remotes = {}

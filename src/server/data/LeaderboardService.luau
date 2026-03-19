@@ -14,6 +14,22 @@ local LeaderboardService = {}
 
 local datastoreCache: { [string]: OrderedDataStore } = {}
 
+-- Caches for faster leaderboard loading
+local leaderboardCache: { [string]: { data: any, timestamp: number } } = {}
+local CACHE_TTL = 30 -- seconds
+
+local nameCache: { [number]: string } = {}
+
+local function getDisplayName(userId: number): string
+	if nameCache[userId] then return nameCache[userId] end
+	local name = "Player"
+	pcall(function()
+		name = Players:GetNameFromUserIdAsync(userId)
+	end)
+	nameCache[userId] = name
+	return name
+end
+
 local function getDataStore(difficultyId: string): OrderedDataStore?
 	if not datastoreCache[difficultyId] then
 		local ok, store = pcall(function()
@@ -47,11 +63,20 @@ function LeaderboardService.submitTime(userId: number, difficultyId: string, tim
 
 	if not ok then
 		warn("[LeaderboardService] Failed to submit time:", err)
+	else
+		-- Invalidate cache so new personal bests show up promptly
+		leaderboardCache[difficultyId] = nil
 	end
 end
 
 -- Get top N times for a difficulty
 function LeaderboardService.getTopTimes(difficultyId: string, count: number): { { userId: number, displayName: string, time: number } }
+	-- Check cache first
+	local cached = leaderboardCache[difficultyId]
+	if cached and (os.clock() - cached.timestamp) < CACHE_TTL then
+		return cached.data
+	end
+
 	local store = getDataStore(difficultyId)
 	local results = {}
 	if not store then return results end
@@ -71,11 +96,7 @@ function LeaderboardService.getTopTimes(difficultyId: string, count: number): { 
 		local timeMs = entry.value
 		local timeSeconds = timeMs / 1000
 
-		-- Try to get display name
-		local displayName = "Player"
-		pcall(function()
-			displayName = Players:GetNameFromUserIdAsync(userId)
-		end)
+		local displayName = getDisplayName(userId)
 
 		-- Try to get title and VIP status from profile (online players only)
 		local title = ""
@@ -102,6 +123,9 @@ function LeaderboardService.getTopTimes(difficultyId: string, count: number): { 
 			isVIP = isVIP,
 		})
 	end
+
+	-- Cache the results
+	leaderboardCache[difficultyId] = { data = results, timestamp = os.clock() }
 
 	return results
 end

@@ -66,3 +66,15 @@ pcall(function()
 	local SpinWheelHandler = require(script:WaitForChild("handlers"):WaitForChild("SpinWheelHandler"))
 	SpinWheelHandler.Init()
 end)
+
+-- Initialize FavoriteRewardHandler
+pcall(function()
+	local FavoriteRewardHandler = require(script:WaitForChild("handlers"):WaitForChild("FavoriteRewardHandler"))
+	FavoriteRewardHandler.Init()
+end)
+
+-- Initialize AdminHandler
+pcall(function()
+	local AdminHandler = require(script:WaitForChild("handlers"):WaitForChild("AdminHandler"))
+	AdminHandler.Init()
+end)

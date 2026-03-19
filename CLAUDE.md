@@ -58,7 +58,7 @@ src/
 
 ## Editor Rules
 - **Indentation**: All `.luau` files use **tabs** for indentation (not spaces). The Read tool displays tabs as spaces, so never trust the visual indentation from Read output when constructing Edit strings.
-- **Edit tool tab workaround**: When the Edit tool fails to match due to tab/space confusion, use Python (`open/read/replace/write`) via Bash instead — it handles raw bytes correctly.
+- **Always use the Edit tool directly** to modify `.luau` files. Never use Python scripts or Bash workarounds for file edits.
 - **Unicode escapes**: Luau files use `\u{XXXX}` syntax for unicode (e.g., `\u{2713}` for checkmark, `\u{1F512}` for lock). These are literal backslash sequences in the source, not the rendered characters.
 
 ## UI Style Guide

@@ -2,7 +2,7 @@ local SoundServiceGame = game:GetService("SoundService")
 
 local MusicService = {}
 
-local DEFAULT_PLAYLIST = { "rbxassetid://129922561211527" }
+local DEFAULT_PLAYLIST = { "rbxassetid://129922561211527", "rbxassetid://82939690072705" }
 local DEFAULT_VOLUME = 0.3
 
 local playlist: { string } = DEFAULT_PLAYLIST
