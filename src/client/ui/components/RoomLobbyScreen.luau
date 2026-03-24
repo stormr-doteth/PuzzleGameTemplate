@@ -138,12 +138,38 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextScaled = true,
 		}),
+		RoomCode = if roomInfo and roomInfo.roomId then React.createElement("Frame", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromScale(0.32, 0.5),
+			Size = UDim2.fromScale(0.15, 0.7),
+			BackgroundColor3 = Theme.Colors.bgElevated,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+			Stroke = React.createElement("UIStroke", {
+				Thickness = 1.5,
+				Color = Theme.Colors.border,
+			}),
+			Label = React.createElement("TextLabel", {
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				Text = "Code: " .. roomInfo.roomId,
+				TextColor3 = Theme.Colors.accentCyan,
+				TextSize = Theme.TextSize.label,
+				Font = Theme.Font.bold,
+				TextScaled = true,
+			}, {
+				TextPadding = React.createElement("UIPadding", {
+					PaddingLeft = UDim.new(0.08, 0),
+					PaddingRight = UDim.new(0.08, 0),
+				}),
+			}),
+		}) else nil,
 		PlayerCount = React.createElement("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromScale(0.2, 0.6),
+			Position = UDim2.fromScale(0.55, 0.5),
+			Size = UDim2.fromScale(0.12, 0.6),
 			BackgroundTransparency = 1,
-			Text = "Players " .. #players .. "/" .. maxPlayers,
+			Text = #players .. "/" .. maxPlayers,
 			TextColor3 = Theme.Colors.textMuted,
 			TextSize = Theme.TextSize.label,
 			Font = Theme.Font.medium,

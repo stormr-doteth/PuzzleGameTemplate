@@ -119,14 +119,22 @@ local function handleSit(seat: Seat, tableId: string, seatIndex: number)
 	local maxPlayers = getMaxPlayers(tableType)
 	local roomId: string? = nil
 
+	local roomInProgress = false
+
 	if tableType:match("^multi") then
 		-- Check if this table already has a room
 		local existingRoomId = tableRooms[tableId]
 		if existingRoomId then
-			-- Join existing room
-			local joined = RoomManager.JoinRoomInternal(player, existingRoomId)
-			if joined then
-				roomId = existingRoomId
+			local roomInfo = RoomManager.GetRoomInfo(existingRoomId)
+			if roomInfo and roomInfo.state == "playing" then
+				-- Don't auto-join; client will show code entry screen
+				roomInProgress = true
+			else
+				-- Join existing room (lobby state)
+				local joined = RoomManager.JoinRoomInternal(player, existingRoomId)
+				if joined then
+					roomId = existingRoomId
+				end
 			end
 		else
 			-- Create new room (first sitter)
@@ -147,6 +155,7 @@ local function handleSit(seat: Seat, tableId: string, seatIndex: number)
 		tableType = tableType,
 		seatIndex = seatIndex,
 		roomId = roomId,
+		roomInProgress = roomInProgress,
 	})
 
 	fireOccupancyChanged(tableId)
@@ -361,9 +370,7 @@ function TableManager.OnRoomStateChanged(tableId: string, newState: string?, pla
 	local tableModel = tableModels[tableId]
 	if not tableModel then return end
 
-	if newState == "playing" then
-		TableStatusService.SetSeatsEnabled(tableModel, false)
-	elseif newState == "lobby" or newState == nil then
+	if newState == "lobby" or newState == nil then
 		TableStatusService.SetSeatsEnabled(tableModel, true)
 	end
 end

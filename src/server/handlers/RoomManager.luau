@@ -555,8 +555,8 @@ function RoomManager.Init()
 			return { error = "Room not found" }
 		end
 
-		if room.state ~= "lobby" then
-			return { error = "Room is already in progress" }
+		if room.state ~= "lobby" and room.state ~= "playing" then
+			return { error = "Room cannot be joined" }
 		end
 
 		-- Count players
@@ -580,7 +580,33 @@ function RoomManager.Init()
 			},
 		}, userId)
 
-		return { roomInfo = getRoomInfo(room) }
+		local response: any = { roomInfo = getRoomInfo(room) }
+
+		-- If room is playing, build late-join snapshot
+		if room.state == "playing" and room.puzzleDef then
+			local piecesData = {}
+			for pieceId, piece in room.pieces do
+				piecesData[tostring(pieceId)] = {
+					x = piece.x,
+					y = piece.y,
+					zIndex = piece.zIndex,
+					locked = piece.locked,
+					groupId = piece.groupId,
+				}
+			end
+			local groupsData = {}
+			for groupId, memberIds in room.groups do
+				groupsData[tostring(groupId)] = memberIds
+			end
+			response.lateJoin = {
+				puzzleDef = room.puzzleDef,
+				pieces = piecesData,
+				config = room.config,
+				groups = groupsData,
+			}
+		end
+
+		return response
 	end
 
 	-- LeaveRoom

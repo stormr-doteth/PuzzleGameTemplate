@@ -26,6 +26,7 @@ local DailyRewardModal = require(script.Parent.components.DailyRewardModal)
 local SpinWheelModal = require(script.Parent.components.SpinWheelModal)
 local LikeFavoriteModal = require(script.Parent.components.LikeFavoriteModal)
 local DevToolPanel = require(script.Parent.components.DevToolPanel)
+local RoomCodeEntryScreen = require(script.Parent.components.RoomCodeEntryScreen)
 
 -- SeatingService loaded optionally
 local SeatingService = nil
@@ -34,7 +35,7 @@ pcall(function()
 end)
 
 
-type GameState = "walking" | "menu" | "playing" | "complete" | "admiring" | "room_lobby" | "room_playing" | "room_complete"
+type GameState = "walking" | "menu" | "playing" | "complete" | "admiring" | "room_lobby" | "room_playing" | "room_complete" | "room_code_entry"
 
 local function App(props)
 	local playerGui = props.playerGui
@@ -70,6 +71,9 @@ local function App(props)
 	local roomConfig, setRoomConfig = React.useState(nil :: any)
 	-- Admire mode tracking for multiplayer
 	local admireIsMultiplayer, setAdmireIsMultiplayer = React.useState(false)
+
+	-- Room code entry error state
+	local roomJoinError, setRoomJoinError = React.useState(nil :: string?)
 
 	-- Loading state for initial data fetch
 	local isDataLoading, setIsDataLoading = React.useState(true)
@@ -431,18 +435,24 @@ local function App(props)
 				if data.tableType == "single" then
 					setGameState("menu")
 				elseif string.find(data.tableType, "^multi") then
-					-- Fetch room info via GetTableInfo
-					task.spawn(function()
-						local getTableInfo = remotes:FindFirstChild("GetTableInfo")
-						if getTableInfo and getTableInfo:IsA("RemoteFunction") then
-							local ok, result = pcall(function() return getTableInfo:InvokeServer(data.tableId) end)
-							if ok and result and result.roomInfo then
-								setRoomInfo(result.roomInfo)
-								setRoomConfig(result.roomInfo.config)
-								setGameState("room_lobby")
+					if data.roomInProgress then
+						-- Room is playing; show code entry screen instead of joining
+						setRoomJoinError(nil)
+						setGameState("room_code_entry")
+					else
+						-- Fetch room info via GetTableInfo
+						task.spawn(function()
+							local getTableInfo = remotes:FindFirstChild("GetTableInfo")
+							if getTableInfo and getTableInfo:IsA("RemoteFunction") then
+								local ok, result = pcall(function() return getTableInfo:InvokeServer(data.tableId) end)
+								if ok and result and result.roomInfo then
+									setRoomInfo(result.roomInfo)
+									setRoomConfig(result.roomInfo.config)
+									setGameState("room_lobby")
+								end
 							end
-						end
-					end)
+						end)
+					end
 				end
 			end))
 		end
@@ -678,11 +688,30 @@ local function App(props)
 			if ok and result then
 				if result.error then
 					warn("[App] JoinRoom error:", result.error)
+					setRoomJoinError(result.error)
 					return
 				end
+				setRoomJoinError(nil)
 				setRoomInfo(result.roomInfo)
-				setRoomConfig(result.roomInfo and result.roomInfo.config)
-				setGameState("room_lobby")
+
+				-- Late join: skip lobby, go straight to playing
+				if result.lateJoin then
+					local config = result.lateJoin.config
+					setRows(config.rows)
+					setCols(config.cols)
+					setImageAssetId(config.imageAssetId)
+					setImageId(config.imageId)
+					setDifficultyId(config.difficultyId)
+					setRoomPuzzleDef(result.lateJoin.puzzleDef)
+					setRoomInitialPieces(result.lateJoin.pieces)
+					setRoomConfig(config)
+					setCompletionTime(0)
+					setRewardData(nil)
+					setGameState("room_playing")
+				else
+					setRoomConfig(result.roomInfo and result.roomInfo.config)
+					setGameState("room_lobby")
+				end
 			end
 		end)
 	end
@@ -712,6 +741,19 @@ local function App(props)
 			setGameState("walking")
 		end
 		-- Otherwise, PlayerUnseated event will handle the state transition
+	end
+
+	-- Stand up from table without leaving a room (for code entry screen)
+	local function onLeaveTable()
+		setRoomJoinError(nil)
+		local humanoid = Players.LocalPlayer and Players.LocalPlayer.Character
+			and Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.Sit = false
+		end
+		if not seatingInfo then
+			setGameState("walking")
+		end
 	end
 
 	local function onConfigureRoom(config: any)
@@ -1674,6 +1716,15 @@ local function App(props)
 		})
 	end
 
+	-- Room code entry screen (for in-progress tables)
+	if gameState == "room_code_entry" then
+		safeChildren["RoomCodeEntry"] = React.createElement(RoomCodeEntryScreen, {
+			onJoinRoom = onJoinRoom,
+			onLeaveTable = onLeaveTable,
+			joinError = roomJoinError,
+		})
+	end
+
 	-- Room lobby screen
 	if gameState == "room_lobby" then
 		local localPlayer = game:GetService("Players").LocalPlayer
@@ -1693,6 +1744,39 @@ local function App(props)
 			onUnlockImageRobux = onUnlockImageRobux,
 			hasExpertPass = if playerData then playerData.hasExpertPass else nil,
 			onPromptExpertPass = onPromptExpertPass,
+		})
+	end
+
+	-- Room code badge overlay (visible during lobby and playing)
+	if gameState == "room_playing" and roomInfo and roomInfo.roomId then
+		safeChildren["RoomCodeBadge"] = React.createElement("Frame", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(1, -8, 0, 8),
+			Size = UDim2.fromOffset(200, 56),
+			BackgroundColor3 = Theme.Colors.bgElevated,
+			ZIndex = 120,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", {
+				Thickness = 1.5,
+				Color = Theme.Colors.border,
+			}),
+			Label = React.createElement("TextLabel", {
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				Text = "Code: " .. roomInfo.roomId,
+				TextColor3 = Theme.Colors.accentCyan,
+				TextScaled = true,
+				Font = Theme.Font.bold,
+				ZIndex = 121,
+			}, {
+				Padding = React.createElement("UIPadding", {
+					PaddingLeft = UDim.new(0, 10),
+					PaddingRight = UDim.new(0, 10),
+					PaddingTop = UDim.new(0, 6),
+					PaddingBottom = UDim.new(0, 6),
+				}),
+			}),
 		})
 	end
 

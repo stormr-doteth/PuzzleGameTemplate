@@ -68,22 +68,31 @@ local function useMultiplayerPuzzle(initialPieces: { [string]: any }?): (PuzzleS
 	React.useEffect(function()
 		if not initialPieces then return end
 		local newPieces: { [number]: PieceState } = {}
+		local newGroups: { [number]: { number } } = {}
 		for idStr, pieceData in initialPieces do
 			local id = tonumber(idStr)
 			if id then
+				local groupId = if pieceData.groupId then tonumber(pieceData.groupId) or pieceData.groupId else nil
 				newPieces[id] = {
 					x = pieceData.x,
 					y = pieceData.y,
 					zIndex = pieceData.zIndex or 1,
 					locked = pieceData.locked or false,
-					groupId = nil,
+					groupId = groupId,
 				}
+				-- Reconstruct groups from piece groupIds (for late-join)
+				if groupId then
+					if not newGroups[groupId] then
+						newGroups[groupId] = {}
+					end
+					table.insert(newGroups[groupId], id)
+				end
 			end
 		end
 		setPieces(newPieces)
 		setIsComplete(false)
 		setZCounter(2)
-		setGroups({})
+		setGroups(newGroups)
 	end, { initialPieces } :: { any })
 
 	-- Listen for server events
