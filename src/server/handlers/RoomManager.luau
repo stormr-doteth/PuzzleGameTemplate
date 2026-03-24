@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ImageCatalog = require(Shared.ImageCatalog)
 local MonetizationConfig = require(Shared.MonetizationConfig)
 local Remotes = require(Shared.Remotes)
+local ImageCatalog = require(Shared.ImageCatalog)
 local PuzzleGenerator = require(Shared.PuzzleGenerator)
 local ProgressionConfig = require(Shared.ProgressionConfig)
 local RoomTypes = require(Shared.RoomTypes)
@@ -122,6 +123,22 @@ end
 -- Client-side clamping ensures pieces stay visible on any screen size.
 local SCATTER_PAD_X = math.floor(VIRTUAL_W * 0.35) -- 420
 local SCATTER_PAD_Y = math.floor(VIRTUAL_H * 0.35) -- 280
+
+-- Bounds for validating client-sent piece positions (scatter area + margin)
+local POS_MIN_X = -SCATTER_PAD_X - 100
+local POS_MAX_X = VIRTUAL_W + SCATTER_PAD_X + 100
+local POS_MIN_Y = -SCATTER_PAD_Y - 100
+local POS_MAX_Y = VIRTUAL_H + SCATTER_PAD_Y + 100
+
+local function clampPosition(x: number, y: number): (number?, number?)
+	if x ~= x or y ~= y or x == math.huge or x == -math.huge or y == math.huge or y == -math.huge then
+		return nil, nil
+	end
+	return math.clamp(x, POS_MIN_X, POS_MAX_X), math.clamp(y, POS_MIN_Y, POS_MAX_Y)
+end
+
+-- Per-player processing lock for UseRoomHint to prevent double-spend
+local processingRoomHint: { [number]: boolean } = {}
 
 local function generateScrambledPositions(puzzleDef: any, config: any): { [number]: any }
 	local pieces: { [number]: any } = {}
@@ -590,12 +607,38 @@ function RoomManager.Init()
 			return { success = false }
 		end
 
+		-- Validate imageAssetId format (must be a Roblox asset URL)
+		if not string.match(config.imageAssetId, "^rbxassetid://%d+$") then
+			return { success = false }
+		end
+
+		-- Validate difficultyId is a known difficulty
+		if not ProgressionConfig.VALID_DIFFICULTIES[config.difficultyId] then
+			return { success = false }
+		end
+
 		-- Validate row/col ranges to prevent abuse
 		if config.rows < 2 or config.rows > 25 or config.rows ~= math.floor(config.rows) then
 			return { success = false }
 		end
 		if config.cols < 2 or config.cols > 25 or config.cols ~= math.floor(config.cols) then
 			return { success = false }
+		end
+
+		-- Validate difficultyId matches actual rows/cols (prevents reward mismatch exploit)
+		local expectedGrid = ProgressionConfig.DIFFICULTY_GRID[config.difficultyId]
+		if expectedGrid then
+			if config.rows ~= expectedGrid.rows or config.cols ~= expectedGrid.cols then
+				return { success = false }
+			end
+		end
+
+		-- Validate imageId exists in catalog
+		if config.imageId ~= "" then
+			local entry = ImageCatalog.getById(config.imageId)
+			if not entry then
+				return { success = false }
+			end
 		end
 
 		-- Verify Expert gamepass for 25x25 difficulty
@@ -818,20 +861,24 @@ function RoomManager.Init()
 		if piece.locked then return end
 		if piece.claimedBy ~= userId then return end
 
+		-- Validate and clamp position
+		local clampedX, clampedY = clampPosition(data.x, data.y)
+		if not clampedX or not clampedY then return end
+
 		-- Capture old position for delta
 		local oldX, oldY = piece.x, piece.y
-		local dx = data.x - oldX
-		local dy = data.y - oldY
+		local dx = clampedX - oldX
+		local dy = clampedY - oldY
 
 		-- Update server-side position
-		piece.x = data.x
-		piece.y = data.y
+		piece.x = clampedX
+		piece.y = clampedY
 
 		-- Relay to other clients
 		fireToRoom(room, "RoomPieceMoved", {
 			id = pieceId,
-			x = data.x,
-			y = data.y,
+			x = clampedX,
+			y = clampedY,
 			userId = userId,
 		}, userId)
 
@@ -935,14 +982,18 @@ function RoomManager.Init()
 		if piece.locked then return end
 		if piece.claimedBy ~= userId then return end
 
+		-- Validate and clamp drop position
+		local clampedX, clampedY = clampPosition(data.x, data.y)
+		if not clampedX or not clampedY then return end
+
 		-- Update drop position (and sync group followers)
 		local oldX, oldY = piece.x, piece.y
-		piece.x = data.x
-		piece.y = data.y
+		piece.x = clampedX
+		piece.y = clampedY
 
 		if piece.groupId and room.groups[piece.groupId] then
-			local dx = data.x - oldX
-			local dy = data.y - oldY
+			local dx = clampedX - oldX
+			local dy = clampedY - oldY
 			for _, memberId in room.groups[piece.groupId] do
 				if memberId ~= pieceId then
 					local memberPiece = room.pieces[memberId]
@@ -978,8 +1029,8 @@ function RoomManager.Init()
 
 		-- ========== PHASE 1: Grid snap ==========
 		local correctX, correctY = getCorrectPosition(pieceDef, config)
-		local gdx = data.x - correctX
-		local gdy = data.y - correctY
+		local gdx = clampedX - correctX
+		local gdy = clampedY - correctY
 		local gdist = math.sqrt(gdx * gdx + gdy * gdy)
 
 		if gdist <= SNAP_THRESHOLD then
@@ -1216,14 +1267,15 @@ function RoomManager.Init()
 		end
 
 		-- ========== No snap — release all involved pieces ==========
-		piece.x = data.x
-		piece.y = data.y
+		piece.x = clampedX
+		piece.y = clampedY
 		releasePieces(room, allInvolved)
 	end)
 
 	-- UseRoomHint — multiplayer hint: server picks a random unlocked piece, locks it, broadcasts snap
 	local useRoomHint = Remotes.GetFunction("UseRoomHint")
-	useRoomHint.OnServerInvoke = function(player)
+
+	local function processRoomHintInner(player): any
 		local data = ProfileService.GetData(player)
 		if not data then
 			return { success = false, message = "Profile not loaded" }
@@ -1327,9 +1379,22 @@ function RoomManager.Init()
 		return { success = true, hintsRemaining = data.HintsRemaining, pieceId = targetId }
 	end
 
+	useRoomHint.OnServerInvoke = function(player)
+		if processingRoomHint[player.UserId] then
+			return { success = false, message = "Processing" }
+		end
+		processingRoomHint[player.UserId] = true
+		local result = processRoomHintInner(player)
+		processingRoomHint[player.UserId] = nil
+		return result
+	end
+
 	-- Player disconnect handling
 	Players.PlayerRemoving:Connect(function(player)
 		local userId = player.UserId
+		processingRoomHint[userId] = nil
+		lastMoveTime[userId] = nil
+
 		local roomId = playerRooms[userId]
 		if not roomId then return end
 

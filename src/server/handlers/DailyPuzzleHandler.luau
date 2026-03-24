@@ -11,6 +11,9 @@ local ProfileService = require(script.Parent.Parent.data.ProfileService)
 
 local DailyPuzzleHandler = {}
 
+-- Server-side start times for daily puzzle timing
+local dailyStartTimes: { [number]: number } = {}
+
 local datastoreCache: { [string]: OrderedDataStore } = {}
 
 local function getDailyStore(dateString: string): OrderedDataStore?
@@ -64,6 +67,22 @@ function DailyPuzzleHandler.Init()
 	local getDailyLeaderboard = Remotes.GetFunction("GetDailyPuzzleLeaderboard")
 	local dailyCompleted = Remotes.GetEvent("DailyPuzzleCompleted")
 
+	-- Listen for PuzzleStarted to record daily puzzle start times
+	local puzzleStarted = Remotes.GetEvent("PuzzleStarted")
+	puzzleStarted.OnServerEvent:Connect(function(player, data)
+		if type(data) ~= "table" then return end
+		local puzzle = DailyPuzzleConfig.getTodaysPuzzle()
+		if not puzzle then return end
+		if data.imageId == puzzle.imageId and data.difficultyId == puzzle.difficultyId then
+			dailyStartTimes[player.UserId] = os.clock()
+		end
+	end)
+
+	-- Clean up on player leave
+	Players.PlayerRemoving:Connect(function(player)
+		dailyStartTimes[player.UserId] = nil
+	end)
+
 	getDailyPuzzle.OnServerInvoke = function(player)
 		local puzzle = DailyPuzzleConfig.getTodaysPuzzle()
 		if not puzzle then
@@ -102,8 +121,13 @@ function DailyPuzzleHandler.Init()
 		if completionData.imageId ~= puzzle.imageId then return end
 		if completionData.difficultyId ~= puzzle.difficultyId then return end
 
-		local completionTime = completionData.completionTime
-		if type(completionTime) ~= "number" or completionTime <= 0 then return end
+		-- Use server-side timing instead of client-provided completionTime
+		local startTime = dailyStartTimes[player.UserId]
+		if not startTime then return end
+		local completionTime = os.clock() - startTime
+		dailyStartTimes[player.UserId] = nil
+
+		if completionTime <= 0 then return end
 
 		-- Anti-cheat: minimum completion time
 		local minTime = ProgressionConfig.MIN_COMPLETION_TIMES[puzzle.difficultyId]

@@ -14,6 +14,15 @@ local TitleService = {}
 -- Track current title per player to skip redundant updates
 local currentTitles: { [number]: string } = {}
 
+-- Server-owned container for all overhead BillboardGuis (anti-exploit)
+local overheadFolder: Folder = nil
+
+-- Per-player billboard tracking for cleanup and updates
+local playerBillboards: { [number]: { title: BillboardGui?, name: BillboardGui? } } = {}
+
+-- Per-player cleanup connections
+local playerConnections: { [number]: { RBXScriptConnection } } = {}
+
 local VIP_GOLD = Color3.fromRGB(255, 215, 0)
 
 local function hasVIP(player: Player): boolean
@@ -23,15 +32,53 @@ local function hasVIP(player: Player): boolean
 	return ok and owns
 end
 
+-- Protect a TextLabel property from client modification
+local function protectProperty(label: TextLabel, property: string, expectedValue: any): RBXScriptConnection
+	return label:GetPropertyChangedSignal(property):Connect(function()
+		if label[property] ~= expectedValue then
+			label[property] = expectedValue
+		end
+	end)
+end
+
+local function cleanupPlayer(userId: number)
+	local billboards = playerBillboards[userId]
+	if billboards then
+		if billboards.title then
+			billboards.title:Destroy()
+		end
+		if billboards.name then
+			billboards.name:Destroy()
+		end
+		playerBillboards[userId] = nil
+	end
+
+	local connections = playerConnections[userId]
+	if connections then
+		for _, conn in connections do
+			conn:Disconnect()
+		end
+		playerConnections[userId] = nil
+	end
+end
+
 local function createBillboard(head: BasePart, titleName: string, player: Player)
+	local userId = player.UserId
+
+	-- Clean up any existing billboards first (respawn case)
+	cleanupPlayer(userId)
+
+	local connections: { RBXScriptConnection } = {}
+
 	-- Title billboard (rank/title) — scale-based sizing to stay consistent with zoom
 	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "TitleBillboard"
+	billboard.Name = "TitleBillboard_" .. userId
+	billboard.Adornee = head
 	billboard.StudsOffset = Vector3.new(0, 2.8, 0)
 	billboard.MaxDistance = 50
 	billboard.AlwaysOnTop = false
 	billboard.Size = UDim2.new(5, 0, 0.4, 0)
-	billboard.Parent = head
+	billboard.Parent = overheadFolder
 
 	local label = Instance.new("TextLabel")
 	label.Name = "TitleLabel"
@@ -43,6 +90,10 @@ local function createBillboard(head: BasePart, titleName: string, player: Player
 	label.TextScaled = true
 	label.Parent = billboard
 
+	-- Protect title label properties from client modification
+	table.insert(connections, protectProperty(label, "Text", titleName))
+	table.insert(connections, protectProperty(label, "TextColor3", Theme.Colors.headerGold))
+
 	local titleStroke = Instance.new("UIStroke")
 	titleStroke.Color = Color3.fromRGB(0, 0, 0)
 	titleStroke.Thickness = 3
@@ -52,24 +103,31 @@ local function createBillboard(head: BasePart, titleName: string, player: Player
 	-- Name billboard (display name + VIP tag)
 	local isVIP = hasVIP(player)
 	local displayName = player.DisplayName
+	local nameText = if isVIP then "[VIP] " .. displayName else displayName
+	local nameColor = if isVIP then VIP_GOLD else Theme.Colors.textPrimary
 
 	local nameBillboard = Instance.new("BillboardGui")
-	nameBillboard.Name = "NameBillboard"
+	nameBillboard.Name = "NameBillboard_" .. userId
+	nameBillboard.Adornee = head
 	nameBillboard.StudsOffset = Vector3.new(0, 2, 0)
 	nameBillboard.MaxDistance = 50
 	nameBillboard.AlwaysOnTop = false
 	nameBillboard.Size = UDim2.new(5, 0, 0.4, 0)
-	nameBillboard.Parent = head
+	nameBillboard.Parent = overheadFolder
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "NameLabel"
 	nameLabel.Size = UDim2.fromScale(1, 1)
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Text = if isVIP then "[VIP] " .. displayName else displayName
+	nameLabel.Text = nameText
 	nameLabel.FontFace = Font.new("rbxasset://fonts/families/FredokaOne.json", Enum.FontWeight.Bold)
-	nameLabel.TextColor3 = if isVIP then VIP_GOLD else Theme.Colors.textPrimary
+	nameLabel.TextColor3 = nameColor
 	nameLabel.TextScaled = true
 	nameLabel.Parent = nameBillboard
+
+	-- Protect name label properties from client modification
+	table.insert(connections, protectProperty(nameLabel, "Text", nameText))
+	table.insert(connections, protectProperty(nameLabel, "TextColor3", nameColor))
 
 	local nameStroke = Instance.new("UIStroke")
 	nameStroke.Color = Color3.fromRGB(0, 0, 0)
@@ -77,7 +135,23 @@ local function createBillboard(head: BasePart, titleName: string, player: Player
 	nameStroke.Transparency = 0
 	nameStroke.Parent = nameLabel
 
+	playerBillboards[userId] = { title = billboard, name = nameBillboard }
+	playerConnections[userId] = connections
+
 	return billboard
+end
+
+-- Update the protected value for a label property and refresh the protection connection
+local function updateProtectedText(userId: number, label: TextLabel, property: string, newValue: any)
+	-- Disconnect old protection for this property
+	local connections = playerConnections[userId]
+	if not connections then return end
+
+	-- Update the property directly (this will fire the signal but we replace protection after)
+	label[property] = newValue
+
+	-- Replace all connections with fresh ones (simpler than tracking individual ones)
+	-- We'll rebuild connections when needed in UpdateTitle
 end
 
 function TitleService.UpdateTitle(player: Player, puzzlesCompletedByDifficulty: { [string]: number })
@@ -95,32 +169,87 @@ function TitleService.UpdateTitle(player: Player, puzzlesCompletedByDifficulty: 
 	local head = character:FindFirstChild("Head")
 	if not head then return end
 
-	-- Find or create billboard
-	local billboard = head:FindFirstChild("TitleBillboard")
-	if billboard then
-		local label = billboard:FindFirstChild("TitleLabel")
+	local userId = player.UserId
+	local billboards = playerBillboards[userId]
+
+	if billboards and billboards.title then
+		local label = billboards.title:FindFirstChild("TitleLabel")
 		if label then
+			-- Disconnect old protections and set up new ones
+			local oldConns = playerConnections[userId]
+			if oldConns then
+				for _, conn in oldConns do
+					conn:Disconnect()
+				end
+			end
+
 			label.Text = titleName
+
+			-- Rebuild all protections
+			local connections: { RBXScriptConnection } = {}
+			table.insert(connections, protectProperty(label, "Text", titleName))
+			table.insert(connections, protectProperty(label, "TextColor3", Theme.Colors.headerGold))
+
+			-- Re-protect name label too
+			if billboards.name then
+				local nameLabel = billboards.name:FindFirstChild("NameLabel")
+				if nameLabel then
+					table.insert(connections, protectProperty(nameLabel, "Text", nameLabel.Text))
+					table.insert(connections, protectProperty(nameLabel, "TextColor3", nameLabel.TextColor3))
+				end
+			end
+
+			playerConnections[userId] = connections
 		end
 	else
 		createBillboard(head, titleName, player)
 	end
+end
 
-	-- Refresh name billboard (in case DisplayName or VIP status changed)
-	local nameBillboard = head:FindFirstChild("NameBillboard")
-	if nameBillboard then
-		local nameLabel = nameBillboard:FindFirstChild("NameLabel")
-		if nameLabel then
-			local isVIP = hasVIP(player)
-			local displayName = player.DisplayName
-			nameLabel.Text = if isVIP then "[VIP] " .. displayName else displayName
-			nameLabel.TextColor3 = if isVIP then VIP_GOLD else Theme.Colors.textPrimary
+-- Refresh name billboard text/color and rebuild protections
+local function refreshNameBillboard(player: Player, nameText: string, nameColor: Color3)
+	local userId = player.UserId
+	local billboards = playerBillboards[userId]
+	if not billboards or not billboards.name then return end
+
+	local nameLabel = billboards.name:FindFirstChild("NameLabel")
+	if not nameLabel then return end
+
+	-- Disconnect old protections
+	local oldConns = playerConnections[userId]
+	if oldConns then
+		for _, conn in oldConns do
+			conn:Disconnect()
 		end
 	end
+
+	nameLabel.Text = nameText
+	nameLabel.TextColor3 = nameColor
+
+	-- Rebuild all protections
+	local connections: { RBXScriptConnection } = {}
+	table.insert(connections, protectProperty(nameLabel, "Text", nameText))
+	table.insert(connections, protectProperty(nameLabel, "TextColor3", nameColor))
+
+	-- Re-protect title label too
+	if billboards.title then
+		local titleLabel = billboards.title:FindFirstChild("TitleLabel")
+		if titleLabel then
+			table.insert(connections, protectProperty(titleLabel, "Text", titleLabel.Text))
+			table.insert(connections, protectProperty(titleLabel, "TextColor3", titleLabel.TextColor3))
+		end
+	end
+
+	playerConnections[userId] = connections
 end
 
 function TitleService.Init(profileService)
 	ProfileService = profileService
+
+	-- Create server-owned container for overhead BillboardGuis
+	overheadFolder = Instance.new("Folder")
+	overheadFolder.Name = "OverheadGuis"
+	overheadFolder.Parent = workspace
 
 	local function onCharacterAdded(player: Player)
 		-- Hide default Roblox nametag
@@ -146,6 +275,9 @@ function TitleService.Init(profileService)
 			onCharacterAdded(player)
 		end
 		player.CharacterAdded:Connect(function()
+			-- Clean up old billboards from previous character
+			cleanupPlayer(player.UserId)
+			currentTitles[player.UserId] = nil
 			-- Wait briefly for Head to load
 			task.wait(0.5)
 			onCharacterAdded(player)
@@ -163,23 +295,14 @@ function TitleService.Init(profileService)
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
 		if wasPurchased and gamePassId == MonetizationConfig.GAME_PASSES.VIP.id then
 			player:SetAttribute("IsVIP", true)
-			-- Refresh overhead name billboard
-			local character = player.Character
-			local head = character and character:FindFirstChild("Head")
-			local nameBillboard = head and head:FindFirstChild("NameBillboard")
-			if nameBillboard then
-				local nameLabel = nameBillboard:FindFirstChild("NameLabel")
-				if nameLabel then
-					nameLabel.Text = "[VIP] " .. player.DisplayName
-					nameLabel.TextColor3 = VIP_GOLD
-				end
-			end
+			refreshNameBillboard(player, "[VIP] " .. player.DisplayName, VIP_GOLD)
 		end
 	end)
 
 	-- Clean up on leave
 	Players.PlayerRemoving:Connect(function(player)
 		currentTitles[player.UserId] = nil
+		cleanupPlayer(player.UserId)
 	end)
 end
 

@@ -1,34 +1,32 @@
 local AssetService = game:GetService("AssetService")
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local PuzzleTypes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PuzzleTypes"))
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local PuzzleTypes = require(Shared.PuzzleTypes)
 
 type PieceDefinition = PuzzleTypes.PieceDefinition
 type PuzzleDefinition = PuzzleTypes.PuzzleDefinition
-type PieceImageData = PuzzleTypes.PieceImageData
 
 local TAB_WIDTH_RATIO = 0.35
 local TAB_HEIGHT_RATIO = 0.18
 local AA_RADIUS = 2
 local OUTLINE_THICKNESS = 4
+local YIELD_EVERY_N_PIECES = 8
 
 local PieceMasker = {}
 
--- Check if a point is inside a tab semicircle on a given edge
--- Returns: distance from the semicircle boundary (negative = inside, positive = outside)
 local function semicircleSignedDistance(
 	px: number,
 	py: number,
 	centerX: number,
 	centerY: number,
 	radius: number,
-	edgeSide: string -- "top", "bottom", "left", "right"
+	edgeSide: string
 ): number
 	local dx = px - centerX
 	local dy = py - centerY
 	local dist = math.sqrt(dx * dx + dy * dy)
 
-	-- Check if on the correct side of the edge for the semicircle
 	local onCorrectSide = false
 	if edgeSide == "top" then
 		onCorrectSide = py <= centerY
@@ -43,7 +41,6 @@ local function semicircleSignedDistance(
 	if onCorrectSide then
 		return dist - radius
 	else
-		-- On the wrong side of the flat edge, use distance from the diameter line
 		if edgeSide == "top" or edgeSide == "bottom" then
 			if math.abs(dx) <= radius then
 				return dist - radius
@@ -57,11 +54,9 @@ local function semicircleSignedDistance(
 	end
 end
 
--- Compute the signed distance from a pixel to the piece boundary.
--- Negative = inside the piece, positive = outside.
 local function getPieceSignedDistance(
-	px: number, -- x in piece image space (0-based)
-	py: number, -- y in piece image space (0-based)
+	px: number,
+	py: number,
 	cellW: number,
 	cellH: number,
 	tabW: number,
@@ -72,41 +67,27 @@ local function getPieceSignedDistance(
 	padLeft: number,
 	edges: PuzzleTypes.PieceEdges
 ): number
-	-- Convert to cell-local coordinates where (0,0) is top-left of the base cell
 	local cx = px - padLeft
 	local cy = py - padTop
 
-	-- Start by checking if inside base rectangle
-	local inBaseRect = cx >= 0 and cx < cellW and cy >= 0 and cy < cellH
-
-	-- Calculate tab/indent semicircle centers and radii for each edge
 	local tabRadius = tabW / 2
 
-	-- Base rectangle signed distance (negative = inside)
 	local baseDistX = math.max(-cx, cx - cellW)
 	local baseDistY = math.max(-cy, cy - cellH)
-	local baseDist = math.max(baseDistX, baseDistY)
+	local dist = math.max(baseDistX, baseDistY)
 
-	-- Start with base rect signed distance
-	-- For a union/subtraction SDF, we combine using min (union) and max (intersection/subtraction)
-	local dist = baseDist
-
-	-- Top edge
 	if edges.top == "tab" then
 		local tcx = cellW / 2
 		local tcy = 0
 		local sd = semicircleSignedDistance(cx, cy, tcx, tcy, tabRadius, "top")
-		-- Union: piece = base rect OR tab semicircle
 		dist = math.min(dist, sd)
 	elseif edges.top == "indent" then
 		local tcx = cellW / 2
 		local tcy = 0
 		local sd = semicircleSignedDistance(cx, cy, tcx, tcy, tabRadius, "bottom")
-		-- Subtraction: piece = base rect AND NOT indent semicircle
 		dist = math.max(dist, -sd)
 	end
 
-	-- Bottom edge
 	if edges.bottom == "tab" then
 		local tcx = cellW / 2
 		local tcy = cellH
@@ -119,7 +100,6 @@ local function getPieceSignedDistance(
 		dist = math.max(dist, -sd)
 	end
 
-	-- Left edge
 	if edges.left == "tab" then
 		local tcx = 0
 		local tcy = cellH / 2
@@ -132,7 +112,6 @@ local function getPieceSignedDistance(
 		dist = math.max(dist, -sd)
 	end
 
-	-- Right edge
 	if edges.right == "tab" then
 		local tcx = cellW
 		local tcy = cellH / 2
@@ -148,11 +127,9 @@ local function getPieceSignedDistance(
 	return dist
 end
 
--- Determine if a pixel (in local piece coordinates) is inside the jigsaw piece shape
--- Returns a value: 1 = fully inside, 0 = fully outside, 0..1 = anti-aliased edge
 local function getPieceAlpha(
-	px: number, -- x in piece image space (0-based)
-	py: number, -- y in piece image space (0-based)
+	px: number,
+	py: number,
 	cellW: number,
 	cellH: number,
 	tabW: number,
@@ -164,21 +141,16 @@ local function getPieceAlpha(
 	edges: PuzzleTypes.PieceEdges,
 	aaRadius: number
 ): number
-	-- Convert to cell-local coordinates where (0,0) is top-left of the base cell
 	local cx = px - padLeft
 	local cy = py - padTop
 
-	-- Start by checking if inside base rectangle
 	local inBaseRect = cx >= 0 and cx < cellW and cy >= 0 and cy < cellH
 
-	-- Calculate tab/indent semicircle centers and radii for each edge
 	local tabRadius = tabW / 2
-	local minDist = math.huge -- minimum signed distance to any boundary
+	local minDist = math.huge
 
-	-- Start with base rect
 	local insidePiece = inBaseRect
 
-	-- Top edge
 	if edges.top == "tab" then
 		local tcx = cellW / 2
 		local tcy = 0
@@ -201,7 +173,6 @@ local function getPieceAlpha(
 		end
 	end
 
-	-- Bottom edge
 	if edges.bottom == "tab" then
 		local tcx = cellW / 2
 		local tcy = cellH
@@ -224,7 +195,6 @@ local function getPieceAlpha(
 		end
 	end
 
-	-- Left edge
 	if edges.left == "tab" then
 		local tcx = 0
 		local tcy = cellH / 2
@@ -247,7 +217,6 @@ local function getPieceAlpha(
 		end
 	end
 
-	-- Right edge
 	if edges.right == "tab" then
 		local tcx = cellW
 		local tcy = cellH / 2
@@ -274,7 +243,6 @@ local function getPieceAlpha(
 		return 0
 	end
 
-	-- Anti-aliasing: smooth alpha near boundaries
 	if minDist < aaRadius then
 		return math.clamp(minDist / aaRadius, 0, 1)
 	end
@@ -287,29 +255,25 @@ function PieceMasker.createPieceImages(
 	sourceWidth: number,
 	sourceHeight: number,
 	puzzleDef: PuzzleDefinition
-): { [number]: PieceImageData }
+): { [number]: { image: EditableImage, outlineImage: EditableImage, width: number, height: number, offsetX: number, offsetY: number } }
 	local cellW = math.floor(sourceWidth / puzzleDef.cols)
 	local cellH = math.floor(sourceHeight / puzzleDef.rows)
 	local tabW = math.floor(cellW * TAB_WIDTH_RATIO)
 	local tabH = math.floor(cellH * TAB_HEIGHT_RATIO)
 
-	-- Ensure tab dimensions are even for clean semicircles
 	if tabW % 2 ~= 0 then tabW += 1 end
 	if tabH % 2 ~= 0 then tabH += 1 end
 
-	-- Tab height used as padding (the protrusion depth)
-	-- For semicircles, the radius equals tabW/2, and the protrusion = radius
 	local tabRadius = math.floor(tabW / 2)
 
-	-- Scale outline/AA thickness relative to cell size (tuned for ~500px cells)
 	local scaleFactor = math.min(cellW, cellH) / 500
 	local outlineThickness = math.max(1, math.floor(OUTLINE_THICKNESS * scaleFactor + 0.5))
 	local aaRadius = math.max(1, math.floor(AA_RADIUS * scaleFactor + 0.5))
 
-	local result: { [number]: PieceImageData } = {}
+	local results: { [number]: any } = {}
+	local piecesProcessed = 0
 
 	for _, piece in puzzleDef.pieces do
-		-- Calculate padding needed on each side
 		local padTop = if piece.edges.top == "tab" then tabRadius else 0
 		local padBottom = if piece.edges.bottom == "tab" then tabRadius else 0
 		local padLeft = if piece.edges.left == "tab" then tabRadius else 0
@@ -318,7 +282,6 @@ function PieceMasker.createPieceImages(
 		local pieceW = cellW + padLeft + padRight
 		local pieceH = cellH + padTop + padBottom
 
-		-- Source region top-left (in source image coords)
 		local srcX = (piece.col - 1) * cellW - padLeft
 		local srcY = (piece.row - 1) * cellH - padTop
 
@@ -327,12 +290,9 @@ function PieceMasker.createPieceImages(
 			Size = Vector2.new(pieceW, pieceH),
 		})
 
-		-- Read source pixels row by row and apply mask
-		-- We'll process in chunks for performance
 		for py = 0, pieceH - 1 do
 			local sourcePy = srcY + py
 			if sourcePy >= 0 and sourcePy < sourceHeight then
-				-- Read one row from source at the correct region
 				local readX = math.max(0, srcX)
 				local readEndX = math.min(sourceWidth, srcX + pieceW)
 				local readWidth = readEndX - readX
@@ -343,7 +303,6 @@ function PieceMasker.createPieceImages(
 						Vector2.new(readWidth, 1)
 					)
 
-					-- Create a row buffer for the piece image
 					local pieceRowBuffer = buffer.create(pieceW * 4)
 
 					for px = 0, pieceW - 1 do
@@ -369,7 +328,6 @@ function PieceMasker.createPieceImages(
 								buffer.writeu8(pieceRowBuffer, destOffset + 3, math.floor(a * alpha))
 							end
 						end
-						-- Pixels outside the mask or outside source bounds stay as 0 (transparent)
 					end
 
 					pieceImage:WritePixelsBuffer(
@@ -381,7 +339,7 @@ function PieceMasker.createPieceImages(
 			end
 		end
 
-		-- Generate outline image: white pixels along the SDF boundary
+		-- Generate outline image
 		local outlineImage = AssetService:CreateEditableImage({
 			Size = Vector2.new(pieceW, pieceH),
 		})
@@ -396,7 +354,6 @@ function PieceMasker.createPieceImages(
 					piece.edges
 				)
 
-				-- Outline band: covers boundary and extends slightly outside to hide AA fringe
 				if sd <= aaRadius and -sd <= outlineThickness then
 					local offset = px * 4
 					buffer.writeu8(outlineRowBuffer, offset, 255)
@@ -413,7 +370,7 @@ function PieceMasker.createPieceImages(
 			)
 		end
 
-		result[piece.id] = {
+		results[piece.id] = {
 			image = pieceImage,
 			outlineImage = outlineImage,
 			width = pieceW,
@@ -421,9 +378,14 @@ function PieceMasker.createPieceImages(
 			offsetX = padLeft,
 			offsetY = padTop,
 		}
+
+		piecesProcessed += 1
+		if piecesProcessed % YIELD_EVERY_N_PIECES == 0 then
+			task.wait()
+		end
 	end
 
-	return result
+	return results
 end
 
 return PieceMasker

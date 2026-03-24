@@ -152,28 +152,28 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		timer.reset()
 
 		task.spawn(function()
-			local sourceImage, sourceWidth, sourceHeight = ImageService.loadImage(props.imageAssetId)
-			if not sourceImage then
-				warn("[PuzzleBoard] Failed to load image")
-				setLoadError(true)
-				setIsLoading(false)
-				return
-			end
-
 			local puzzle
 			if props.isMultiplayer and props.roomPuzzleDef then
 				puzzle = props.roomPuzzleDef
 			elseif props.savedState then
-				-- Use saved puzzleDef instead of generating new
 				puzzle = props.savedState.puzzleDef
 			else
 				puzzle = PuzzleGenerator.generatePuzzle(props.rows, props.cols)
 			end
 			setPuzzleDef(puzzle)
 
-			local images = PieceMasker.createPieceImages(
-				sourceImage, sourceWidth, sourceHeight, puzzle
-			)
+			-- Load source image and generate piece images on client
+			local sourceImage, sourceWidth, sourceHeight = ImageService.loadImage(props.imageAssetId)
+			if not sourceImage or not sourceWidth or not sourceHeight then
+				warn("[PuzzleBoard] Failed to load source image:", props.imageAssetId)
+				setLoadError(true)
+				setIsLoading(false)
+				return
+			end
+
+			local images = PieceMasker.createPieceImages(sourceImage, sourceWidth, sourceHeight, puzzle)
+			sourceImage:Destroy()
+
 			setPieceImages(images)
 
 			-- Calculate display sizes
@@ -231,23 +231,18 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				)
 			end
 
-			sourceImage:Destroy()
 			setIsLoading(false)
 			timer.start()
 		end)
 	end, { props.imageAssetId, props.rows, props.cols } :: { any })
 
-	-- Cleanup pieceImages on unmount to prevent memory leaks
+	-- Cleanup EditableImages on unmount
 	React.useEffect(function()
 		return function()
 			if pieceImages then
-				for _, imgData in pieceImages do
-					if imgData.image and typeof(imgData.image) == "Instance" then
-						imgData.image:Destroy()
-					end
-					if imgData.outlineImage and typeof(imgData.outlineImage) == "Instance" then
-						imgData.outlineImage:Destroy()
-					end
+				for _, data in pieceImages do
+					if data.image then data.image:Destroy() end
+					if data.outlineImage then data.outlineImage:Destroy() end
 				end
 			end
 		end

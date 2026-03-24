@@ -68,7 +68,6 @@ local function App(props)
 	local roomPuzzleDef, setRoomPuzzleDef = React.useState(nil :: any)
 	local roomInitialPieces, setRoomInitialPieces = React.useState(nil :: any)
 	local roomConfig, setRoomConfig = React.useState(nil :: any)
-
 	-- Admire mode tracking for multiplayer
 	local admireIsMultiplayer, setAdmireIsMultiplayer = React.useState(false)
 
@@ -462,6 +461,10 @@ local function App(props)
 				setRoomPuzzleDef(nil)
 				setRoomInitialPieces(nil)
 				setRoomConfig(nil)
+	
+	
+	
+	
 				setGameState("walking")
 			end))
 		end
@@ -515,6 +518,19 @@ local function App(props)
 		setRewardData(nil)
 		setResumeState(nil)
 		setGameState("playing")
+
+		-- Notify server of puzzle start for server-side timing
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local puzzleStartedEvent = remotes:FindFirstChild("PuzzleStarted")
+			if puzzleStartedEvent and puzzleStartedEvent:IsA("RemoteEvent") then
+				puzzleStartedEvent:FireServer({
+					imageId = selectedImageId,
+					difficultyId = selectedDifficultyId,
+				})
+			end
+		end)
 	end
 
 	local function onComplete(elapsedSeconds: number)
@@ -597,6 +613,20 @@ local function App(props)
 		setRewardData(nil)
 		setResumeState(save)
 		setGameState("playing")
+
+		-- Notify server of puzzle resume with prior elapsed time
+		task.spawn(function()
+			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+			if not remotes then return end
+			local puzzleStartedEvent = remotes:FindFirstChild("PuzzleStarted")
+			if puzzleStartedEvent and puzzleStartedEvent:IsA("RemoteEvent") then
+				puzzleStartedEvent:FireServer({
+					imageId = save.imageId,
+					difficultyId = save.difficultyId,
+					resumedElapsed = save.elapsedSeconds,
+				})
+			end
+		end)
 	end
 
 	local function onDeleteSave(slotIndex: number)
@@ -800,6 +830,10 @@ local function App(props)
 			table.insert(connections, roomReturnedToLobby.OnClientEvent:Connect(function(data)
 				setRoomPuzzleDef(nil)
 				setRoomInitialPieces(nil)
+	
+	
+	
+	
 				setRewardData(nil)
 				setCompletionTime(0)
 				if data.config then
@@ -826,6 +860,10 @@ local function App(props)
 				setRoomPuzzleDef(nil)
 				setRoomInitialPieces(nil)
 				setRoomConfig(nil)
+	
+	
+	
+	
 				-- Stay at menu if seated, otherwise walk
 				setSeatingInfo(function(prev)
 					if prev then
@@ -860,6 +898,10 @@ local function App(props)
 			setRoomPuzzleDef(nil)
 			setRoomInitialPieces(nil)
 			setRoomConfig(nil)
+
+
+
+
 		end
 		-- Stay at the table (menu) if seated, otherwise go to walking
 		if seatingInfo then

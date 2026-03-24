@@ -12,6 +12,9 @@ local FavoriteRewardHandler = {}
 function FavoriteRewardHandler.Init()
 	local claimFavoriteReward = Remotes.GetFunction("ClaimFavoriteReward")
 
+	-- NOTE: Roblox's favorite API is client-only, so the server cannot verify the
+	-- favorite actually happened. The HasClaimedFavoriteReward flag prevents
+	-- double-claims and the reward is cosmetic, so this is an accepted trade-off.
 	claimFavoriteReward.OnServerInvoke = function(player)
 		local profileData = ProfileService.GetData(player)
 		if not profileData then

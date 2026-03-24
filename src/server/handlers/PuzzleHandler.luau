@@ -16,9 +16,20 @@ end)
 
 -- Rate limiting: track last completion time per player
 local lastCompletionTime: { [number]: number } = {}
+-- Per-player lock to prevent same-frame duplicate processing
+local processingCompletion: { [number]: boolean } = {}
+-- Rate limiting for GetPlayerData (1 call per second per player)
+local lastGetDataTime: { [number]: number } = {}
 
 -- Track which players have activated a cash boost for their current puzzle
 local activatedBoosts: { [number]: boolean } = {}
+
+-- Server-side puzzle start times for anti-cheat timing
+local puzzleStartTimes: { [number]: { startTime: number, imageId: string, difficultyId: string } } = {}
+
+-- Per-player processing locks to prevent race-condition double-spending
+local processingHint: { [number]: boolean } = {}
+local processingUnlock: { [number]: boolean } = {}
 
 -- Optional: LeaderboardService (loaded if available)
 local LeaderboardService = nil
@@ -41,7 +52,9 @@ local function validateCompletionData(data: any): (boolean, string?)
 		return false, "Invalid difficultyId"
 	end
 
-	if type(data.completionTime) ~= "number" or data.completionTime <= 0 then
+	if type(data.completionTime) ~= "number" or data.completionTime <= 0
+		or data.completionTime ~= data.completionTime  -- NaN check
+		or data.completionTime == math.huge then
 		return false, "Invalid completionTime"
 	end
 
@@ -79,10 +92,62 @@ function PuzzleHandler.Init()
 	Players.PlayerRemoving:Connect(function(player)
 		activatedBoosts[player.UserId] = nil
 		lastCompletionTime[player.UserId] = nil
+		processingCompletion[player.UserId] = nil
+		lastGetDataTime[player.UserId] = nil
+		puzzleStartTimes[player.UserId] = nil
+		processingHint[player.UserId] = nil
+		processingUnlock[player.UserId] = nil
+	end)
+
+	-- Handle PuzzleStarted — record server-side start time
+	local puzzleStarted = Remotes.GetEvent("PuzzleStarted")
+	puzzleStarted.OnServerEvent:Connect(function(player, data)
+		if type(data) ~= "table" then return end
+		if type(data.imageId) ~= "string" or data.imageId == "" then return end
+		if type(data.difficultyId) ~= "string" or not ProgressionConfig.VALID_DIFFICULTIES[data.difficultyId] then return end
+
+		local startTime = os.clock()
+
+		-- Handle resumed puzzles: adjust start time to account for prior elapsed
+		if data.resumedElapsed ~= nil then
+			if type(data.resumedElapsed) ~= "number" or data.resumedElapsed < 0
+				or data.resumedElapsed ~= data.resumedElapsed  -- NaN check
+				or data.resumedElapsed == math.huge then
+				return
+			end
+			-- Cap at 24 hours to prevent abuse
+			if data.resumedElapsed > 86400 then return end
+			-- Validate that a matching saved puzzle exists on server
+			local profileData = ProfileService.GetData(player)
+			if profileData and profileData.SavedPuzzles then
+				local found = false
+				for _, save in profileData.SavedPuzzles do
+					if save.imageId == data.imageId and save.difficultyId == data.difficultyId then
+						found = true
+						break
+					end
+				end
+				if not found then return end
+			else
+				return
+			end
+			startTime = os.clock() - data.resumedElapsed
+		end
+
+		puzzleStartTimes[player.UserId] = {
+			startTime = startTime,
+			imageId = data.imageId,
+			difficultyId = data.difficultyId,
+		}
 	end)
 
 	-- Handle puzzle completion
 	puzzleCompleted.OnServerEvent:Connect(function(player, data)
+		-- Prevent same-frame duplicate processing
+		if processingCompletion[player.UserId] then
+			return
+		end
+
 		-- Rate limiting
 		local now = os.clock()
 		local lastTime = lastCompletionTime[player.UserId]
@@ -91,6 +156,7 @@ function PuzzleHandler.Init()
 			return
 		end
 		lastCompletionTime[player.UserId] = now
+		processingCompletion[player.UserId] = true
 
 		-- Validate data
 		local valid, err = validateCompletionData(data)
@@ -107,7 +173,21 @@ function PuzzleHandler.Init()
 		end
 
 		local difficultyId = data.difficultyId
-		local completionTime = data.completionTime
+
+		-- Use server-side timing instead of client-provided completionTime
+		local startRecord = puzzleStartTimes[player.UserId]
+		if not startRecord then
+			warn("[PuzzleHandler] No start record for", player.Name)
+			processingCompletion[player.UserId] = nil
+			return
+		end
+		if startRecord.imageId ~= data.imageId or startRecord.difficultyId ~= data.difficultyId then
+			warn("[PuzzleHandler] Start record mismatch for", player.Name)
+			processingCompletion[player.UserId] = nil
+			return
+		end
+		local completionTime = os.clock() - startRecord.startTime
+		puzzleStartTimes[player.UserId] = nil
 
 		-- Calculate base cash reward
 		local baseCash = ProgressionConfig.COIN_REWARDS_BY_DIFFICULTY[difficultyId] or 0
@@ -196,10 +276,19 @@ function PuzzleHandler.Init()
 			end
 		end
 
+		processingCompletion[player.UserId] = nil
 	end)
 
 	-- Handle GetPlayerData requests
 	getPlayerData.OnServerInvoke = function(player)
+		-- Rate limit: 1 call per second
+		local now = os.clock()
+		local lastTime = lastGetDataTime[player.UserId]
+		if lastTime and (now - lastTime) < 1 then
+			return nil
+		end
+		lastGetDataTime[player.UserId] = now
+
 		-- Wait for profile to load (handles Play Solo race condition)
 		local profileData = ProfileService.WaitForData(player, 10)
 		if not profileData then
@@ -308,6 +397,46 @@ function PuzzleHandler.Init()
 			return { success = false }
 		end
 
+		-- Validate imageAssetId format
+		if not string.match(data.imageAssetId, "^rbxassetid://%d+$") then
+			return { success = false }
+		end
+
+		-- Validate difficultyId is known
+		if not ProgressionConfig.VALID_DIFFICULTIES[data.difficultyId] then
+			return { success = false }
+		end
+
+		-- Validate rows/cols match difficulty and are in range
+		local expectedGrid = ProgressionConfig.DIFFICULTY_GRID[data.difficultyId]
+		if expectedGrid then
+			if data.rows ~= expectedGrid.rows or data.cols ~= expectedGrid.cols then
+				return { success = false }
+			end
+		end
+		if data.rows < 2 or data.rows > 25 or data.cols < 2 or data.cols > 25 then
+			return { success = false }
+		end
+
+		-- Validate imageId exists
+		if not ImageCatalog.getById(data.imageId) then
+			return { success = false }
+		end
+
+		-- Validate NaN/Infinity
+		if data.elapsedSeconds ~= data.elapsedSeconds or data.elapsedSeconds == math.huge then
+			return { success = false }
+		end
+
+		-- Validate puzzleDef has expected structure and piece count matches grid
+		if type(data.puzzleDef.pieces) ~= "table" then
+			return { success = false }
+		end
+		local expectedPieceCount = data.rows * data.cols
+		if #data.puzzleDef.pieces ~= expectedPieceCount or #data.pieces > expectedPieceCount then
+			return { success = false }
+		end
+
 		profileData.SavedPuzzles = profileData.SavedPuzzles or {}
 
 		-- Replace existing save for same imageId + difficultyId if present
@@ -368,20 +497,28 @@ function PuzzleHandler.Init()
 		return { success = true }
 	end
 
-	-- Handle UseHint requests
+	-- Handle UseHint requests (with processing lock to prevent double-spend)
 	local useHint = Remotes.GetFunction("UseHint")
 	useHint.OnServerInvoke = function(player)
+		if processingHint[player.UserId] then
+			return { success = false, hintsRemaining = 0 }
+		end
+		processingHint[player.UserId] = true
+
 		local profileData = ProfileService.GetData(player)
 		if not profileData then
+			processingHint[player.UserId] = nil
 			return { success = false, hintsRemaining = 0 }
 		end
 
 		local hints = profileData.HintsRemaining or 0
 		if hints <= 0 then
+			processingHint[player.UserId] = nil
 			return { success = false, hintsRemaining = 0 }
 		end
 
 		profileData.HintsRemaining = hints - 1
+		processingHint[player.UserId] = nil
 		return { success = true, hintsRemaining = profileData.HintsRemaining }
 	end
 
@@ -408,20 +545,28 @@ function PuzzleHandler.Init()
 		return { success = true, active = true, cashBoostsRemaining = profileData.CashBoostsRemaining or 0 }
 	end
 
-	-- Handle UnlockImage requests (coin purchase)
+	-- Handle UnlockImage requests (coin purchase, with processing lock to prevent double-spend)
 	local unlockImage = Remotes.GetFunction("UnlockImage")
 	unlockImage.OnServerInvoke = function(player, imageId)
+		if processingUnlock[player.UserId] then
+			return { success = false, message = "Processing" }
+		end
+		processingUnlock[player.UserId] = true
+
 		if type(imageId) ~= "string" or imageId == "" then
+			processingUnlock[player.UserId] = nil
 			return { success = false, message = "Invalid imageId" }
 		end
 
 		local entry = ImageCatalog.getById(imageId)
 		if not entry then
+			processingUnlock[player.UserId] = nil
 			return { success = false, message = "Unknown image" }
 		end
 
 		local profileData = ProfileService.GetData(player)
 		if not profileData then
+			processingUnlock[player.UserId] = nil
 			return { success = false, message = "Profile not loaded" }
 		end
 
@@ -430,16 +575,19 @@ function PuzzleHandler.Init()
 		end
 
 		if profileData.UnlockedImages[imageId] or entry.defaultUnlocked then
+			processingUnlock[player.UserId] = nil
 			return { success = false, message = "Already unlocked" }
 		end
 
 		local price = ProgressionConfig.COIN_UNLOCK_PRICE
 		if profileData.Cash < price then
+			processingUnlock[player.UserId] = nil
 			return { success = false, message = "Not enough coins" }
 		end
 
 		profileData.Cash = profileData.Cash - price
 		profileData.UnlockedImages[imageId] = true
+		processingUnlock[player.UserId] = nil
 		return { success = true, newCash = profileData.Cash }
 	end
 end

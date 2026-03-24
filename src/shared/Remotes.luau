@@ -4,6 +4,7 @@ local RunService = game:GetService("RunService")
 local FOLDER_NAME = "PuzzleRemotes"
 
 local REMOTE_EVENTS = {
+	"PuzzleStarted",    -- client → server: { imageId, difficultyId, resumedElapsed? }
 	"PuzzleCompleted",  -- client → server: { imageId, difficultyId, completionTime }
 	"XPAwarded",        -- server → client: { cashGained, isPersonalBest, isSpeedBonus, previousBest? }
 	"HintPurchased",    -- server → client: notifies that a Robux hint was granted
@@ -72,6 +73,9 @@ local REMOTE_FUNCTIONS = {
 	"UseRoomHint",            -- client → server: returns { success, hintsRemaining, pieceId } (multiplayer hint)
 	"AdminResetData",         -- client → server: admin-only data reset, returns { success }
 	"AdminGetSessionTimes",   -- client → server: admin-only, returns { { name, userId, sessionSeconds } }
+	"AdminBanPlayer",         -- client → server: admin-only, (targetUserId, reason, durationMinutes) → { success }
+	"AdminUnbanPlayer",       -- client → server: admin-only, (targetUserId) → { success }
+	"AdminGetBanList",        -- client → server: admin-only, returns { bans: { BanRecord } }
 }
 
 local Remotes = {}

@@ -214,7 +214,7 @@ function MonetizationHandler.Init()
 			profileData.OwnedSnapEffects[itemId] = true
 		elseif item.category == "hints" then
 			local hintCount = (item :: any).hintCount or 1
-			profileData.HintsRemaining = (profileData.HintsRemaining or 0) + hintCount
+			profileData.HintsRemaining = math.min(999, (profileData.HintsRemaining or 0) + hintCount)
 		end
 
 		return { success = true, message = "Purchased!", newCash = profileData.Cash }
@@ -238,18 +238,19 @@ function MonetizationHandler.Init()
 			return { success = false, message = "Profile not loaded" }
 		end
 
+		-- Empty string = unequip; non-empty = must own the item
 		if category == "board_skins" then
-			if not profileData.OwnedBoardSkins or not profileData.OwnedBoardSkins[itemId] then
+			if itemId ~= "" and (not profileData.OwnedBoardSkins or not profileData.OwnedBoardSkins[itemId]) then
 				return { success = false, message = "Not owned" }
 			end
 			profileData.EquippedBoardSkin = itemId
 		elseif category == "confetti_styles" then
-			if not profileData.OwnedConfettiStyles or not profileData.OwnedConfettiStyles[itemId] then
+			if itemId ~= "" and (not profileData.OwnedConfettiStyles or not profileData.OwnedConfettiStyles[itemId]) then
 				return { success = false, message = "Not owned" }
 			end
 			profileData.EquippedConfettiStyle = itemId
 		elseif category == "snap_effects" then
-			if not profileData.OwnedSnapEffects or not profileData.OwnedSnapEffects[itemId] then
+			if itemId ~= "" and (not profileData.OwnedSnapEffects or not profileData.OwnedSnapEffects[itemId]) then
 				return { success = false, message = "Not owned" }
 			end
 			profileData.EquippedSnapEffect = itemId
