@@ -101,6 +101,12 @@ local PlayerStore = ProfileStore.New("PlayerData", PROFILE_TEMPLATE)
 local activeProfiles = {}
 local started = false
 
+-- Optional: PhysicalLeaderboardService (loaded if available)
+local PhysicalLeaderboardService = nil
+pcall(function()
+	PhysicalLeaderboardService = require(script.Parent.Parent.services.PhysicalLeaderboardService)
+end)
+
 local ProfileService = {}
 
 local function loadProfile(player)
@@ -171,6 +177,11 @@ local function loadProfile(player)
 	end
 
 	activeProfiles[player] = profile
+
+	-- Submit existing stats to physical leaderboards
+	if PhysicalLeaderboardService then
+		task.spawn(PhysicalLeaderboardService.submitAllScores, player.UserId, profile.Data)
+	end
 end
 
 local function releaseProfile(player)

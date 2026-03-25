@@ -78,3 +78,12 @@ pcall(function()
 	local AdminHandler = require(script:WaitForChild("handlers"):WaitForChild("AdminHandler"))
 	AdminHandler.Init()
 end)
+
+-- Initialize PhysicalLeaderboardService
+pcall(function()
+	local PhysicalLeaderboardService = require(script:WaitForChild("services"):WaitForChild("PhysicalLeaderboardService"))
+	local leaderboardsFolder = Workspace:FindFirstChild("Leaderboards")
+	if leaderboardsFolder then
+		PhysicalLeaderboardService.Init(leaderboardsFolder)
+	end
+end)

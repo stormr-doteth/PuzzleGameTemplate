@@ -19,6 +19,12 @@ pcall(function()
 	TitleService = require(script.Parent.Parent.services.TitleService)
 end)
 
+-- Optional: PhysicalLeaderboardService (loaded if available)
+local PhysicalLeaderboardService = nil
+pcall(function()
+	PhysicalLeaderboardService = require(script.Parent.Parent.services.PhysicalLeaderboardService)
+end)
+
 local VIRTUAL_W = RoomTypes.VIRTUAL_CANVAS_WIDTH
 local VIRTUAL_H = RoomTypes.VIRTUAL_CANVAS_HEIGHT
 local SNAP_THRESHOLD = 25 -- in virtual canvas coords
@@ -282,6 +288,9 @@ local function awardCompletion(player: Player, room: any)
 	local grid = ProgressionConfig.DIFFICULTY_GRID[config.difficultyId]
 	if grid then
 		profileData.TotalPiecesPlaced = (profileData.TotalPiecesPlaced or 0) + (grid.rows * grid.cols)
+	end
+	if PhysicalLeaderboardService then
+		task.spawn(PhysicalLeaderboardService.submitAllScores, player.UserId, profileData)
 	end
 	if not profileData.PuzzlesCompletedByDifficulty then
 		profileData.PuzzlesCompletedByDifficulty = {}

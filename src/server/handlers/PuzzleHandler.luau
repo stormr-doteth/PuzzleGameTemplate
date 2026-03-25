@@ -37,6 +37,12 @@ pcall(function()
 	LeaderboardService = require(script.Parent.Parent.data.LeaderboardService)
 end)
 
+-- Optional: PhysicalLeaderboardService (loaded if available)
+local PhysicalLeaderboardService = nil
+pcall(function()
+	PhysicalLeaderboardService = require(script.Parent.Parent.services.PhysicalLeaderboardService)
+end)
+
 local PuzzleHandler = {}
 
 local function validateCompletionData(data: any): (boolean, string?)
@@ -228,6 +234,9 @@ function PuzzleHandler.Init()
 		local grid = ProgressionConfig.DIFFICULTY_GRID[difficultyId]
 		if grid then
 			profileData.TotalPiecesPlaced = (profileData.TotalPiecesPlaced or 0) + (grid.rows * grid.cols)
+		end
+		if PhysicalLeaderboardService then
+			task.spawn(PhysicalLeaderboardService.submitAllScores, player.UserId, profileData)
 		end
 		if not profileData.PuzzlesCompletedByDifficulty then
 			profileData.PuzzlesCompletedByDifficulty = {}
