@@ -33,6 +33,7 @@ local function StatsScreen(props: StatsScreenProps)
 	local totalTime = if playerData then (playerData.totalPlayTime or 0) else 0
 	local byDifficulty = if playerData then (playerData.puzzlesCompletedByDifficulty or {}) else {}
 	local titleName = TitleConfig.getTitleFromCompletions(byDifficulty)
+	local hasStarterPack = if playerData then (playerData.starterPack_purchased == true) else false
 
 	-- Build summary cards
 	local summaryData = {
@@ -213,10 +214,22 @@ local function StatsScreen(props: StatsScreenProps)
 					Size = UDim2.new(1, 0, 0, 24),
 					BackgroundTransparency = 1,
 					Text = "Rank: " .. titleName,
-					TextColor3 = Theme.Colors.headerGold,
+					TextColor3 = if hasStarterPack then Color3.fromRGB(255, 255, 255) else Theme.Colors.headerGold,
 					TextSize = 20,
 					TextScaled = true,
 					Font = Theme.Font.bold,
+				}, {
+					RainbowGradient = if hasStarterPack then React.createElement("UIGradient", {
+						Color = ColorSequence.new({
+							ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)),
+							ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 180, 50)),
+							ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 255, 80)),
+							ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 255, 120)),
+							ColorSequenceKeypoint.new(0.67, Color3.fromRGB(80, 180, 255)),
+							ColorSequenceKeypoint.new(0.83, Color3.fromRGB(180, 80, 255)),
+							ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 200)),
+						}),
+					}) else nil,
 				}),
 
 				-- Summary row

@@ -106,7 +106,18 @@ MonetizationConfig.DEV_PRODUCTS = {
 		iconText = "\u{1F3B0}",
 		iconImage = "rbxassetid://124221102367378",
 	},
+	STARTER_PACK = {
+		id = 3563549451,
+		name = "Starter Pack",
+		description = "500 Cash, 5 Hints, 2 Cash Boosts + Exclusive Snap Effect",
+		robuxPrice = 79,
+		iconColor = Color3.fromRGB(255, 180, 50),
+		iconText = "\u{1F381}",
+	},
 }
+
+-- Starter Pack timer duration (20 minutes in seconds)
+MonetizationConfig.STARTER_PACK_DURATION = 1200
 
 -- Returns true if all product IDs have been configured (non-zero)
 function MonetizationConfig.isConfigured(): boolean

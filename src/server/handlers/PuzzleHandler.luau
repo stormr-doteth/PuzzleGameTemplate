@@ -366,6 +366,8 @@ function PuzzleHandler.Init()
 			dailyPuzzle_lastCompletionDate = profileData.DailyPuzzle_LastCompletionDate or "",
 			spinWheel_lastFreeSpinDate = profileData.SpinWheel_LastFreeSpinDate or "",
 			hasClaimedFavoriteReward = profileData.HasClaimedFavoriteReward == true,
+			starterPack_expiryTime = (profileData.StarterPack_FirstJoinTime or 0) + 1200,
+			starterPack_purchased = profileData.StarterPack_Purchased == true,
 		}
 	end
 

@@ -5,7 +5,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Packages = ServerScriptService:WaitForChild("Packages")
 local ProfileStore = require(Packages.ProfileStore)
 
-local CURRENT_SCHEMA_VERSION = 5
+local CURRENT_SCHEMA_VERSION = 6
 
 local PROFILE_TEMPLATE = {
 	SchemaVersion = CURRENT_SCHEMA_VERSION,
@@ -32,6 +32,8 @@ local PROFILE_TEMPLATE = {
 	DailyPuzzle_LastCompletionDate = "",  -- "YYYY-MM-DD"
 	SpinWheel_LastFreeSpinDate = "",      -- "YYYY-MM-DD"
 	HasClaimedFavoriteReward = false,
+	StarterPack_FirstJoinTime = 0,
+	StarterPack_Purchased = false,
 }
 
 -- Cap PurchaseHistory to prevent unbounded growth toward DataStore limits
@@ -95,6 +97,17 @@ local function migrateProfile(data)
 		end
 		data.SchemaVersion = 5
 	end
+
+	-- Migration from v5 to v6: add Starter Pack fields
+	if version < 6 then
+		if data.StarterPack_FirstJoinTime == nil then
+			data.StarterPack_FirstJoinTime = 0
+		end
+		if data.StarterPack_Purchased == nil then
+			data.StarterPack_Purchased = false
+		end
+		data.SchemaVersion = 6
+	end
 end
 
 local PlayerStore = ProfileStore.New("PlayerData", PROFILE_TEMPLATE)
@@ -126,6 +139,11 @@ local function loadProfile(player)
 	profile:Reconcile()
 	migrateProfile(profile.Data)
 
+	-- Set StarterPack first join time on very first load
+	if profile.Data.StarterPack_FirstJoinTime == 0 then
+		profile.Data.StarterPack_FirstJoinTime = os.time()
+	end
+
 	-- Seed test data in Studio so shop items are testable (double-check PlaceId to prevent accidental activation)
 	if RunService:IsStudio() and game.PlaceId == 0 then
 		local data = profile.Data
@@ -154,6 +172,10 @@ local function loadProfile(player)
 		if data.CashBoostsRemaining < 3 then
 			data.CashBoostsRemaining = 3
 		end
+		-- Reset starter pack timer for testing (grant snap effect so it's visible in shop)
+		data.StarterPack_FirstJoinTime = os.time()
+		data.StarterPack_Purchased = false
+		data.OwnedSnapEffects["snap_starter"] = true
 		-- Seed some puzzle completions for title testing
 		if not data.PuzzlesCompletedByDifficulty or not next(data.PuzzlesCompletedByDifficulty) then
 			data.PuzzlesCompletedByDifficulty = {

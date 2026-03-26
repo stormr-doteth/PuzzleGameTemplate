@@ -248,6 +248,14 @@ local function ShopScreen(props: ShopScreenProps)
 		local swatchDefault = CATEGORY_SWATCH_DEFAULTS[sectionCategory] or Color3.fromRGB(80, 80, 100)
 
 		for _, item in section.items do
+			-- Hide exclusive items unless already owned (so they can be equipped)
+			if (item :: any).starterPackExclusive then
+				local isOwnedExclusive = false
+				if item.category == "snap_effects" then
+					isOwnedExclusive = ownedSnapEffects[item.id] == true
+				end
+				if not isOwnedExclusive then continue end
+			end
 			local swatchColor = item.previewColor or swatchDefault
 			local firstLetter = string.sub(item.name, 1, 1)
 

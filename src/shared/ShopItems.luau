@@ -223,6 +223,15 @@ ShopItems.SNAP_EFFECTS = {
 		cashPrice = 5000,
 		previewColor = Color3.fromRGB(255, 120, 20),
 	},
+	{
+		id = "snap_starter",
+		name = "Starter Burst",
+		description = "Exclusive golden burst effect from the Starter Pack",
+		category = "snap_effects",
+		cashPrice = 0,
+		previewColor = Color3.fromRGB(255, 200, 50),
+		starterPackExclusive = true,
+	},
 }
 
 ShopItems.HINTS = {

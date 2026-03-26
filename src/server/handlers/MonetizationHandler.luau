@@ -11,6 +11,12 @@ local ProfileService = require(script.Parent.Parent.data.ProfileService)
 
 local ImageCatalog = require(Shared.ImageCatalog)
 
+-- TitleService loaded optionally (for rainbow title refresh on starter pack purchase)
+local TitleService = nil
+pcall(function()
+	TitleService = require(script.Parent.Parent.services.TitleService)
+end)
+
 local MonetizationHandler = {}
 
 -- Rate limiting for shop purchases (3s cooldown per player)
@@ -88,6 +94,25 @@ function MonetizationHandler.Init()
 			hintPurchasedEvent:FireClient(player, {})
 		elseif product.name == "Spin the Wheel" then
 			profileData.SpinTokens = (profileData.SpinTokens or 0) + 1
+			granted = true
+		elseif product.name == "Starter Pack" then
+			-- Grant starter pack contents (always grant — player already charged)
+			if not profileData.StarterPack_Purchased then
+				profileData.Cash = profileData.Cash + 500
+				profileData.HintsRemaining = (profileData.HintsRemaining or 0) + 5
+				profileData.CashBoostsRemaining = (profileData.CashBoostsRemaining or 0) + 2
+				if not profileData.OwnedSnapEffects then
+					profileData.OwnedSnapEffects = {}
+				end
+				profileData.OwnedSnapEffects["snap_starter"] = true
+				profileData.StarterPack_Purchased = true
+				local starterPackEvent = Remotes.GetEvent("StarterPackPurchased")
+				starterPackEvent:FireClient(player, {})
+				-- Refresh overhead title to show rainbow
+				if TitleService then
+					task.spawn(TitleService.RefreshTitleAppearance, player)
+				end
+			end
 			granted = true
 		elseif product.name == "Unlock Puzzle" then
 			-- Unlock a specific puzzle image

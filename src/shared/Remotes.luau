@@ -38,6 +38,9 @@ local REMOTE_EVENTS = {
 
 	-- Daily puzzle events
 	"DailyPuzzleCompleted",   -- client → server: { imageId, difficultyId, completionTime }
+
+	-- Starter pack events
+	"StarterPackPurchased",   -- server → client: notifies starter pack was granted
 }
 
 local REMOTE_FUNCTIONS = {

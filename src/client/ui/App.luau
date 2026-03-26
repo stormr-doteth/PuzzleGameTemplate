@@ -27,6 +27,8 @@ local SpinWheelModal = require(script.Parent.components.SpinWheelModal)
 local LikeFavoriteModal = require(script.Parent.components.LikeFavoriteModal)
 local DevToolPanel = require(script.Parent.components.DevToolPanel)
 local RoomCodeEntryScreen = require(script.Parent.components.RoomCodeEntryScreen)
+local StarterPackButton = require(script.Parent.components.StarterPackButton)
+local StarterPackModal = require(script.Parent.components.StarterPackModal)
 
 -- SeatingService loaded optionally
 local SeatingService = nil
@@ -94,6 +96,11 @@ local function App(props)
 	local spinWheelCanFree, setSpinWheelCanFree = React.useState(false)
 	local spinWheelSecsUntilFree, setSpinWheelSecsUntilFree = React.useState(0)
 	local spinWheelPaidRestricted, setSpinWheelPaidRestricted = React.useState(false)
+
+	-- Starter pack state
+	local starterPackSecsLeft, setStarterPackSecsLeft = React.useState(0)
+	local starterPackPurchased, setStarterPackPurchased = React.useState(true) -- hidden until data loads
+	local showStarterPackModal, setShowStarterPackModal = React.useState(false)
 
 	-- Dev tool panel state (admin only)
 	local isAdmin = Players.LocalPlayer.UserId == 3401001
@@ -324,6 +331,15 @@ local function App(props)
 				end
 			end
 
+			-- Init starter pack timer from player data
+			if data then
+				setStarterPackPurchased(data.starterPack_purchased == true)
+				if not data.starterPack_purchased then
+					local remaining = math.max(0, (data.starterPack_expiryTime or 0) - os.time())
+					setStarterPackSecsLeft(remaining)
+				end
+			end
+
 			setIsDataLoading(false)
 		end)
 	end, {})
@@ -408,6 +424,52 @@ local function App(props)
 					return updated
 				end)
 			end
+		end)
+
+		return function()
+			conn:Disconnect()
+		end
+	end, {} :: { any })
+
+	-- Starter pack countdown timer
+	React.useEffect(function()
+		local running = true
+		task.spawn(function()
+			while running do
+				task.wait(1)
+				if not running then break end
+				setStarterPackSecsLeft(function(prev)
+					if prev <= 0 then return 0 end
+					return prev - 1
+				end)
+			end
+		end)
+		return function()
+			running = false
+		end
+	end, { starterPackPurchased } :: { any })
+
+	-- Listen for StarterPackPurchased event from server
+	React.useEffect(function()
+		local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+		if not remotes then return end
+		local starterEvent = remotes:FindFirstChild("StarterPackPurchased")
+		if not starterEvent or not starterEvent:IsA("RemoteEvent") then return end
+
+		local conn = starterEvent.OnClientEvent:Connect(function()
+			setStarterPackPurchased(true)
+			setStarterPackSecsLeft(0)
+			setShowStarterPackModal(false)
+			-- Refresh player data
+			task.spawn(function()
+				local getPlayerData = remotes:FindFirstChild("GetPlayerData")
+				if getPlayerData and getPlayerData:IsA("RemoteFunction") then
+					local ok, data = pcall(function() return getPlayerData:InvokeServer() end)
+					if ok and data then
+						setPlayerData(data)
+					end
+				end
+			end)
 		end)
 
 		return function()
@@ -1043,6 +1105,7 @@ local function App(props)
 	end
 
 	local spinWheelElement = nil
+	local starterPackElement = nil
 	if gameState == "walking" then
 		-- Only show hint for players who haven't sat at a table yet
 		if not hasEverSat and not (playerData and (playerData.totalPuzzlesCompleted or 0) > 0) then
@@ -1367,6 +1430,16 @@ local function App(props)
 			}),
 		})
 
+		-- Starter pack button (left of spin wheel)
+		if not starterPackPurchased and starterPackSecsLeft > 0 then
+			starterPackElement = React.createElement(StarterPackButton, {
+				secondsLeft = starterPackSecsLeft,
+				onActivated = function()
+					setShowStarterPackModal(true)
+				end,
+			})
+		end
+
 		-- NPC overlay (animated wrapper)
 		if activeOverlay then
 			local overlayContent = nil
@@ -1639,6 +1712,25 @@ local function App(props)
 		})
 	end
 
+	-- Starter pack modal
+	if showStarterPackModal and gameState == "walking" then
+		safeChildren["StarterPackModal"] = React.createElement(StarterPackModal, {
+			secondsLeft = starterPackSecsLeft,
+			onClose = function()
+				setShowStarterPackModal(false)
+			end,
+			onBuy = function()
+				local MarketplaceService = game:GetService("MarketplaceService")
+				local localPlayer = Players.LocalPlayer
+				if localPlayer and MonetizationConfig.DEV_PRODUCTS.STARTER_PACK.id ~= 0 then
+					pcall(function()
+						MarketplaceService:PromptProductPurchase(localPlayer, MonetizationConfig.DEV_PRODUCTS.STARTER_PACK.id)
+					end)
+				end
+			end,
+		})
+	end
+
 	-- Dev tool panel (admin only)
 	if isAdmin and (gameState == "walking" or gameState == "menu") then
 		safeChildren["DevToolBtn"] = React.createElement("TextButton", {
@@ -1783,7 +1875,7 @@ local function App(props)
 	-- Board ScreenGui: full screen for piece dragging (rendered below safe UI)
 	-- Spin wheel ScreenGui: ignores top bar so it sits at the very top
 	local spinGui = nil
-	if spinWheelElement then
+	if spinWheelElement or starterPackElement then
 		spinGui = React.createElement("ScreenGui", {
 			Name = "PuzzleAppSpin",
 			ResetOnSpawn = false,
@@ -1793,6 +1885,7 @@ local function App(props)
 			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		}, {
 			SpinWheelBtn = spinWheelElement,
+			StarterPackBtn = starterPackElement,
 		})
 	end
 

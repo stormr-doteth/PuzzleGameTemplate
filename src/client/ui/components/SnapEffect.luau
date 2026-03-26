@@ -16,6 +16,7 @@ type EffectConfig = {
 	rotation: boolean,
 	gravity: number,
 	isRing: boolean?,
+	isCombo: boolean?,
 }
 
 local EFFECT_CONFIGS: { [string]: EffectConfig } = {
@@ -209,6 +210,25 @@ local EFFECT_CONFIGS: { [string]: EffectConfig } = {
 		rotation = false,
 		gravity = 0,
 	},
+	snap_starter = {
+		particleCount = 28,
+		colors = {
+			Color3.fromRGB(255, 80, 80),
+			Color3.fromRGB(255, 180, 50),
+			Color3.fromRGB(255, 255, 80),
+			Color3.fromRGB(80, 255, 120),
+			Color3.fromRGB(80, 180, 255),
+			Color3.fromRGB(180, 80, 255),
+			Color3.fromRGB(255, 80, 200),
+		},
+		size = 16,
+		duration = 0.85,
+		spread = 110,
+		cornerRadius = UDim.new(1, 0),
+		rotation = true,
+		gravity = 0,
+		isCombo = true,
+	},
 }
 
 local function SnapParticle(props: { config: EffectConfig, index: number, centerX: number, centerY: number })
@@ -381,7 +401,55 @@ local function SnapEffect(props: SnapEffectProps)
 
 	local children: { [string]: any } = {}
 
-	if config.isRing then
+	if config.isCombo then
+		-- Epic combo effect: expanding rainbow ring + scattered particles + big flash
+		local ringConfig: EffectConfig = {
+			particleCount = 1,
+			colors = { Color3.fromRGB(255, 215, 60) },
+			size = 16,
+			duration = 0.7,
+			spread = config.spread,
+			cornerRadius = UDim.new(1, 0),
+			rotation = false,
+			gravity = 0,
+			isRing = true,
+		}
+		children["Ring"] = React.createElement(SnapRing, {
+			config = ringConfig,
+			centerX = props.positionX,
+			centerY = props.positionY,
+		})
+		-- Second outer ring, slightly delayed feel via larger spread
+		local outerRingConfig: EffectConfig = {
+			particleCount = 1,
+			colors = { Color3.fromRGB(180, 80, 255) },
+			size = 10,
+			duration = 0.9,
+			spread = config.spread * 1.4,
+			cornerRadius = UDim.new(1, 0),
+			rotation = false,
+			gravity = 0,
+			isRing = true,
+		}
+		children["OuterRing"] = React.createElement(SnapRing, {
+			config = outerRingConfig,
+			centerX = props.positionX,
+			centerY = props.positionY,
+		})
+		-- Rainbow particles
+		for i = 1, config.particleCount do
+			children["Particle_" .. i] = React.createElement(SnapParticle, {
+				config = config,
+				index = i,
+				centerX = props.positionX,
+				centerY = props.positionY,
+			})
+		end
+		children["Flash"] = React.createElement(SnapFlash, {
+			centerX = props.positionX,
+			centerY = props.positionY,
+		})
+	elseif config.isRing then
 		children["Ring"] = React.createElement(SnapRing, {
 			config = config,
 			centerX = props.positionX,
