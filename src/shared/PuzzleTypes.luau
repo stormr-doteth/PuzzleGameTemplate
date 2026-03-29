@@ -50,6 +50,9 @@ export type SavedPuzzleData = {
 	puzzleDef: PuzzleDefinition,
 	pieces: { { id: number, x: number, y: number, zIndex: number, locked: boolean, groupId: number? } },
 	groups: { { id: number, pieceIds: { number } } }?,
+	isVirtualCoords: boolean?,
+	isNormalizedCoords: boolean?,
+	isBoardRelativeCoords: boolean?,
 }
 
 return {}

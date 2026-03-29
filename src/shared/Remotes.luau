@@ -61,6 +61,7 @@ local REMOTE_FUNCTIONS = {
 	"ConfigureRoom",    -- (config) → { success }
 	"StartRoom",        -- returns { success } or { error }
 	"RestartRoom",      -- (sameConfig: boolean) → { success } or { error }
+	"ResumeRoom",       -- (saveData) → { success } or { error } (configure + start from saved state)
 
 	-- Cafe table functions
 	"GetTableInfo",     -- (tableId) → { tableType, occupants, roomId? }

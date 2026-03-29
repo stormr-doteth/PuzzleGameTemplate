@@ -49,7 +49,7 @@ local function StarterPackModal(props: StarterPackModalProps)
 			FillDirection = Enum.FillDirection.Vertical,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			SortOrder = Enum.SortOrder.LayoutOrder,
-			Padding = UDim.new(0, 6),
+			Padding = UDim.new(0.02, 0),
 		}),
 		Padding = React.createElement("UIPadding", {
 			PaddingLeft = UDim.new(0, 16),
@@ -60,7 +60,7 @@ local function StarterPackModal(props: StarterPackModalProps)
 	for i, item in CONTENTS do
 		contentRows["Row_" .. i] = React.createElement("Frame", {
 			LayoutOrder = i,
-			Size = UDim2.new(1, 0, 0, 32),
+			Size = UDim2.new(1, 0, 0.14, 0),
 			BackgroundColor3 = Theme.Colors.bgElevated,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
@@ -98,7 +98,7 @@ local function StarterPackModal(props: StarterPackModalProps)
 	-- Snap effect row with test button (row 4)
 	contentRows["Row_snap"] = React.createElement("Frame", {
 		LayoutOrder = 4,
-		Size = UDim2.new(1, 0, 0, 32),
+		Size = UDim2.new(1, 0, 0.14, 0),
 		BackgroundColor3 = Theme.Colors.bgElevated,
 	}, {
 		Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
@@ -177,7 +177,7 @@ local function StarterPackModal(props: StarterPackModalProps)
 	-- Rainbow name row (row 5)
 	contentRows["Row_rainbow"] = React.createElement("Frame", {
 		LayoutOrder = 5,
-		Size = UDim2.new(1, 0, 0, 32),
+		Size = UDim2.new(1, 0, 0.14, 0),
 		BackgroundColor3 = Theme.Colors.bgElevated,
 	}, {
 		Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
@@ -217,7 +217,7 @@ local function StarterPackModal(props: StarterPackModalProps)
 	-- Rainbow preview section (row 6)
 	contentRows["Row_rainbowPreview"] = React.createElement("Frame", {
 		LayoutOrder = 6,
-		Size = UDim2.new(1, 0, 0, 36),
+		Size = UDim2.new(1, 0, 0.16, 0),
 		BackgroundColor3 = Theme.Colors.bgCard,
 	}, {
 		Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
@@ -255,7 +255,7 @@ local function StarterPackModal(props: StarterPackModalProps)
 			ref = modalRef,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(460, 500),
+			Size = UDim2.fromScale(0.9, 0.82),
 			BackgroundColor3 = Theme.Colors.bgDark,
 			ZIndex = 201,
 			ClipsDescendants = true,
@@ -266,14 +266,14 @@ local function StarterPackModal(props: StarterPackModalProps)
 				Color = Theme.Colors.border,
 			}),
 			SizeConstraint = React.createElement("UISizeConstraint", {
-				MaxSize = Vector2.new(460, 500),
+				MaxSize = Vector2.new(460, 550),
 			}),
 
 			-- Title
 			Title = React.createElement("TextLabel", {
 				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromScale(0.5, 0.03),
-				Size = UDim2.fromScale(0.7, 0.08),
+				Position = UDim2.fromScale(0.5, 0.02),
+				Size = UDim2.fromScale(0.7, 0.07),
 				BackgroundTransparency = 1,
 				Text = "STARTER PACK",
 				TextColor3 = Theme.Colors.gold,
@@ -290,8 +290,8 @@ local function StarterPackModal(props: StarterPackModalProps)
 			-- Timer
 			Timer = React.createElement("TextLabel", {
 				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromScale(0.5, 0.12),
-				Size = UDim2.fromScale(0.6, 0.06),
+				Position = UDim2.fromScale(0.5, 0.09),
+				Size = UDim2.fromScale(0.6, 0.05),
 				BackgroundTransparency = 1,
 				Text = if isExpired then "EXPIRED" else "Expires in " .. formatMMSS(props.secondsLeft),
 				TextColor3 = Theme.Colors.danger,
@@ -308,8 +308,8 @@ local function StarterPackModal(props: StarterPackModalProps)
 			-- Contents list
 			ContentsList = React.createElement("Frame", {
 				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromScale(0.5, 0.19),
-				Size = UDim2.fromScale(0.9, 0.62),
+				Position = UDim2.fromScale(0.5, 0.15),
+				Size = UDim2.fromScale(0.9, 0.68),
 				BackgroundTransparency = 1,
 				ZIndex = 202,
 			}, contentRows),
@@ -332,8 +332,8 @@ local function StarterPackModal(props: StarterPackModalProps)
 			-- Buy button
 			BuyButton = React.createElement("TextButton", {
 				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromScale(0.5, 0.84),
-				Size = UDim2.fromScale(0.7, 0.09),
+				Position = UDim2.fromScale(0.5, 0.85),
+				Size = UDim2.fromScale(0.7, 0.1),
 				BackgroundColor3 = if isExpired then Theme.Colors.bgMuted else Theme.Colors.success,
 				Text = if isExpired then "EXPIRED" else "BUY \u{2014} 79 R$",
 				TextColor3 = Theme.Colors.textPrimary,
@@ -358,7 +358,7 @@ local function StarterPackModal(props: StarterPackModalProps)
 			CloseBtn = React.createElement("TextButton", {
 				AnchorPoint = Vector2.new(1, 0),
 				Position = UDim2.fromScale(0.97, 0.02),
-				Size = UDim2.fromOffset(36, 36),
+				Size = UDim2.fromOffset(40, 40),
 				BackgroundColor3 = Theme.Colors.closeRed,
 				Text = "X",
 				TextColor3 = Theme.Colors.textPrimary,

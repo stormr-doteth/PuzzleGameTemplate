@@ -94,63 +94,53 @@ local function refreshBoard(board: any)
 	end
 
 	local rank = 0
-	while true do
-		local entries = pages:GetCurrentPage()
-		for _, entry in entries do
-			rank += 1
-			local userId = tonumber(entry.key)
-			if not userId then
-				continue
-			end
-
-			local score = entry.value
-			local displayName = getDisplayName(userId)
-			local color = getRankColor(rank)
-
-			local row = board.template:Clone()
-			row.Name = "Entry_" .. rank
-			row.LayoutOrder = rank
-			row.Visible = true
-
-			local placeLabel = row:FindFirstChild("PlaceLabel")
-			if placeLabel then
-				placeLabel.Text = tostring(rank)
-				placeLabel.TextColor3 = color
-			end
-
-			local imageLabel = row:FindFirstChild("ImageLabel")
-			if imageLabel then
-				pcall(function()
-					imageLabel.Image = Players:GetUserThumbnailAsync(
-						userId,
-						Enum.ThumbnailType.HeadShot,
-						Enum.ThumbnailSize.Size60x60
-					)
-				end)
-			end
-
-			local nameLabel = row:FindFirstChild("NameLabel")
-			if nameLabel then
-				nameLabel.Text = displayName
-				nameLabel.TextColor3 = color
-			end
-
-			local winsLabel = row:FindFirstChild("WinsLabel")
-			if winsLabel then
-				winsLabel.Text = board.config.formatValue(score)
-				winsLabel.TextColor3 = color
-			end
-
-			row.Parent = board.scrollingFrame
+	local entries = pages:GetCurrentPage()
+	for _, entry in entries do
+		rank += 1
+		local userId = tonumber(entry.key)
+		if not userId then
+			continue
 		end
 
-		if pages.IsFinished then
-			break
+		local score = entry.value
+		local displayName = getDisplayName(userId)
+		local color = getRankColor(rank)
+
+		local row = board.template:Clone()
+		row.Name = "Entry_" .. rank
+		row.LayoutOrder = rank
+		row.Visible = true
+
+		local placeLabel = row:FindFirstChild("PlaceLabel")
+		if placeLabel then
+			placeLabel.Text = tostring(rank)
+			placeLabel.TextColor3 = color
 		end
 
-		pcall(function()
-			pages:AdvanceToNextPageAsync()
-		end)
+		local imageLabel = row:FindFirstChild("ImageLabel")
+		if imageLabel then
+			pcall(function()
+				imageLabel.Image = Players:GetUserThumbnailAsync(
+					userId,
+					Enum.ThumbnailType.HeadShot,
+					Enum.ThumbnailSize.Size60x60
+				)
+			end)
+		end
+
+		local nameLabel = row:FindFirstChild("NameLabel")
+		if nameLabel then
+			nameLabel.Text = displayName
+			nameLabel.TextColor3 = color
+		end
+
+		local winsLabel = row:FindFirstChild("WinsLabel")
+		if winsLabel then
+			winsLabel.Text = board.config.formatValue(score)
+			winsLabel.TextColor3 = color
+		end
+
+		row.Parent = board.scrollingFrame
 	end
 end
 

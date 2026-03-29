@@ -308,8 +308,8 @@ local function PackPicker(props: PackPickerProps)
 		BorderSizePixel = 0,
 	}, {
 		Padding = React.createElement("UIPadding", {
-			PaddingTop = UDim.new(0, 130),
-			PaddingBottom = UDim.new(0, 50),
+			PaddingTop = UDim.new(0.22, 0),
+			PaddingBottom = UDim.new(0.06, 0),
 		}),
 		Layout = React.createElement("UIListLayout", {
 			SortOrder = Enum.SortOrder.LayoutOrder,

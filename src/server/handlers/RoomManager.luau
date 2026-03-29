@@ -25,6 +25,12 @@ pcall(function()
 	PhysicalLeaderboardService = require(script.Parent.Parent.services.PhysicalLeaderboardService)
 end)
 
+-- Optional: LeaderboardService (loaded if available)
+local LeaderboardService = nil
+pcall(function()
+	LeaderboardService = require(script.Parent.Parent.data.LeaderboardService)
+end)
+
 local VIRTUAL_W = RoomTypes.VIRTUAL_CANVAS_WIDTH
 local VIRTUAL_H = RoomTypes.VIRTUAL_CANVAS_HEIGHT
 local SNAP_THRESHOLD = 25 -- in virtual canvas coords
@@ -42,6 +48,123 @@ local playerRooms: { [number]: string } = {}
 -- Rate limiting for PieceMove events (~30 updates/sec per player)
 local MOVE_MIN_INTERVAL = 1 / 30
 local lastMoveTime: { [number]: number } = {}
+
+-- Auto-save state per room
+local roomSnapCountSinceLastSave: { [string]: number } = {} -- roomId → count
+local roomAutoSaveThreads: { [string]: thread? } = {} -- roomId → pending delayed save
+
+local function buildRoomSaveData(room: any): any?
+	if not room or not room.config or not room.puzzleDef or not room.pieces then return nil end
+	local config = room.config
+	local savePieces = {}
+	for pieceId, p in room.pieces do
+		table.insert(savePieces, {
+			id = pieceId, x = p.x, y = p.y,
+			zIndex = p.zIndex, locked = p.locked,
+			groupId = p.groupId,
+		})
+	end
+	local saveGroups = {}
+	for gid, memberIds in room.groups do
+		table.insert(saveGroups, { id = gid, pieceIds = memberIds })
+	end
+	local elapsedSeconds = if room.startTime then os.clock() - room.startTime else 0
+	return {
+		imageId = config.imageId,
+		imageAssetId = config.imageAssetId,
+		difficultyId = config.difficultyId,
+		rows = config.rows,
+		cols = config.cols,
+		elapsedSeconds = elapsedSeconds,
+		savedAt = os.time(),
+		puzzleDef = room.puzzleDef,
+		pieces = savePieces,
+		groups = saveGroups,
+		isVirtualCoords = true,
+	}
+end
+
+local function saveRoomProgressForAllPlayers(room: any)
+	if not room or room.state ~= "playing" then return end
+	local saveData = buildRoomSaveData(room)
+	if not saveData then return end
+
+	for userId in room.players do
+		local player = Players:GetPlayerByUserId(userId)
+		if player then
+			local profileData = ProfileService.GetData(player)
+			if profileData then
+				profileData.SavedPuzzles = profileData.SavedPuzzles or {}
+				-- Replace existing save for same imageId + difficultyId
+				local replaced = false
+				for i, save in profileData.SavedPuzzles do
+					if save.imageId == saveData.imageId and save.difficultyId == saveData.difficultyId then
+						profileData.SavedPuzzles[i] = saveData
+						replaced = true
+						break
+					end
+				end
+				if not replaced then
+					if #profileData.SavedPuzzles < 3 then
+						table.insert(profileData.SavedPuzzles, saveData)
+					else
+						-- Replace oldest
+						local oldestIdx = 1
+						local oldestTime = profileData.SavedPuzzles[1].savedAt or 0
+						for i, save in profileData.SavedPuzzles do
+							local t = save.savedAt or 0
+							if t < oldestTime then
+								oldestTime = t
+								oldestIdx = i
+							end
+						end
+						profileData.SavedPuzzles[oldestIdx] = saveData
+					end
+				end
+			end
+		end
+	end
+end
+
+local function triggerRoomAutoSave(roomId: string)
+	local room = rooms[roomId]
+	if not room or room.state ~= "playing" then return end
+	roomSnapCountSinceLastSave[roomId] = 0
+	saveRoomProgressForAllPlayers(room)
+end
+
+local function onRoomPieceSnapped(roomId: string)
+	local room = rooms[roomId]
+	if not room or room.state ~= "playing" then return end
+
+	roomSnapCountSinceLastSave[roomId] = (roomSnapCountSinceLastSave[roomId] or 0) + 1
+
+	-- Cancel any pending delayed save
+	if roomAutoSaveThreads[roomId] then
+		task.cancel(roomAutoSaveThreads[roomId])
+		roomAutoSaveThreads[roomId] = nil
+	end
+
+	-- Save every 3 snaps
+	if roomSnapCountSinceLastSave[roomId] >= 3 then
+		triggerRoomAutoSave(roomId)
+		return
+	end
+
+	-- Otherwise schedule a save in 30 seconds
+	roomAutoSaveThreads[roomId] = task.delay(30, function()
+		roomAutoSaveThreads[roomId] = nil
+		triggerRoomAutoSave(roomId)
+	end)
+end
+
+local function cleanupRoomAutoSave(roomId: string)
+	if roomAutoSaveThreads[roomId] then
+		task.cancel(roomAutoSaveThreads[roomId])
+		roomAutoSaveThreads[roomId] = nil
+	end
+	roomSnapCountSinceLastSave[roomId] = nil
+end
 
 local RoomManager = {}
 
@@ -111,6 +234,12 @@ end
 local function destroyRoom(roomId: string)
 	local room = rooms[roomId]
 	if not room then return end
+
+	-- Flush any pending auto-save before destroying
+	if roomSnapCountSinceLastSave[roomId] and roomSnapCountSinceLastSave[roomId] > 0 and room.state == "playing" then
+		saveRoomProgressForAllPlayers(room)
+	end
+	cleanupRoomAutoSave(roomId)
 
 	fireToAll(room, "RoomDestroyed", { roomId = roomId })
 
@@ -311,9 +440,26 @@ local function awardCompletion(player: Player, room: any)
 		end
 	end
 
+	-- Submit to time leaderboard if personal best
+	if isPersonalBest and LeaderboardService then
+		task.spawn(function()
+			LeaderboardService.submitTime(player.UserId, config.difficultyId, completionTime)
+		end)
+	end
+
 	-- Update title billboard
 	if TitleService then
 		TitleService.UpdateTitle(player, profileData.PuzzlesCompletedByDifficulty)
+	end
+
+	-- Clear matching saved puzzle (same imageId + difficultyId)
+	if profileData.SavedPuzzles then
+		for i = #profileData.SavedPuzzles, 1, -1 do
+			local save = profileData.SavedPuzzles[i]
+			if save.imageId == config.imageId and save.difficultyId == config.difficultyId then
+				table.remove(profileData.SavedPuzzles, i)
+			end
+		end
 	end
 
 	local xpAwarded = Remotes.GetEvent("XPAwarded")
@@ -795,6 +941,12 @@ function RoomManager.Init()
 		if room.hostUserId ~= userId then return { error = "Only the host can restart" } end
 		if room.state ~= "complete" then return { error = "Room is not complete" } end
 
+		-- Flush any pending auto-save before resetting
+		if roomSnapCountSinceLastSave[roomId] and roomSnapCountSinceLastSave[roomId] > 0 then
+			saveRoomProgressForAllPlayers(room)
+		end
+		cleanupRoomAutoSave(roomId)
+
 		-- Reset puzzle state
 		room.state = "lobby"
 		room.pieces = nil
@@ -816,6 +968,126 @@ function RoomManager.Init()
 		end
 
 		fireToAll(room, "RoomReturnedToLobby", { config = room.config })
+
+		return { success = true }
+	end
+
+	-- ResumeRoom — host configures + starts room from saved puzzle state
+	local resumeRoom = Remotes.GetFunction("ResumeRoom")
+	resumeRoom.OnServerInvoke = function(player, saveData)
+		local userId = player.UserId
+		local roomId = playerRooms[userId]
+		if not roomId then return { error = "Not in a room" } end
+
+		local room = rooms[roomId]
+		if not room then return { error = "Room not found" } end
+		if room.hostUserId ~= userId then return { error = "Only the host can start" } end
+		if room.state ~= "lobby" then return { error = "Room already started" } end
+
+		-- Validate save data
+		if type(saveData) ~= "table" then return { error = "Invalid save data" } end
+		if type(saveData.imageId) ~= "string" or type(saveData.imageAssetId) ~= "string" then
+			return { error = "Invalid save data" }
+		end
+		if type(saveData.difficultyId) ~= "string" or type(saveData.rows) ~= "number" or type(saveData.cols) ~= "number" then
+			return { error = "Invalid save data" }
+		end
+		if type(saveData.puzzleDef) ~= "table" or type(saveData.pieces) ~= "table" then
+			return { error = "Invalid save data" }
+		end
+		if not ProgressionConfig.VALID_DIFFICULTIES[saveData.difficultyId] then
+			return { error = "Invalid difficulty" }
+		end
+		local expectedGrid = ProgressionConfig.DIFFICULTY_GRID[saveData.difficultyId]
+		if expectedGrid and (saveData.rows ~= expectedGrid.rows or saveData.cols ~= expectedGrid.cols) then
+			return { error = "Grid mismatch" }
+		end
+
+		-- Verify the host has the image unlocked
+		local imageId = saveData.imageId
+		if imageId and imageId ~= "" then
+			local entry = ImageCatalog.getById(imageId)
+			if entry and not entry.defaultUnlocked then
+				local profileData = ProfileService.GetData(player)
+				local unlockedViaProfile = profileData and profileData.UnlockedImages and profileData.UnlockedImages[imageId]
+				local unlockedViaGamePass = false
+				if MonetizationConfig.GAME_PASSES and MonetizationConfig.GAME_PASSES.ALL_IMAGES then
+					local ok, result = pcall(function()
+						return MarketplaceService:UserOwnsGamePassAsync(player.UserId, MonetizationConfig.GAME_PASSES.ALL_IMAGES.id)
+					end)
+					unlockedViaGamePass = ok and result == true
+				end
+				if not unlockedViaProfile and not unlockedViaGamePass then
+					return { error = "Image is locked" }
+				end
+			end
+		end
+
+		-- Configure room from save data
+		room.config = {
+			imageAssetId = saveData.imageAssetId,
+			imageId = saveData.imageId,
+			difficultyId = saveData.difficultyId,
+			rows = saveData.rows,
+			cols = saveData.cols,
+		}
+
+		-- Use saved puzzle definition instead of generating new
+		room.puzzleDef = saveData.puzzleDef
+
+		-- Restore piece positions from save
+		local pieces: { [number]: any } = {}
+		local restoredGroups: { [number]: { number } } = {}
+		local maxGroupId = 0
+		for _, p in saveData.pieces do
+			pieces[p.id] = {
+				x = p.x,
+				y = p.y,
+				zIndex = p.zIndex or 1,
+				locked = p.locked or false,
+				claimedBy = nil,
+				claimedAt = nil,
+				groupId = p.groupId,
+			}
+			if p.groupId then
+				if not restoredGroups[p.groupId] then
+					restoredGroups[p.groupId] = {}
+				end
+				table.insert(restoredGroups[p.groupId], p.id)
+				if p.groupId > maxGroupId then maxGroupId = p.groupId end
+			end
+		end
+		room.pieces = pieces
+		room.groups = restoredGroups
+		room.nextGroupId = maxGroupId + 1
+		room.state = "playing"
+		room.startTime = os.clock() - (saveData.elapsedSeconds or 0)
+		room.zCounter = 2
+
+		-- Notify table status
+		if stateChangeCallback then
+			local count = 0
+			for _ in room.players do count += 1 end
+			stateChangeCallback(roomId, "playing", count)
+		end
+
+		-- Build serializable pieces table
+		local piecesData = {}
+		for pieceId, piece in room.pieces do
+			piecesData[tostring(pieceId)] = {
+				x = piece.x,
+				y = piece.y,
+				zIndex = piece.zIndex,
+				locked = piece.locked,
+				groupId = piece.groupId,
+			}
+		end
+
+		fireToAll(room, "RoomPuzzleStarted", {
+			puzzleDef = room.puzzleDef,
+			pieces = piecesData,
+			config = room.config,
+		})
 
 		return { success = true }
 	end
@@ -965,9 +1237,11 @@ function RoomManager.Init()
 			table.insert(piecesSnappedData, { id = mid, x = cx, y = cy })
 		end
 		fireToAll(room, "RoomPiecesSnapped", { pieces = piecesSnappedData, snapEffect = snapEffect or "" })
+		onRoomPieceSnapped(roomId)
 
 		if checkCompletion(room) then
 			room.state = "complete"
+			cleanupRoomAutoSave(roomId)
 			fireToAll(room, "RoomCompleted", {})
 
 			if stateChangeCallback then
@@ -1088,9 +1362,11 @@ function RoomManager.Init()
 				local placerData = ProfileService.GetData(player)
 				local placerSnapEffect = if placerData then placerData.EquippedSnapEffect or "" else ""
 				fireToAll(room, "RoomPieceSnapped", { id = pieceId, x = correctX, y = correctY, snapEffect = placerSnapEffect })
+				onRoomPieceSnapped(roomId)
 
 				if checkCompletion(room) then
 					room.state = "complete"
+					cleanupRoomAutoSave(roomId)
 					fireToAll(room, "RoomCompleted", {})
 
 					if stateChangeCallback then
@@ -1262,6 +1538,7 @@ function RoomManager.Init()
 						end
 					end
 					fireToAll(room, "RoomGroupFormed", { groupId = finalGid, pieces = groupPieces })
+					onRoomPieceSnapped(roomId)
 
 					-- Clear claims on all members
 					for _, pid in finalList do
@@ -1386,10 +1663,12 @@ function RoomManager.Init()
 		fireToAll(room, "RoomPieceSnapped", {
 			id = targetId, x = correctX, y = correctY
 		})
+		onRoomPieceSnapped(roomId)
 
 		-- Check completion
 		if checkCompletion(room) then
 			room.state = "complete"
+			cleanupRoomAutoSave(roomId)
 			fireToAll(room, "RoomCompleted", {})
 
 			if stateChangeCallback then

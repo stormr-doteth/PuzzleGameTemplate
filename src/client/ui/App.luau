@@ -29,6 +29,7 @@ local DevToolPanel = require(script.Parent.components.DevToolPanel)
 local RoomCodeEntryScreen = require(script.Parent.components.RoomCodeEntryScreen)
 local StarterPackButton = require(script.Parent.components.StarterPackButton)
 local StarterPackModal = require(script.Parent.components.StarterPackModal)
+local ResumePromptModal = require(script.Parent.components.ResumePromptModal)
 
 -- SeatingService loaded optionally
 local SeatingService = nil
@@ -64,7 +65,11 @@ local function App(props)
 
 	-- Saved puzzles state
 	local savedPuzzles, setSavedPuzzles = React.useState({} :: { any })
+	local savedPuzzlesRef = React.useRef(savedPuzzles)
+	savedPuzzlesRef.current = savedPuzzles
 	local resumeState, setResumeState = React.useState(nil :: any)
+	local showResumePrompt, setShowResumePrompt = React.useState(false)
+	local didResumeFromPromptRef = React.useRef(false)
 
 	-- Multiplayer room state
 	local roomInfo, setRoomInfo = React.useState(nil :: any)
@@ -494,6 +499,12 @@ local function App(props)
 					SeatingService.TransitionCameraToTable(data.tableId)
 				end
 
+				-- Check for saved puzzles to show resume prompt (both single and multi tables)
+				local saves = savedPuzzlesRef.current
+				if saves and #saves > 0 then
+					setShowResumePrompt(true)
+				end
+
 				if data.tableType == "single" then
 					setGameState("menu")
 				elseif string.find(data.tableType, "^multi") then
@@ -510,7 +521,10 @@ local function App(props)
 								if ok and result and result.roomInfo then
 									setRoomInfo(result.roomInfo)
 									setRoomConfig(result.roomInfo.config)
-									setGameState("room_lobby")
+									-- Don't overwrite gameState if player already chose to resume a saved puzzle
+									if not didResumeFromPromptRef.current then
+										setGameState("room_lobby")
+									end
 								end
 							end
 						end)
@@ -533,6 +547,8 @@ local function App(props)
 				setRoomPuzzleDef(nil)
 				setRoomInitialPieces(nil)
 				setRoomConfig(nil)
+				setShowResumePrompt(false)
+				didResumeFromPromptRef.current = false
 	
 	
 	
@@ -664,6 +680,7 @@ local function App(props)
 		savePuzzleData(saveData)
 	end
 
+
 	local function onGiveUp()
 		setResumeState(nil)
 		if seatingInfo then
@@ -716,6 +733,37 @@ local function App(props)
 				if ok and saves then setSavedPuzzles(saves) end
 			end
 		end)
+	end
+
+	-- Resume prompt handlers
+	local function onResumeFromPrompt(slotIndex: number)
+		setShowResumePrompt(false)
+		local save = savedPuzzles[slotIndex]
+		if not save then return end
+
+		-- Check if we're at a multiplayer table
+		local isMultiTable = seatingInfo and string.find(seatingInfo.tableType, "^multi")
+		if isMultiTable then
+			didResumeFromPromptRef.current = true
+			-- Resume as multiplayer: call ResumeRoom to configure + start room with saved state
+			task.spawn(function()
+				local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+				if not remotes then return end
+				local resumeRemote = remotes:FindFirstChild("ResumeRoom")
+				if resumeRemote and resumeRemote:IsA("RemoteFunction") then
+					local ok, result = pcall(function() return resumeRemote:InvokeServer(save) end)
+					if ok and result and result.error then
+						warn("[App] ResumeRoom error:", result.error)
+					end
+				end
+			end)
+		else
+			onResume(slotIndex)
+		end
+	end
+
+	local function onStartFresh()
+		setShowResumePrompt(false)
 	end
 
 	-- === Multiplayer handlers ===
@@ -803,6 +851,16 @@ local function App(props)
 			setGameState("walking")
 		end
 		-- Otherwise, PlayerUnseated event will handle the state transition
+	end
+
+	-- Multiplayer save callbacks (save & exit leaves room, save & continue just saves)
+	local function onMpBackToMenu(saveData: any)
+		savePuzzleData(saveData)
+		onLeaveRoom()
+	end
+
+	local function onMpSaveContinue(saveData: any)
+		savePuzzleData(saveData)
 	end
 
 	-- Stand up from table without leaving a room (for code entry screen)
@@ -1784,6 +1842,15 @@ local function App(props)
 			hasClaimedFavoriteReward = if playerData then playerData.hasClaimedFavoriteReward else false,
 		})
 
+		-- Resume prompt overlay
+		if showResumePrompt and savedPuzzles and #savedPuzzles > 0 then
+			safeChildren["ResumePrompt"] = React.createElement(ResumePromptModal, {
+				savedPuzzles = savedPuzzles,
+				onResume = onResumeFromPrompt,
+				onNewPuzzle = onStartFresh,
+			})
+		end
+
 		-- Leave Table button
 		safeChildren["LeaveTableBtn"] = React.createElement("TextButton", {
 			AnchorPoint = Vector2.new(0.5, 1),
@@ -1815,6 +1882,15 @@ local function App(props)
 			onLeaveTable = onLeaveTable,
 			joinError = roomJoinError,
 		})
+
+		-- Resume prompt overlay for room code entry
+		if showResumePrompt and savedPuzzles and #savedPuzzles > 0 then
+			safeChildren["ResumePrompt"] = React.createElement(ResumePromptModal, {
+				savedPuzzles = savedPuzzles,
+				onResume = onResumeFromPrompt,
+				onNewPuzzle = onStartFresh,
+			})
+		end
 	end
 
 	-- Room lobby screen
@@ -1836,7 +1912,33 @@ local function App(props)
 			onUnlockImageRobux = onUnlockImageRobux,
 			hasExpertPass = if playerData then playerData.hasExpertPass else nil,
 			onPromptExpertPass = onPromptExpertPass,
+			savedPuzzles = savedPuzzles,
+			onResumeSave = function(slotIndex: number)
+				local save = savedPuzzles[slotIndex]
+				if not save then return end
+				task.spawn(function()
+					local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+					if not remotes then return end
+					local resumeRemote = remotes:FindFirstChild("ResumeRoom")
+					if resumeRemote and resumeRemote:IsA("RemoteFunction") then
+						local ok, result = pcall(function() return resumeRemote:InvokeServer(save) end)
+						if ok and result and result.error then
+							warn("[App] ResumeRoom error:", result.error)
+						end
+					end
+				end)
+			end,
+			onDeleteSave = onDeleteSave,
 		})
+
+		-- Resume prompt overlay for multiplayer lobby
+		if showResumePrompt and savedPuzzles and #savedPuzzles > 0 then
+			safeChildren["ResumePrompt"] = React.createElement(ResumePromptModal, {
+				savedPuzzles = savedPuzzles,
+				onResume = onResumeFromPrompt,
+				onNewPuzzle = onStartFresh,
+			})
+		end
 	end
 
 	-- Room code badge overlay (visible during lobby and playing)
@@ -1911,8 +2013,8 @@ local function App(props)
 					-- In multiplayer, completion is handled by RoomCompleted event
 				end else onComplete,
 				onGiveUp = if isMultiplayerBoard then onLeaveRoom else onGiveUp,
-				onBackToMenu = if isMultiplayerBoard then nil else onBackToMenu,
-				onSaveContinue = if isMultiplayerBoard then nil else onSaveContinue,
+				onBackToMenu = if isMultiplayerBoard then onMpBackToMenu else onBackToMenu,
+				onSaveContinue = if isMultiplayerBoard then onMpSaveContinue else onSaveContinue,
 				savedState = if isMultiplayerBoard then nil else resumeState,
 				equippedBoardSkin = if playerData then playerData.equippedBoardSkin else nil,
 				equippedSnapEffect = if playerData then playerData.equippedSnapEffect else nil,

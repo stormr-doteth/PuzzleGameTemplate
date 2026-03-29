@@ -146,6 +146,124 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	zoomStateRef.current = zoomState
 	actionsRef.current = actions
 
+	-- Auto-save refs and logic (solo only)
+	local isCompleteRef = React.useRef(false)
+	isCompleteRef.current = state.isComplete
+	local lockedCountSinceLastSave = React.useRef(0)
+	local autoSaveTimerThread = React.useRef(nil :: thread?)
+
+	local buildSaveData = React.useCallback(function()
+		local curState = stateRef.current
+		local curPuzzleDef = puzzleDefRef.current
+		if not curPuzzleDef then return nil end
+
+		local savePieces = {}
+		for id, p in curState.pieces do
+			if props.isMultiplayer then
+				-- Multiplayer: save virtual coords as-is
+				table.insert(savePieces, {
+					id = id, x = p.x, y = p.y,
+					zIndex = p.zIndex, locked = p.locked,
+					groupId = p.groupId,
+				})
+			else
+				-- Solo: save as offset from board center in board-size units
+				local camera = workspace.CurrentCamera
+				local vpW = if camera then camera.ViewportSize.X else 1200
+				local vpH = if camera then camera.ViewportSize.Y else 800
+				local bW = boardSizeRef.current.X
+				local bH = boardSizeRef.current.Y
+				local boardCenterX = vpW / 2
+				local boardCenterY = vpH / 2
+				table.insert(savePieces, {
+					id = id,
+					x = if bW > 0 then (p.x - boardCenterX) / bW else 0,
+					y = if bH > 0 then (p.y - boardCenterY) / bH else 0,
+					zIndex = p.zIndex, locked = p.locked,
+					groupId = p.groupId,
+				})
+			end
+		end
+		local saveGroups = {}
+		for gid, memberIds in curState.groups do
+			table.insert(saveGroups, { id = gid, pieceIds = memberIds })
+		end
+		return {
+			imageId = props.imageId,
+			imageAssetId = props.imageAssetId,
+			difficultyId = props.difficultyId,
+			rows = props.rows,
+			cols = props.cols,
+			elapsedSeconds = timer.elapsedSeconds,
+			savedAt = os.time(),
+			puzzleDef = curPuzzleDef,
+			pieces = savePieces,
+			groups = saveGroups,
+			isVirtualCoords = if props.isMultiplayer then true else nil,
+			isBoardRelativeCoords = if not props.isMultiplayer then true else nil,
+		}
+	end, { state.pieces, state.groups, timer.elapsedSeconds, puzzleDef } :: { any })
+
+	local buildSaveDataRef = React.useRef(buildSaveData)
+	buildSaveDataRef.current = buildSaveData
+
+	local function triggerAutoSave()
+		if isCompleteRef.current then return end
+		if props.isMultiplayer then return end
+		if not puzzleDefRef.current then return end
+		lockedCountSinceLastSave.current = 0
+		if props.onSaveContinue then
+			local saveData = buildSaveDataRef.current()
+			if saveData then
+				props.onSaveContinue(saveData)
+			end
+		end
+	end
+
+	local function onPieceSnapped()
+		if isCompleteRef.current then return end
+		if props.isMultiplayer then return end
+
+		lockedCountSinceLastSave.current += 1
+
+		-- Cancel any pending delayed save
+		if autoSaveTimerThread.current then
+			task.cancel(autoSaveTimerThread.current)
+			autoSaveTimerThread.current = nil
+		end
+
+		-- Save every 3 locked pieces
+		if lockedCountSinceLastSave.current >= 3 then
+			triggerAutoSave()
+			return
+		end
+
+		-- Otherwise schedule a save in 30 seconds
+		autoSaveTimerThread.current = task.delay(30, function()
+			autoSaveTimerThread.current = nil
+			triggerAutoSave()
+		end)
+	end
+
+	-- Flush pending auto-save on unmount
+	React.useEffect(function()
+		return function()
+			if autoSaveTimerThread.current then
+				task.cancel(autoSaveTimerThread.current)
+				autoSaveTimerThread.current = nil
+			end
+			-- Fire one last save if there are unsaved snaps
+			if lockedCountSinceLastSave.current > 0 and not isCompleteRef.current and not props.isMultiplayer then
+				if puzzleDefRef.current and props.onSaveContinue then
+					local saveData = buildSaveDataRef.current()
+					if saveData then
+						props.onSaveContinue(saveData)
+					end
+				end
+			end
+		end
+	end, {})
+
 	-- Load image and generate/restore puzzle on mount
 	React.useEffect(function()
 		setIsLoading(true)
@@ -202,7 +320,60 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				-- No scramble or restore needed
 			elseif props.savedState then
 				-- Restore piece positions and timer from saved state
-				actions.restorePieces(props.savedState.pieces, props.savedState.groups)
+				local piecesToRestore = props.savedState.pieces
+				local camera = workspace.CurrentCamera
+				local viewportW = if camera then camera.ViewportSize.X else 1200
+				local viewportH = if camera then camera.ViewportSize.Y else 800
+
+				if props.savedState.isVirtualCoords then
+					-- Convert virtual canvas coords to screen image coords
+					local vw = RoomTypes.VIRTUAL_CANVAS_WIDTH
+					local vh = RoomTypes.VIRTUAL_CANVAS_HEIGHT
+					local bOffX = math.floor((viewportW - displayBoardW) / 2)
+					local bOffY = math.floor((viewportH - displayBoardH) / 2)
+					local converted = {}
+					for _, p in piecesToRestore do
+						local imgData = images[p.id]
+						local sox = if imgData then math.floor(imgData.offsetX * scale) else 0
+						local soy = if imgData then math.floor(imgData.offsetY * scale) else 0
+						local screenX = p.x / vw * displayBoardW + bOffX - sox
+						local screenY = p.y / vh * displayBoardH + bOffY - soy
+						table.insert(converted, {
+							id = p.id, x = screenX, y = screenY,
+							zIndex = p.zIndex, locked = p.locked,
+							groupId = p.groupId,
+						})
+					end
+					piecesToRestore = converted
+				elseif props.savedState.isBoardRelativeCoords then
+					-- Convert board-relative coords back to screen pixels
+					local boardCenterX = viewportW / 2
+					local boardCenterY = viewportH / 2
+					local converted = {}
+					for _, p in piecesToRestore do
+						table.insert(converted, {
+							id = p.id,
+							x = p.x * displayBoardW + boardCenterX,
+							y = p.y * displayBoardH + boardCenterY,
+							zIndex = p.zIndex, locked = p.locked,
+							groupId = p.groupId,
+						})
+					end
+					piecesToRestore = converted
+				elseif props.savedState.isNormalizedCoords then
+					-- Legacy normalized viewport coords (convert best-effort)
+					local converted = {}
+					for _, p in piecesToRestore do
+						table.insert(converted, {
+							id = p.id, x = p.x * viewportW, y = p.y * viewportH,
+							zIndex = p.zIndex, locked = p.locked,
+							groupId = p.groupId,
+						})
+					end
+					piecesToRestore = converted
+				end
+				-- else: legacy saves with raw pixel coords — use as-is (best effort)
+				actions.restorePieces(piecesToRestore, props.savedState.groups)
 				timer.restore(props.savedState.elapsedSeconds)
 			else
 				local pieceIds = {}
@@ -584,6 +755,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			)
 			if snapped then
 				SoundService.playSnap()
+				onPieceSnapped()
 				local effectX, effectY = zoomActionsRef.current.worldToScreen(
 					x + curCellSize.X / 2, y + curCellSize.Y / 2
 				)
@@ -667,6 +839,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 
 		actions.snapPiece(targetId, correctX, correctY)
 		SoundService.playSnap()
+		onPieceSnapped()
 
 		-- Flash green highlight
 		setHintHighlightId(targetId)
@@ -777,13 +950,11 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			Font = Theme.Font.medium,
 			ZIndex = 50,
 			[React.Event.Activated] = function()
-				if props.isMultiplayer then
-					if props.onGiveUp then
-						props.onGiveUp()
-					end
-				elseif puzzleDef then
+				if puzzleDef then
 					timer.stop()
 					setShowSavePrompt(true)
+				elseif props.onGiveUp then
+					props.onGiveUp()
 				end
 			end,
 		}, {
@@ -791,7 +962,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 		})
 
-		if not props.isMultiplayer then
+		do
 			children["SavePuzzleButton"] = React.createElement("TextButton", {
 				AnchorPoint = Vector2.new(1, 0),
 				Position = UDim2.new(1, -scaled(146), 0, 4),
@@ -815,7 +986,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		end
 
 		-- Shop button (top-right, to the left of Save/Back)
-		local shopOffset = if props.isMultiplayer then scaled(146) else scaled(254)
+		local shopOffset = scaled(254)
 		children["ShopButton"] = React.createElement("TextButton", {
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -shopOffset, 0, 4),
@@ -1808,33 +1979,6 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			ZIndex = 100,
 			[React.Event.Activated] = function() end,
 		})
-		local function buildSaveData()
-			local savePieces = {}
-			for id, p in state.pieces do
-				table.insert(savePieces, {
-					id = id, x = p.x, y = p.y,
-					zIndex = p.zIndex, locked = p.locked,
-					groupId = p.groupId,
-				})
-			end
-			local saveGroups = {}
-			for gid, memberIds in state.groups do
-				table.insert(saveGroups, { id = gid, pieceIds = memberIds })
-			end
-			return {
-				imageId = props.imageId,
-				imageAssetId = props.imageAssetId,
-				difficultyId = props.difficultyId,
-				rows = props.rows,
-				cols = props.cols,
-				elapsedSeconds = timer.elapsedSeconds,
-				savedAt = os.time(),
-				puzzleDef = puzzleDef,
-				pieces = savePieces,
-				groups = saveGroups,
-			}
-		end
-
 		children["SavePromptCard"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),

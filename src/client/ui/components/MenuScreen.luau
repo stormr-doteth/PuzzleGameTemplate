@@ -535,10 +535,13 @@ local function MenuScreen(props: MenuScreenProps)
 		menuChildren["DailyPuzzleCard"] = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.new(0.5, 0, 0, -topInset + 44),
-			Size = UDim2.new(0, 320, 0, 80),
+			Size = UDim2.new(0.35, 0, 0.12, 0),
 			BackgroundTransparency = 1,
 			ZIndex = 10,
 		}, {
+			SizeConstraint = React.createElement("UISizeConstraint", {
+				MaxSize = Vector2.new(320, 80),
+			}),
 			Card = React.createElement(DailyPuzzleCard, {
 				dailyPuzzle = props.dailyPuzzle,
 				completed = props.dailyPuzzleCompleted == true,

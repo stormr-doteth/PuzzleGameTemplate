@@ -34,7 +34,16 @@ export type RoomLobbyScreenProps = {
 	onUnlockImageRobux: ((imageId: string) -> ())?,
 	hasExpertPass: boolean?,
 	onPromptExpertPass: (() -> ())?,
+	savedPuzzles: { any }?,
+	onResumeSave: ((slotIndex: number) -> ())?,
+	onDeleteSave: ((slotIndex: number) -> ())?,
 }
+
+local function formatTime(seconds: number): string
+	local mins = math.floor(seconds / 60)
+	local secs = math.floor(seconds % 60)
+	return string.format("%d:%02d", mins, secs)
+end
 
 local PLAYER_COLORS = {
 	Theme.Colors.player1,
@@ -51,6 +60,10 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 	local selectedPackId, setSelectedPackId = React.useState(nil :: string?)
 
 	local localUserId = Players.LocalPlayer and Players.LocalPlayer.UserId or 0
+
+	local showSavedPuzzles, setShowSavedPuzzles = React.useState(false)
+	local savedPuzzles = props.savedPuzzles
+	local hasSaves = savedPuzzles and #savedPuzzles > 0
 
 	-- Friend detection: check if any player in room is a friend
 	local friendsInRoom, setFriendsInRoom = React.useState(0)
@@ -746,6 +759,188 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 			TextStrokeTransparency = 0.3,
 			ZIndex = 2,
 		}) else nil,
+		SavedPuzzlesBtn = if hasSaves and props.isHost then React.createElement("TextButton", {
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.fromScale(0.98, 0.98),
+			Size = UDim2.fromScale(0.18, 0.06),
+			BackgroundColor3 = Theme.Colors.accentBlue,
+			Text = "Saved Puzzles",
+			TextColor3 = Theme.Colors.textPrimary,
+			TextSize = Theme.TextSize.label,
+			Font = Theme.Font.bold,
+			TextScaled = true,
+			ZIndex = 2,
+			[React.Event.Activated] = function()
+				setShowSavedPuzzles(true)
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", {
+				Color = Theme.Colors.border,
+				Thickness = 1.5,
+			}),
+			TextPadding = React.createElement("UIPadding", {
+				PaddingLeft = UDim.new(0.05, 0),
+				PaddingRight = UDim.new(0.05, 0),
+			}),
+		}) else nil,
+		SavedPuzzlesBackdrop = if showSavedPuzzles then React.createElement("TextButton", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Theme.Colors.black,
+			BackgroundTransparency = Theme.Transparency.overlay,
+			Text = "",
+			ZIndex = 10,
+			[React.Event.Activated] = function()
+				setShowSavedPuzzles(false)
+			end,
+		}) else nil,
+		SavedPuzzlesModal = if showSavedPuzzles then React.createElement("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(0.32, 0.7),
+			BackgroundColor3 = Theme.Colors.bgMedium,
+			ZIndex = 11,
+		}, (function()
+			local entries: { [string]: any } = {}
+			entries["Corner"] = React.createElement("UICorner", { CornerRadius = UDim.new(0, 12) })
+			entries["Title"] = React.createElement("TextLabel", {
+				Position = UDim2.fromScale(0.04, 0.03),
+				Size = UDim2.fromScale(0.7, 0.1),
+				BackgroundTransparency = 1,
+				Text = "Saved Puzzles",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = Theme.TextSize.large,
+				Font = Theme.Font.bold,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextScaled = true,
+				ZIndex = 11,
+			})
+			entries["CloseBtn"] = React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(1, 0),
+				Position = UDim2.fromScale(0.97, 0.02),
+				Size = UDim2.fromScale(0.1, 0.1),
+				BackgroundColor3 = Theme.Colors.border,
+				Text = "X",
+				TextColor3 = Theme.Colors.textSecondary,
+				TextSize = Theme.TextSize.body,
+				Font = Theme.Font.bold,
+				TextScaled = true,
+				ZIndex = 11,
+				[React.Event.Activated] = function()
+					setShowSavedPuzzles(false)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+			})
+
+			local listChildren: { [string]: any } = {}
+			listChildren["Layout"] = React.createElement("UIListLayout", {
+				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				Padding = UDim.new(0.02, 0),
+			})
+			listChildren["Padding"] = React.createElement("UIPadding", {
+				PaddingLeft = UDim.new(0.03, 0),
+				PaddingRight = UDim.new(0.03, 0),
+				PaddingTop = UDim.new(0.02, 0),
+				PaddingBottom = UDim.new(0.02, 0),
+			})
+
+			if savedPuzzles and #savedPuzzles > 0 then
+				for i, save in savedPuzzles do
+					local imageEntry = ImageCatalog.getById(save.imageId)
+					local imageName = if imageEntry then imageEntry.name else save.imageId
+					local timeStr = formatTime(save.elapsedSeconds or 0)
+					local label = save.difficultyId .. " - " .. imageName .. " - " .. timeStr
+
+					listChildren["Save_" .. i] = React.createElement("Frame", {
+						LayoutOrder = i,
+						Size = UDim2.fromScale(1, 0.18),
+						BackgroundColor3 = Theme.Colors.bgInput,
+						BorderSizePixel = 0,
+					}, {
+						Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+						Label = React.createElement("TextLabel", {
+							Position = UDim2.fromScale(0.03, 0.05),
+							Size = UDim2.fromScale(0.94, 0.4),
+							BackgroundTransparency = 1,
+							Text = label,
+							TextColor3 = Theme.Colors.textSecondary,
+							TextSize = Theme.TextSize.body,
+							Font = Theme.Font.medium,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							TextScaled = true,
+							TextTruncate = Enum.TextTruncate.AtEnd,
+							ZIndex = 11,
+						}),
+						ResumeBtn = React.createElement("TextButton", {
+							Position = UDim2.fromScale(0.03, 0.5),
+							Size = UDim2.fromScale(0.35, 0.4),
+							BackgroundColor3 = Theme.Colors.success,
+							Text = "Resume",
+							TextColor3 = Theme.Colors.textPrimary,
+							TextSize = Theme.TextSize.body,
+							Font = Theme.Font.medium,
+							TextScaled = true,
+							ZIndex = 11,
+							[React.Event.Activated] = function()
+								if props.onResumeSave then
+									setShowSavedPuzzles(false)
+									props.onResumeSave(i)
+								end
+							end,
+						}, {
+							Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+						}),
+						DeleteBtn = React.createElement("TextButton", {
+							Position = UDim2.fromScale(0.4, 0.5),
+							Size = UDim2.fromScale(0.25, 0.4),
+							BackgroundColor3 = Theme.Colors.dangerDark,
+							Text = "Delete",
+							TextColor3 = Color3.fromRGB(255, 220, 220),
+							TextSize = Theme.TextSize.body,
+							Font = Theme.Font.medium,
+							TextScaled = true,
+							ZIndex = 11,
+							[React.Event.Activated] = function()
+								if props.onDeleteSave then
+									props.onDeleteSave(i)
+								end
+							end,
+						}, {
+							Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+						}),
+					})
+				end
+			else
+				listChildren["Empty"] = React.createElement("TextLabel", {
+					LayoutOrder = 1,
+					Size = UDim2.fromScale(1, 0.12),
+					BackgroundTransparency = 1,
+					Text = "No saved puzzles",
+					TextColor3 = Theme.Colors.textDisabled,
+					TextSize = Theme.TextSize.body,
+					Font = Theme.Font.medium,
+					TextScaled = true,
+					TextXAlignment = Enum.TextXAlignment.Center,
+					ZIndex = 11,
+				})
+			end
+
+			entries["SavesList"] = React.createElement("ScrollingFrame", {
+				Position = UDim2.fromScale(0, 0.14),
+				Size = UDim2.fromScale(1, 0.86),
+				BackgroundTransparency = 1,
+				ScrollBarThickness = 3,
+				ScrollBarImageColor3 = Theme.Colors.scrollbar,
+				ScrollingDirection = Enum.ScrollingDirection.Y,
+				CanvasSize = UDim2.fromScale(0, 0),
+				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+				ZIndex = 11,
+			}, listChildren)
+
+			return entries
+		end)()) else nil,
 	})
 end
 
