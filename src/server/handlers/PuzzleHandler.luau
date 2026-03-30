@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes = require(Shared.Remotes)
+local MonetizationConfig = require(Shared.MonetizationConfig)
 local ProgressionConfig = require(Shared.ProgressionConfig)
 local ImageCatalog = require(Shared.ImageCatalog)
 
@@ -366,7 +367,7 @@ function PuzzleHandler.Init()
 			dailyPuzzle_lastCompletionDate = profileData.DailyPuzzle_LastCompletionDate or "",
 			spinWheel_lastFreeSpinDate = profileData.SpinWheel_LastFreeSpinDate or "",
 			hasClaimedFavoriteReward = profileData.HasClaimedFavoriteReward == true,
-			starterPack_expiryTime = (profileData.StarterPack_FirstJoinTime or 0) + 1200,
+			starterPack_expiryTime = (profileData.StarterPack_FirstJoinTime or 0) + MonetizationConfig.STARTER_PACK_DURATION,
 			starterPack_purchased = profileData.StarterPack_Purchased == true,
 		}
 	end

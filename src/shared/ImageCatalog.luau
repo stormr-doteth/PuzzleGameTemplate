@@ -242,7 +242,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://105941517770020",
 		category = "Space",
 		packId = "space",
-		defaultUnlocked = false,
+		defaultUnlocked = true,
 	},
 	{
 		id = "sushi_platter",
@@ -269,7 +269,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://83955374040675",
 		category = "Space",
 		packId = "space",
-		defaultUnlocked = false,
+		defaultUnlocked = true,
 	},
 	{
 		id = "watercolor_flowers",
@@ -305,7 +305,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://113246660851151",
 		category = "Space",
 		packId = "space",
-		defaultUnlocked = false,
+		defaultUnlocked = true,
 	},
 	{
 		id = "oil_painting",
@@ -998,7 +998,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://107668098844514",
 		category = "Space",
 		packId = "space",
-		defaultUnlocked = false,
+		defaultUnlocked = true,
 	},
 	{
 		id = "pixel_art",
@@ -1034,7 +1034,7 @@ local IMAGES: { ImageEntry } = {
 		thumbnailId = "rbxassetid://71494749483602",
 		category = "Space",
 		packId = "space",
-		defaultUnlocked = false,
+		defaultUnlocked = true,
 	},
 	-- Brainrots pack
 	{

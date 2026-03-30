@@ -4,7 +4,10 @@ local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local React = require(Packages.React)
 
+local FavoriteRewardConfig = require(Shared.FavoriteRewardConfig)
 local Theme = require(Shared.Theme)
+
+local GROUP_ID = FavoriteRewardConfig.GROUP_ID
 
 export type LikeFavoriteModalProps = {
 	onConfirm: () -> (),
@@ -32,7 +35,7 @@ local function LikeFavoriteModal(props: LikeFavoriteModalProps)
 		LayoutOrder = 1,
 		Size = UDim2.new(1, 0, 0, 36),
 		BackgroundTransparency = 1,
-		Text = "Like & Favorite to Unlock!",
+		Text = "Join Group & Like to Unlock!",
 		TextColor3 = Theme.Colors.gold,
 		TextSize = Theme.TextSize.heading,
 		Font = Theme.Font.heading,
@@ -47,14 +50,44 @@ local function LikeFavoriteModal(props: LikeFavoriteModalProps)
 		LayoutOrder = 2,
 		Size = UDim2.new(1, 0, 0, 48),
 		BackgroundTransparency = 1,
-		Text = "Help us grow! Like \u{1F44D} and Favorite \u{2B50} the game, then tap below to claim your FREE puzzle pack!",
+		Text = "Help us grow! Join our Roblox group \u{1F465} and Like \u{1F44D} the game, then tap below to claim your FREE puzzle pack!",
 		TextColor3 = Theme.Colors.textSecondary,
 		TextSize = Theme.TextSize.body,
 		Font = Theme.Font.regular,
 		TextWrapped = true,
 	})
 
-	-- Show error message if not favorited
+	-- Join Group button — prompts the native Roblox group join dialog
+	modalChildren["JoinGroupBtn"] = React.createElement("TextButton", {
+		LayoutOrder = 3,
+		Size = UDim2.new(0.7, 0, 0, 40),
+		BackgroundColor3 = Theme.Colors.accentBlue,
+		Text = "\u{1F465} Join Group",
+		TextColor3 = Theme.Colors.textPrimary,
+		TextSize = Theme.TextSize.button,
+		Font = Theme.Font.bold,
+		[React.Event.Activated] = function()
+			print("[JoinGroup] Button clicked, GROUP_ID:", GROUP_ID)
+			task.spawn(function()
+				local ok, result = pcall(function()
+					return game:GetService("GroupService"):PromptJoinAsync(GROUP_ID)
+				end)
+				if ok then
+					print("[JoinGroup] PromptJoinAsync result:", result)
+				else
+					warn("[JoinGroup] PromptJoinAsync FAILED:", result)
+				end
+			end)
+		end,
+	}, {
+		Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+		Stroke = React.createElement("UIStroke", {
+			Thickness = 2,
+			Color = Theme.Colors.border,
+		}),
+	})
+
+	-- Show error message if not in group
 	if props.errorMessage and props.errorMessage ~= "" then
 		modalChildren["Error"] = React.createElement("TextLabel", {
 			LayoutOrder = 3,
@@ -68,7 +101,7 @@ local function LikeFavoriteModal(props: LikeFavoriteModalProps)
 		})
 	end
 
-	local btnText = if props.isChecking then "Checking..." else "Claim Free Pack!"
+	local btnText = if props.isChecking then "Verifying..." else "Claim Free Pack!"
 
 	modalChildren["ConfirmBtn"] = React.createElement("TextButton", {
 		LayoutOrder = 4,
@@ -117,7 +150,7 @@ local function LikeFavoriteModal(props: LikeFavoriteModalProps)
 		Modal = React.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
-			Size = UDim2.fromOffset(420, 300),
+			Size = UDim2.fromOffset(420, 360),
 			BackgroundColor3 = Theme.Colors.bgDark,
 			ZIndex = Theme.ZIndex.modal + 1,
 		}, {

@@ -17,7 +17,7 @@ export type PackPickerProps = {
 }
 
 -- Only these 4 packs are shown on the main screen
-local DISPLAY_PACKS = { "landscapes", "animals", "seals", "brainrots" }
+local DISPLAY_PACKS = { "landscapes", "animals", "seals", "space" }
 
 local function PackPicker(props: PackPickerProps)
 	local topRowCards: { [string]: any } = {}
@@ -266,7 +266,7 @@ local function PackPicker(props: PackPickerProps)
 					Position = UDim2.fromScale(0.5, 0.92),
 					Size = UDim2.fromScale(0.9, 0.15),
 					BackgroundTransparency = 1,
-					Text = "Like & Favorite to unlock!",
+					Text = "Join Group to unlock!",
 					TextColor3 = Theme.Colors.gold,
 					Font = Theme.Font.bold,
 					TextXAlignment = Enum.TextXAlignment.Center,

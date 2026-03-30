@@ -176,6 +176,8 @@ local function loadProfile(player)
 		data.StarterPack_FirstJoinTime = os.time()
 		data.StarterPack_Purchased = false
 		data.OwnedSnapEffects["snap_starter"] = true
+		-- Reset favorite reward for testing
+		data.HasClaimedFavoriteReward = false
 		-- Seed some puzzle completions for title testing
 		if not data.PuzzlesCompletedByDifficulty or not next(data.PuzzlesCompletedByDifficulty) then
 			data.PuzzlesCompletedByDifficulty = {

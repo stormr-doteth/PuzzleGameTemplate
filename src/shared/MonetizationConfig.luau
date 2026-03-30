@@ -116,8 +116,8 @@ MonetizationConfig.DEV_PRODUCTS = {
 	},
 }
 
--- Starter Pack timer duration (20 minutes in seconds)
-MonetizationConfig.STARTER_PACK_DURATION = 1200
+-- Starter Pack timer duration (2 hours in seconds)
+MonetizationConfig.STARTER_PACK_DURATION = 7200
 
 -- Returns true if all product IDs have been configured (non-zero)
 function MonetizationConfig.isConfigured(): boolean

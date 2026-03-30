@@ -1682,32 +1682,12 @@ local function App(props)
 		setShowLikeFavoriteModal(true)
 	end
 
-	-- Favorite reward: confirm from modal → prompt favorite → verify → claim
+	-- Favorite reward: confirm from modal → server verifies group membership
 	local function onConfirmLikeFavorite()
 		setFavoriteChecking(true)
 		setFavoriteError(nil)
 		task.spawn(function()
-			-- Prompt the native Roblox favorite dialog with correct args
-			local promptOk, promptErr = pcall(function()
-				AvatarEditorService:PromptSetFavorite(game.PlaceId, Enum.AvatarItemType.Asset, true)
-			end)
-			if not promptOk then
-				warn("[FavoriteReward] PromptSetFavorite failed:", promptErr)
-				setFavoriteError("Something went wrong \u{2014} please try again.")
-				setFavoriteChecking(false)
-				return
-			end
-
-			-- Wait for the user to respond to the native prompt
-			local result = AvatarEditorService.PromptSetFavoriteCompleted:Wait()
-
-			if result ~= Enum.AvatarPromptResult.Success then
-				setFavoriteError("You need to favorite the game to claim the free pack!")
-				setFavoriteChecking(false)
-				return
-			end
-
-			-- User favorited successfully — claim the reward from server
+			-- Ask server to verify group membership and claim
 			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
 			if not remotes then
 				setFavoriteError("Something went wrong \u{2014} please try again.")
@@ -1738,7 +1718,10 @@ local function App(props)
 					return updated
 				end)
 			else
-				setFavoriteError("Something went wrong \u{2014} please try again.")
+				local msg = if ok and claimResult and claimResult.message
+					then claimResult.message
+					else "Something went wrong \u{2014} please try again."
+				setFavoriteError(msg)
 				setFavoriteChecking(false)
 			end
 		end)
