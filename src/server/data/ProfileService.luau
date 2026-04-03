@@ -5,7 +5,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Packages = ServerScriptService:WaitForChild("Packages")
 local ProfileStore = require(Packages.ProfileStore)
 
-local CURRENT_SCHEMA_VERSION = 6
+local CURRENT_SCHEMA_VERSION = 7
 
 local PROFILE_TEMPLATE = {
 	SchemaVersion = CURRENT_SCHEMA_VERSION,
@@ -34,6 +34,7 @@ local PROFILE_TEMPLATE = {
 	HasClaimedFavoriteReward = false,
 	StarterPack_FirstJoinTime = 0,
 	StarterPack_Purchased = false,
+	HasEdgeSort = false,
 }
 
 -- Cap PurchaseHistory to prevent unbounded growth toward DataStore limits
@@ -107,6 +108,14 @@ local function migrateProfile(data)
 			data.StarterPack_Purchased = false
 		end
 		data.SchemaVersion = 6
+	end
+
+	-- Migration from v6 to v7: add Edge Sort purchase flag
+	if version < 7 then
+		if data.HasEdgeSort == nil then
+			data.HasEdgeSort = false
+		end
+		data.SchemaVersion = 7
 	end
 end
 

@@ -41,6 +41,9 @@ local REMOTE_EVENTS = {
 
 	-- Starter pack events
 	"StarterPackPurchased",   -- server → client: notifies starter pack was granted
+
+	-- Edge Sort purchase
+	"EdgeSortPurchased",      -- server → client: notifies edge sort was granted
 }
 
 local REMOTE_FUNCTIONS = {

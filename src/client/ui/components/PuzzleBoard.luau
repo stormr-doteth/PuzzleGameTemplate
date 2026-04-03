@@ -99,6 +99,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local showPlayersMenu, setShowPlayersMenu = React.useState(false)
 	local ownsPuzzleAssist, setOwnsPuzzleAssist = React.useState(false)
 	local showAssistOverlay, setShowAssistOverlay = React.useState(false)
+	local ownsEdgeSort, setOwnsEdgeSort = React.useState(if props.playerData then props.playerData.hasEdgeSort == true else false)
 	local showShop, setShowShop = React.useState(false)
 
 	-- Dynamic top inset to clear Roblox top bar in full-screen ScreenGui
@@ -894,6 +895,22 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		end
 	end, {})
 
+	-- Listen for Edge Sort purchase confirmation from server
+	React.useEffect(function()
+		local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
+		if not remotes then return end
+		local edgeSortEvent = remotes:FindFirstChild("EdgeSortPurchased")
+		if not edgeSortEvent or not edgeSortEvent:IsA("RemoteEvent") then return end
+
+		local connection = edgeSortEvent.OnClientEvent:Connect(function()
+			setOwnsEdgeSort(true)
+		end)
+
+		return function()
+			connection:Disconnect()
+		end
+	end, {})
+
 	-- Compute board colors from equipped skin
 	local boardBgColor = Theme.Colors.bgDark
 	local gridBgColor = Color3.fromRGB(80, 80, 80)
@@ -1273,11 +1290,36 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				Font = Theme.Font.medium,
 				ZIndex = 50,
 				[React.Event.Activated] = function()
-					setShowEdgesOnly(function(prev) return not prev end)
+					if ownsEdgeSort then
+						setShowEdgesOnly(function(prev) return not prev end)
+					else
+						local productConfig = MonetizationConfig.DEV_PRODUCTS.EDGE_SORT
+						if productConfig then
+							pcall(function()
+								MarketplaceService:PromptProductPurchase(Players.LocalPlayer, productConfig.id)
+							end)
+						end
+					end
 				end,
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 				Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
+				RobuxTag = if not ownsEdgeSort then React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 1),
+					Position = UDim2.new(0.5, 0, 0, scaled(-2)),
+					Size = UDim2.fromOffset(scaled(36), scaled(16)),
+					BackgroundTransparency = 1,
+					Text = "R$19",
+					TextColor3 = Color3.fromRGB(30, 200, 60),
+					TextSize = scaled(14),
+					Font = Theme.Font.bold,
+					ZIndex = 52,
+				}, {
+					TagStroke = React.createElement("UIStroke", {
+						Thickness = 1,
+						Color = Theme.Colors.black,
+					}),
+				}) else nil,
 			}),
 		}
 
@@ -1451,22 +1493,20 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 			Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
-			RobuxBadge = if not ownsPuzzleAssist then React.createElement("Frame", {
-				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.new(1, scaled(4), 0, scaled(-4)),
-				Size = UDim2.fromOffset(scaled(18), scaled(18)),
-				BackgroundColor3 = Theme.Colors.gold,
-				ZIndex = 51,
+			RobuxTag = if not ownsPuzzleAssist then React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 1),
+				Position = UDim2.new(0.5, 0, 0, scaled(-2)),
+				Size = UDim2.fromOffset(scaled(36), scaled(16)),
+				BackgroundTransparency = 1,
+				Text = "R$49",
+				TextColor3 = Color3.fromRGB(30, 200, 60),
+				TextSize = scaled(14),
+				Font = Theme.Font.bold,
+				ZIndex = 52,
 			}, {
-				BadgeCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0.5, 0) }),
-				RobuxLabel = React.createElement("TextLabel", {
-					Size = UDim2.fromScale(1, 1),
-					BackgroundTransparency = 1,
-					Text = "R$",
-					TextColor3 = Color3.new(1, 1, 1),
-					TextSize = scaled(10),
-					Font = Theme.Font.bold,
-					ZIndex = 52,
+				TagStroke = React.createElement("UIStroke", {
+					Thickness = 1,
+					Color = Theme.Colors.black,
 				}),
 			}) else nil,
 		})
@@ -1650,6 +1690,42 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			}, {
 				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 			}),
+			ViewPermanentlyBtn = if not ownsPuzzleAssist then React.createElement("TextButton", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, -4),
+				Size = UDim2.fromOffset(220, 40),
+				BackgroundColor3 = Color3.fromRGB(30, 180, 60),
+				Text = "",
+				ZIndex = Theme.ZIndex.modal + 3,
+				[React.Event.Activated] = function()
+					local passConfig = MonetizationConfig.GAME_PASSES.PUZZLE_ASSIST
+					pcall(function()
+						MarketplaceService:PromptGamePassPurchase(Players.LocalPlayer, passConfig.id)
+					end)
+				end,
+			}, {
+				BtnCorner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+				BtnStroke = React.createElement("UIStroke", {
+					Thickness = 2,
+					Color = Theme.Colors.border,
+				}),
+				BtnLabel = React.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.fromScale(0.9, 0.8),
+					BackgroundTransparency = 1,
+					Text = "R$49 — View Permanently",
+					TextColor3 = Color3.new(1, 1, 1),
+					TextSize = 16,
+					Font = Theme.Font.bold,
+					ZIndex = Theme.ZIndex.modal + 4,
+				}, {
+					LabelStroke = React.createElement("UIStroke", {
+						Thickness = 1,
+						Color = Theme.Colors.black,
+					}),
+				}),
+			}) else nil,
 		})
 	end
 

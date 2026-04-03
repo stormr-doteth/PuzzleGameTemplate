@@ -369,6 +369,7 @@ function PuzzleHandler.Init()
 			hasClaimedFavoriteReward = profileData.HasClaimedFavoriteReward == true,
 			starterPack_expiryTime = (profileData.StarterPack_FirstJoinTime or 0) + MonetizationConfig.STARTER_PACK_DURATION,
 			starterPack_purchased = profileData.StarterPack_Purchased == true,
+			hasEdgeSort = profileData.HasEdgeSort == true,
 		}
 	end
 

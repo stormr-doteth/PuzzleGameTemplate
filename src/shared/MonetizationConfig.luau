@@ -9,7 +9,7 @@ MonetizationConfig.GAME_PASSES = {
 		id = 1747572669,
 		name = "VIP Pass",
 		description = "2x Cash permanently + gold name on leaderboard",
-		robuxPrice = 199,
+		robuxPrice = 99,
 		iconColor = Color3.fromRGB(255, 215, 0),
 		iconText = "\u{1F451}",
 		iconImage = "rbxassetid://93296148794293",
@@ -36,7 +36,7 @@ MonetizationConfig.GAME_PASSES = {
 		id = 1747289089,
 		name = "Puzzle Assist",
 		description = "Shows the original image behind your puzzle as a guide",
-		robuxPrice = 99,
+		robuxPrice = 49,
 		iconColor = Color3.fromRGB(80, 200, 255),
 		iconText = "\u{1F50D}",
 		iconImage = "rbxassetid://93689489012267",
@@ -113,6 +113,14 @@ MonetizationConfig.DEV_PRODUCTS = {
 		robuxPrice = 79,
 		iconColor = Color3.fromRGB(255, 180, 50),
 		iconText = "\u{1F381}",
+	},
+	EDGE_SORT = {
+		id = 3568903424,
+		name = "Edge Sort",
+		description = "Filter to show only edge pieces while solving",
+		robuxPrice = 19,
+		iconColor = Color3.fromRGB(80, 200, 120),
+		iconText = "\u{1F9E9}",
 	},
 }
 

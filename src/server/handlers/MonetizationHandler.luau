@@ -114,6 +114,13 @@ function MonetizationHandler.Init()
 				end
 			end
 			granted = true
+		elseif product.name == "Edge Sort" then
+			if not profileData.HasEdgeSort then
+				profileData.HasEdgeSort = true
+				local edgeSortEvent = Remotes.GetEvent("EdgeSortPurchased")
+				edgeSortEvent:FireClient(player, {})
+			end
+			granted = true
 		elseif product.name == "Unlock Puzzle" then
 			-- Unlock a specific puzzle image
 			local imageId = pendingUnlockImage[player.UserId]
