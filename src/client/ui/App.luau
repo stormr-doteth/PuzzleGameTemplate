@@ -597,6 +597,15 @@ local function App(props)
 	end, { gameState })
 
 	local function onStart(selectedRows: number, selectedCols: number, selectedImageAssetId: string, selectedImageId: string, selectedDifficultyId: string)
+		-- Check if a saved puzzle matches this image + difficulty → auto-resume
+		local matchedSave = nil
+		for _, save in savedPuzzles do
+			if save.imageId == selectedImageId and save.difficultyId == selectedDifficultyId then
+				matchedSave = save
+				break
+			end
+		end
+
 		setRows(selectedRows)
 		setCols(selectedCols)
 		setImageAssetId(selectedImageAssetId)
@@ -604,7 +613,7 @@ local function App(props)
 		setDifficultyId(selectedDifficultyId)
 		setCompletionTime(0)
 		setRewardData(nil)
-		setResumeState(nil)
+		setResumeState(matchedSave) -- nil if no save, auto-resumes if found
 		setGameState("playing")
 
 		-- Notify server of puzzle start for server-side timing
@@ -616,6 +625,7 @@ local function App(props)
 				puzzleStartedEvent:FireServer({
 					imageId = selectedImageId,
 					difficultyId = selectedDifficultyId,
+					resumedElapsed = if matchedSave then matchedSave.elapsedSeconds else nil,
 				})
 			end
 		end)
@@ -891,11 +901,34 @@ local function App(props)
 		task.spawn(function()
 			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
 			if not remotes then return end
-			local startRemote = remotes:FindFirstChild("StartRoom")
-			if startRemote and startRemote:IsA("RemoteFunction") then
-				local ok, result = pcall(function() return startRemote:InvokeServer() end)
-				if ok and result and result.error then
-					warn("[App] StartRoom error:", result.error)
+
+			-- Check if a saved puzzle matches the current room config → auto-resume
+			local matchedSave = nil
+			if roomConfig then
+				for _, save in savedPuzzles do
+					if save.imageId == roomConfig.imageId and save.difficultyId == roomConfig.difficultyId then
+						matchedSave = save
+						break
+					end
+				end
+			end
+
+			if matchedSave then
+				-- Resume from saved state instead of starting fresh
+				local resumeRemote = remotes:FindFirstChild("ResumeRoom")
+				if resumeRemote and resumeRemote:IsA("RemoteFunction") then
+					local ok, result = pcall(function() return resumeRemote:InvokeServer(matchedSave) end)
+					if ok and result and result.error then
+						warn("[App] ResumeRoom error:", result.error)
+					end
+				end
+			else
+				local startRemote = remotes:FindFirstChild("StartRoom")
+				if startRemote and startRemote:IsA("RemoteFunction") then
+					local ok, result = pcall(function() return startRemote:InvokeServer() end)
+					if ok and result and result.error then
+						warn("[App] StartRoom error:", result.error)
+					end
 				end
 			end
 		end)
@@ -1912,6 +1945,8 @@ local function App(props)
 				end)
 			end,
 			onDeleteSave = onDeleteSave,
+			onClaimFavoriteReward = onClaimFavoriteReward,
+			hasClaimedFavoriteReward = if playerData then playerData.hasClaimedFavoriteReward else false,
 		})
 
 		-- Resume prompt overlay for multiplayer lobby

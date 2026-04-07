@@ -5,25 +5,35 @@
     "Lighting": {
       "$properties": {
         "Ambient": [
-          0.3140000104904175,
-          0.23499999940395355,
-          0.15700000524520874
+          0.9019607843137255,
+          0.7843137254901961,
+          0.8941176470588236
         ],
-        "Brightness": 1.5,
-        "ClockTime": 14.0,
-        "EnvironmentDiffuseScale": 1.0,
-        "EnvironmentSpecularScale": 1.0,
+        "Brightness": 1.39,
+        "ClockTime": 11.0,
+        "ColorShift_Bottom": [
+          1.0,
+          1.1372549019607843,
+          0.9254901960784314
+        ],
+        "ColorShift_Top": [
+          0.7372549019607844,
+          0.9215686274509803,
+          1.0
+        ],
+        "EnvironmentDiffuseScale": 0.3,
+        "EnvironmentSpecularScale": 0.2,
         "FogColor": [
           0.7529412508010864,
           0.7529412508010864,
           0.7529412508010864
         ],
-        "GeographicLatitude": 0.0,
+        "GeographicLatitude": 24.0,
         "GlobalShadows": true,
         "OutdoorAmbient": [
-          0.27450981736183167,
-          0.27450981736183167,
-          0.27450981736183167
+          0.27450980392156865,
+          0.27450980392156865,
+          0.27450980392156865
         ],
         "Outlines": false,
         "PrioritizeLightingQuality": true,

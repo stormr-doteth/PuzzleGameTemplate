@@ -37,6 +37,8 @@ export type RoomLobbyScreenProps = {
 	savedPuzzles: { any }?,
 	onResumeSave: ((slotIndex: number) -> ())?,
 	onDeleteSave: ((slotIndex: number) -> ())?,
+	onClaimFavoriteReward: (() -> ())?,
+	hasClaimedFavoriteReward: boolean?,
 }
 
 local function formatTime(seconds: number): string
@@ -668,6 +670,8 @@ local function RoomLobbyScreen(props: RoomLobbyScreenProps)
 					setSelectedImageAssetId(nil)
 				end,
 				unlockedImages = props.unlockedImages,
+				onClaimFavoriteReward = props.onClaimFavoriteReward,
+				hasClaimedFavoriteReward = props.hasClaimedFavoriteReward,
 			})
 		end
 	else

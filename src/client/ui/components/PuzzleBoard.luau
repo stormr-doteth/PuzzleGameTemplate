@@ -101,6 +101,20 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local showAssistOverlay, setShowAssistOverlay = React.useState(false)
 	local ownsEdgeSort, setOwnsEdgeSort = React.useState(if props.playerData then props.playerData.hasEdgeSort == true else false)
 	local showShop, setShowShop = React.useState(false)
+	local resumeToast, setResumeToast = React.useState(if props.savedState then true else false)
+	local timerHidden, setTimerHidden = React.useState(false)
+	local timerRef = React.useRef(nil :: TextLabel?)
+
+	-- Auto-fade resume toast after 2 seconds
+	React.useEffect(function()
+		if not resumeToast then return end
+		local handle = task.delay(2, function()
+			setResumeToast(false)
+		end)
+		return function()
+			task.cancel(handle)
+		end
+	end, {})
 
 	-- Dynamic top inset to clear Roblox top bar in full-screen ScreenGui
 	local topInset = React.useMemo(function()
@@ -156,30 +170,39 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 	local buildSaveData = React.useCallback(function()
 		local curState = stateRef.current
 		local curPuzzleDef = puzzleDefRef.current
+		local curPieceImages = pieceImagesRef.current
+		local curPixelScale = pixelScaleRef.current
 		if not curPuzzleDef then return nil end
 
 		local savePieces = {}
 		for id, p in curState.pieces do
 			if props.isMultiplayer then
-				-- Multiplayer: save virtual coords as-is
+				-- Multiplayer: already in virtual coords
 				table.insert(savePieces, {
 					id = id, x = p.x, y = p.y,
 					zIndex = p.zIndex, locked = p.locked,
 					groupId = p.groupId,
 				})
 			else
-				-- Solo: save as offset from board center in board-size units
+				-- Solo: convert screen coords to virtual coords for cross-mode compatibility
+				local imgData = if curPieceImages then curPieceImages[id] else nil
+				local sox = if imgData then math.floor(imgData.offsetX * curPixelScale) else 0
+				local soy = if imgData then math.floor(imgData.offsetY * curPixelScale) else 0
+				local bW = boardSizeRef.current and boardSizeRef.current.X or 0
+				local bH = boardSizeRef.current and boardSizeRef.current.Y or 0
 				local camera = workspace.CurrentCamera
 				local vpW = if camera then camera.ViewportSize.X else 1200
 				local vpH = if camera then camera.ViewportSize.Y else 800
-				local bW = boardSizeRef.current.X
-				local bH = boardSizeRef.current.Y
-				local boardCenterX = vpW / 2
-				local boardCenterY = vpH / 2
+				local bOffX = math.floor((vpW - bW) / 2)
+				local bOffY = math.floor((vpH - bH) / 2)
+				local vw = RoomTypes.VIRTUAL_CANVAS_WIDTH
+				local vh = RoomTypes.VIRTUAL_CANVAS_HEIGHT
+				local cellX = p.x + sox
+				local cellY = p.y + soy
+				local vx = if bW > 0 then (cellX - bOffX) / bW * vw else 0
+				local vy = if bH > 0 then (cellY - bOffY) / bH * vh else 0
 				table.insert(savePieces, {
-					id = id,
-					x = if bW > 0 then (p.x - boardCenterX) / bW else 0,
-					y = if bH > 0 then (p.y - boardCenterY) / bH else 0,
+					id = id, x = vx, y = vy,
 					zIndex = p.zIndex, locked = p.locked,
 					groupId = p.groupId,
 				})
@@ -200,8 +223,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			puzzleDef = curPuzzleDef,
 			pieces = savePieces,
 			groups = saveGroups,
-			isVirtualCoords = if props.isMultiplayer then true else nil,
-			isBoardRelativeCoords = if not props.isMultiplayer then true else nil,
+			isVirtualCoords = true,
 		}
 	end, { state.pieces, state.groups, timer.elapsedSeconds, puzzleDef } :: { any })
 
@@ -931,12 +953,16 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 
 	local children: { [string]: any } = {}
 
-	-- Timer display (top-center)
+	-- Timer display (top-center) with arrow to hide/show
 	if not isLoading then
+		local timerHeight = scaled(40)
+		local timerShowY = 4
+		local timerHideY = -(timerHeight + 4)
+
 		children["Timer"] = React.createElement("TextLabel", {
 			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 4),
-			Size = UDim2.fromOffset(scaled(120), scaled(40)),
+			Position = UDim2.new(0.5, 0, 0, if timerHidden then timerHideY else timerShowY),
+			Size = UDim2.fromOffset(scaled(120), timerHeight),
 			BackgroundColor3 = Theme.Colors.bgButtonContrast,
 			BackgroundTransparency = Theme.Transparency.hudButton,
 			Text = formatTime(timer.elapsedSeconds),
@@ -944,6 +970,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			TextSize = scaled(Theme.TextSize.heading),
 			Font = Theme.Font.bold,
 			ZIndex = 50,
+			ref = timerRef,
 		}, {
 			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
 			Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
@@ -951,6 +978,37 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				PaddingLeft = UDim.new(0, 8),
 				PaddingRight = UDim.new(0, 8),
 			}),
+		})
+
+		local arrowSize = scaled(24)
+		children["TimerToggle"] = React.createElement("TextButton", {
+			AnchorPoint = Vector2.new(1, 0),
+			Position = UDim2.new(0.5, -scaled(64), 0, timerShowY + (timerHeight - arrowSize) / 2),
+			Size = UDim2.fromOffset(arrowSize, arrowSize),
+			BackgroundColor3 = Theme.Colors.bgButtonContrast,
+			BackgroundTransparency = Theme.Transparency.hudButton,
+			Text = if timerHidden then "\u{25BC}" else "\u{25B2}",
+			TextColor3 = Theme.Colors.textSecondary,
+			TextSize = scaled(12),
+			Font = Theme.Font.bold,
+			ZIndex = 50,
+			[React.Event.Activated] = function()
+				local timerInst = timerRef.current
+				local nowHidden = not timerHidden
+				setTimerHidden(nowHidden)
+
+				if timerInst then
+					local targetY = if nowHidden then timerHideY else timerShowY
+					local tweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+					local tween = TweenService:Create(timerInst, tweenInfo, {
+						Position = UDim2.new(0.5, 0, 0, targetY),
+					})
+					tween:Play()
+				end
+			end,
+		}, {
+			Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 8) }),
+			Stroke = React.createElement("UIStroke", { Thickness = scaled(1.5), Color = Theme.Colors.border }),
 		})
 	end
 
@@ -1265,7 +1323,7 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 				Size = UDim2.fromOffset(boardSize.X * zoomState.zoom, boardSize.Y * zoomState.zoom),
 				Image = props.imageAssetId,
 				ScaleType = Enum.ScaleType.Fit,
-				ImageTransparency = 0.75,
+				ImageTransparency = 0.6,
 				BackgroundTransparency = 1,
 				ZIndex = 1,
 			})
@@ -1518,6 +1576,25 @@ local function PuzzleBoard(props: PuzzleBoardProps)
 			BackgroundTransparency = 1,
 			ZIndex = 50,
 		}, bottomControlChildren)
+
+		-- Resume toast notification
+		if resumeToast then
+			children["ResumeToast"] = React.createElement("TextLabel", {
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, topInset + scaled(40)),
+				Size = UDim2.fromOffset(scaled(220), scaled(32)),
+				BackgroundColor3 = Theme.Colors.bgElevated,
+				BackgroundTransparency = 0.1,
+				Text = "Resuming saved progress...",
+				TextColor3 = Theme.Colors.textPrimary,
+				TextSize = scaled(Theme.TextSize.label),
+				Font = Theme.Font.bold,
+				ZIndex = 80,
+			}, {
+				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+				Stroke = React.createElement("UIStroke", { Thickness = 1, Color = Theme.Colors.border }),
+			})
+		end
 
 		-- Compute topmost hovered piece
 		local topmostHoveredId = nil
