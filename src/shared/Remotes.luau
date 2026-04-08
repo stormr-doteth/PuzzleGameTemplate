@@ -70,13 +70,9 @@ local REMOTE_FUNCTIONS = {
 	"GetTableInfo",     -- (tableId) → { tableType, occupants, roomId? }
 
 	-- Daily features
-	"ClaimDailyReward",       -- returns { success, reward }
-	"GetDailyRewardStatus",   -- returns { streak, canClaim, rewards }
 	"GetDailyPuzzle",         -- returns { puzzle, completed, leaderboard }
 	"GetDailyPuzzleLeaderboard", -- returns top 20 times
-	"SpinWheel",              -- returns { success, segmentIndex, reward }
 	"ClaimFavoriteReward",    -- returns { success, unlockedIds, packId }
-	"GetSpinWheelStatus",     -- returns { canFreeSpin, lastFreeSpinTimestamp, paidSpinsRestricted }
 	"UseRoomHint",            -- client → server: returns { success, hintsRemaining, pieceId } (multiplayer hint)
 	"AdminResetData",         -- client → server: admin-only data reset, returns { success }
 	"AdminGetSessionTimes",   -- client → server: admin-only, returns { { name, userId, sessionSeconds } }

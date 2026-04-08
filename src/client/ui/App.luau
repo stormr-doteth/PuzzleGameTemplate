@@ -22,8 +22,6 @@ local PuzzleBoard = require(script.Parent.components.PuzzleBoard)
 local CompleteScreen = require(script.Parent.components.CompleteScreen)
 local NewItemNotification = require(script.Parent.components.NewItemNotification)
 local RoomLobbyScreen = require(script.Parent.components.RoomLobbyScreen)
-local DailyRewardModal = require(script.Parent.components.DailyRewardModal)
-local SpinWheelModal = require(script.Parent.components.SpinWheelModal)
 local LikeFavoriteModal = require(script.Parent.components.LikeFavoriteModal)
 local DevToolPanel = require(script.Parent.components.DevToolPanel)
 local RoomCodeEntryScreen = require(script.Parent.components.RoomCodeEntryScreen)
@@ -85,22 +83,14 @@ local function App(props)
 	-- Loading state for initial data fetch
 	local isDataLoading, setIsDataLoading = React.useState(true)
 
-	-- Daily reward state
-	local showDailyReward, setShowDailyReward = React.useState(false)
+	-- Favorite reward state
 	local showLikeFavoriteModal, setShowLikeFavoriteModal = React.useState(false)
 	local favoriteChecking, setFavoriteChecking = React.useState(false)
 	local favoriteError, setFavoriteError = React.useState(nil :: string?)
-	local dailyRewardStatus, setDailyRewardStatus = React.useState(nil :: any)
-	local dailyRewardClaimResult, setDailyRewardClaimResult = React.useState(nil :: any)
 
 	-- Daily puzzle state
 	local dailyPuzzle, setDailyPuzzle = React.useState(nil :: any)
 	local dailyPuzzleCompleted, setDailyPuzzleCompleted = React.useState(false)
-
-	-- Spin wheel state
-	local spinWheelCanFree, setSpinWheelCanFree = React.useState(false)
-	local spinWheelSecsUntilFree, setSpinWheelSecsUntilFree = React.useState(0)
-	local spinWheelPaidRestricted, setSpinWheelPaidRestricted = React.useState(false)
 
 	-- Starter pack state
 	local starterPackSecsLeft, setStarterPackSecsLeft = React.useState(0)
@@ -303,18 +293,6 @@ local function App(props)
 				end
 			end
 
-			-- Fetch daily reward status
-			local getDailyStatus = remotes:FindFirstChild("GetDailyRewardStatus")
-			if getDailyStatus and getDailyStatus:IsA("RemoteFunction") then
-				local ok3, status = pcall(function() return getDailyStatus:InvokeServer() end)
-				if ok3 and status then
-					setDailyRewardStatus(status)
-					if status.canClaim then
-						setShowDailyReward(true)
-					end
-				end
-			end
-
 			-- Fetch daily puzzle
 			local getDailyPuzzleRemote = remotes:FindFirstChild("GetDailyPuzzle")
 			if getDailyPuzzleRemote and getDailyPuzzleRemote:IsA("RemoteFunction") then
@@ -322,17 +300,6 @@ local function App(props)
 				if ok4 and result then
 					setDailyPuzzle(result.puzzle)
 					setDailyPuzzleCompleted(result.completed == true)
-				end
-			end
-
-			-- Fetch spin wheel status
-			local getSpinStatus = remotes:FindFirstChild("GetSpinWheelStatus")
-			if getSpinStatus and getSpinStatus:IsA("RemoteFunction") then
-				local ok5, spinStatus = pcall(function() return getSpinStatus:InvokeServer() end)
-				if ok5 and spinStatus then
-					setSpinWheelCanFree(spinStatus.canFreeSpin == true)
-					setSpinWheelSecsUntilFree(spinStatus.secondsUntilFreeSpin or 0)
-					setSpinWheelPaidRestricted(spinStatus.paidSpinsRestricted == true)
 				end
 			end
 
@@ -1195,7 +1162,6 @@ local function App(props)
 		})
 	end
 
-	local spinWheelElement = nil
 	local starterPackElement = nil
 	if gameState == "walking" then
 		-- Only show hint for players who haven't sat at a table yet
@@ -1456,72 +1422,7 @@ local function App(props)
 			}),
 		})
 
-		-- Spin wheel button (top area, between center and right)
-		spinWheelElement = React.createElement("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.7, 0, 0, 4),
-			Size = UDim2.fromScale(0.105, 0.14),
-			BackgroundTransparency = 1,
-			ZIndex = 10,
-		}, {
-			Icon = React.createElement("ImageButton", {
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.fromScale(0.5, 0),
-				Size = UDim2.fromScale(0.85, 0.72),
-				BackgroundColor3 = Theme.Colors.gold,
-				BackgroundTransparency = 1,
-				Image = "",
-				ZIndex = 10,
-				[React.Event.Activated] = function()
-					openOverlay("spin")
-				end,
-				[React.Event.MouseEnter] = function(rbx)
-					TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 5 }):Play()
-				end,
-				[React.Event.MouseLeave] = function(rbx)
-					TweenService:Create(rbx, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 0 }):Play()
-				end,
-			}, {
-				Aspect = React.createElement("UIAspectRatioConstraint", {
-					AspectRatio = 1,
-				}),
-				Corner = React.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
-				SpinIcon = React.createElement("ImageLabel", {
-					Size = UDim2.fromScale(1, 1),
-					BackgroundTransparency = 1,
-					Image = "rbxassetid://124221102367378",
-					ScaleType = Enum.ScaleType.Fit,
-					ZIndex = 10,
-				}),
-				FreeDot = if spinWheelCanFree then React.createElement("Frame", {
-					AnchorPoint = Vector2.new(1, 0),
-					Position = UDim2.new(1, 6, 0, -6),
-					Size = UDim2.fromOffset(18, 18),
-					BackgroundColor3 = Theme.Colors.danger,
-					ZIndex = 12,
-				}, {
-					DotCorner = React.createElement("UICorner", { CornerRadius = UDim.new(1, 0) }),
-				}) else nil,
-			}),
-			Label = React.createElement("TextLabel", {
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.72),
-				Size = UDim2.fromScale(1.1, 0.3),
-				BackgroundTransparency = 1,
-				ZIndex = 11,
-				Text = "Spin",
-				TextColor3 = Theme.Colors.textPrimary,
-				TextScaled = true,
-				Font = Theme.Font.heading,
-			}, {
-				LabelStroke = React.createElement("UIStroke", {
-					Thickness = 2,
-					Color = Theme.Colors.black,
-				}),
-			}),
-		})
-
-		-- Starter pack button (left of spin wheel)
+		-- Starter pack button
 		if not starterPackPurchased and starterPackSecsLeft > 0 then
 			starterPackElement = React.createElement(StarterPackButton, {
 				secondsLeft = starterPackSecsLeft,
@@ -1590,28 +1491,6 @@ local function App(props)
 				else
 					setActiveOverlay(nil)
 				end
-			elseif activeOverlay == "spin" then
-				overlayContent = React.createElement(SpinWheelModal, {
-					onClose = closeOverlay,
-					canFreeSpin = spinWheelCanFree,
-					secondsUntilFreeSpin = spinWheelSecsUntilFree,
-					paidSpinsRestricted = spinWheelPaidRestricted,
-					onSpinComplete = function(reward)
-						setSpinWheelCanFree(false)
-						-- Refresh player data after spin
-						task.spawn(function()
-							local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
-							if not remotes then return end
-							local getPlayerData = remotes:FindFirstChild("GetPlayerData")
-							if getPlayerData and getPlayerData:IsA("RemoteFunction") then
-								local ok2, data = pcall(function() return getPlayerData:InvokeServer() end)
-								if ok2 and data then
-									setPlayerData(data)
-								end
-							end
-						end)
-					end,
-				})
 			end
 
 			if overlayContent then
@@ -1680,36 +1559,6 @@ local function App(props)
 		end)
 	end
 
-	-- Daily reward claim handler
-	local function onClaimDailyReward()
-		task.spawn(function()
-			local remotes = ReplicatedStorage:FindFirstChild("PuzzleRemotes")
-			if not remotes then return end
-			local claimRemote = remotes:FindFirstChild("ClaimDailyReward")
-			if not claimRemote or not claimRemote:IsA("RemoteFunction") then return end
-
-			local ok, result = pcall(function() return claimRemote:InvokeServer() end)
-			if ok and result then
-				setDailyRewardClaimResult(result)
-				if result.success and result.newCash then
-					setPlayerData(function(prev)
-						if not prev then return prev end
-						local updated = table.clone(prev)
-						updated.cash = result.newCash
-						if result.bonusReward and result.bonusReward.type == "snap_effect" then
-							updated.ownedSnapEffects = table.clone(updated.ownedSnapEffects or {})
-							updated.ownedSnapEffects[result.bonusReward.id] = true
-						end
-						if result.bonusReward and result.bonusReward.type == "hints" then
-							updated.hintsRemaining = (updated.hintsRemaining or 0) + result.bonusReward.count
-						end
-						return updated
-					end)
-				end
-			end
-		end)
-	end
-
 	-- Favorite reward: show custom modal
 	local function onClaimFavoriteReward()
 		setShowLikeFavoriteModal(true)
@@ -1758,18 +1607,6 @@ local function App(props)
 				setFavoriteChecking(false)
 			end
 		end)
-	end
-
-	-- Daily reward modal (auto-show on login when claimable, in walking state)
-	if showDailyReward and gameState == "walking" then
-		safeChildren["DailyRewardModal"] = React.createElement(DailyRewardModal, {
-			onClose = function()
-				setShowDailyReward(false)
-			end,
-			rewardStatus = dailyRewardStatus,
-			onClaim = onClaimDailyReward,
-			claimResult = dailyRewardClaimResult,
-		})
 	end
 
 	-- Like & Favorite modal
@@ -1992,19 +1829,17 @@ local function App(props)
 		})
 	end
 
-	-- Board ScreenGui: full screen for piece dragging (rendered below safe UI)
-	-- Spin wheel ScreenGui: ignores top bar so it sits at the very top
-	local spinGui = nil
-	if spinWheelElement or starterPackElement then
-		spinGui = React.createElement("ScreenGui", {
-			Name = "PuzzleAppSpin",
+	-- Starter pack ScreenGui: ignores top bar so it sits at the very top
+	local starterPackGui = nil
+	if starterPackElement then
+		starterPackGui = React.createElement("ScreenGui", {
+			Name = "PuzzleAppStarterPack",
 			ResetOnSpawn = false,
 			IgnoreGuiInset = true,
 			ScreenInsets = Enum.ScreenInsets.None,
 			DisplayOrder = 2,
 			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		}, {
-			SpinWheelBtn = spinWheelElement,
 			StarterPackBtn = starterPackElement,
 		})
 	end
@@ -2178,7 +2013,7 @@ local function App(props)
 	-- directly (which would destroy Roblox's TouchGui, Freecam, etc.)
 	return React.createElement(React.Fragment, nil, {
 		SafeGui = ReactRoblox.createPortal(safeGui, playerGui, "SafeGui"),
-		SpinGui = spinGui and ReactRoblox.createPortal(spinGui, playerGui, "SpinGui") or nil,
+		StarterPackGui = starterPackGui and ReactRoblox.createPortal(starterPackGui, playerGui, "StarterPackGui") or nil,
 		BoardGui = boardGui and ReactRoblox.createPortal(boardGui, playerGui, "BoardGui") or nil,
 		CompleteGui = completeGui and ReactRoblox.createPortal(completeGui, playerGui, "CompleteGui") or nil,
 		AdmireGui = admireGui and ReactRoblox.createPortal(admireGui, playerGui, "AdmireGui") or nil,

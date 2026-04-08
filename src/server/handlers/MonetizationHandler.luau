@@ -92,9 +92,6 @@ function MonetizationHandler.Init()
 			granted = true
 			local hintPurchasedEvent = Remotes.GetEvent("HintPurchased")
 			hintPurchasedEvent:FireClient(player, {})
-		elseif product.name == "Spin the Wheel" then
-			profileData.SpinTokens = (profileData.SpinTokens or 0) + 1
-			granted = true
 		elseif product.name == "Starter Pack" then
 			-- Grant starter pack contents (always grant — player already charged)
 			if not profileData.StarterPack_Purchased then

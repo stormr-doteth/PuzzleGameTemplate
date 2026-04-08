@@ -21,7 +21,7 @@ src/
 ├── server/
 │   ├── init.server.luau          # Initializes all handlers
 │   ├── data/                     # ProfileService (DataStore wrapper), LeaderboardService
-│   ├── handlers/                 # PuzzleHandler, MonetizationHandler, RoomManager, DailyRewardsHandler, etc.
+│   ├── handlers/                 # PuzzleHandler, MonetizationHandler, RoomManager, etc.
 │   ├── services/                 # TitleService, TableStatusService
 │   └── cafe/                     # TableManager (multiplayer seating)
 ├── shared/                       # Config & types used by both client and server

@@ -31,10 +31,7 @@ local PROFILE_TEMPLATE = {
 	EquippedConfettiStyle = "",
 	EquippedSnapEffect = "",
 	SavedPuzzles = {},
-	DailyReward_LastClaimTime = 0,
-	DailyReward_Streak = 0,
 	DailyPuzzle_LastCompletionDate = "",
-	SpinWheel_LastFreeSpinDate = "",
 	HasClaimedFavoriteReward = false,
 }
 
@@ -43,7 +40,10 @@ local Players = game:GetService("Players")
 local joinTimes: { [Player]: number } = {}
 
 -- Ban system
-local BanStore = DataStoreService:GetDataStore("BanStore")
+-- Note: the original "BanStore" datastore was marked deleted by Roblox
+-- (likely a GDPR/right-to-be-forgotten request), so any GetAsync on that
+-- name now throws DatastoreDeleted. Using a new name to recreate the store.
+local BanStore = DataStoreService:GetDataStore("PlayerBans_v2")
 local bannedPlayersCache: { [number]: { reason: string, bannedAt: number, duration: number, bannedBy: string } } = {}
 
 local function getBanRecord(userId: number): { reason: string, bannedAt: number, duration: number, bannedBy: string }?
